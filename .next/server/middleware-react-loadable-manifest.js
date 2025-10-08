@@ -1,0 +1,1 @@
+self.__REACT_LOADABLE_MANIFEST="{\"app/canvas/page.tsx -> fabric\":{\"id\":\"app/canvas/page.tsx -> fabric\",\"files\":[\"static/chunks/_app-pages-browser_node_modules_fabric_dist_index_min_mjs.js\"]}}"
