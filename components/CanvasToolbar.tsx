@@ -34,7 +34,8 @@ import {
   ArrowUp,
   ArrowDown,
   MoveUp,
-  MoveDown
+  MoveDown,
+  Redo
 } from 'lucide-react'
 import TextToolPanel from './TextToolPanel'
 import { useUserStore } from '../stores/userStore'
@@ -765,11 +766,37 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
       return (window as any).fabric?.util?.object?.clone(obj) || obj
     }).filter(obj => obj !== null)
     
-    const newHistory = history.slice(0, historyIndex + 1)
-    newHistory.push(currentState)
+    // 如果当前不是最新状态，需要截断重做分支
+    let newHistory
+    if (historyIndex < history.length - 1) {
+      // 截断重做分支
+      newHistory = history.slice(0, historyIndex + 1)
+      newHistory.push(currentState)
+    } else {
+      // 追加到历史记录末尾
+      newHistory = [...history, currentState]
+    }
     
     setHistory(newHistory)
     setHistoryIndex(newHistory.length - 1)
+  }
+
+  // 保存状态但不移动指针（用于撤销/重做操作）
+  const saveStateWithoutMovingPointer = () => {
+    if (!canvas || !(window as any).fabric) return
+    
+    // 深拷贝画布对象
+    const currentState = canvas._objects.map(obj => {
+      if (!obj) return null
+      return (window as any).fabric?.util?.object?.clone(obj) || obj
+    }).filter(obj => obj !== null)
+    
+    // 保存状态但不移动指针，用于撤销/重做操作后的状态保存
+    const newHistory = [...history]
+    newHistory.push(currentState)
+    
+    setHistory(newHistory)
+    // 不更新historyIndex，保持当前位置
   }
 
   // 设置画板移动功能
@@ -1584,7 +1611,7 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
   }
 
   const handleUndo = () => {
-    if (!canvas || historyIndex < 0) return
+    if (!canvas || historyIndex <= 0) return
     
     const newIndex = historyIndex - 1
     const previousState = history[newIndex]
@@ -1605,6 +1632,23 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
     
     canvas.renderAll()
     setHistoryIndex(newIndex)
+    
+    // 手动保存当前状态到历史记录，但不触发对象事件
+    setTimeout(() => {
+      if (!canvas || !(window as any).fabric) return
+      
+      // 深拷贝当前状态
+      const currentState = canvas._objects.map(obj => {
+        if (!obj) return null
+        return (window as any).fabric?.util?.object?.clone(obj) || obj
+      }).filter(obj => obj !== null)
+      
+      // 直接更新历史记录，不触发对象事件
+      const newHistory = [...history]
+      newHistory[newIndex + 1] = currentState // 更新当前位置的状态
+      
+      setHistory(newHistory)
+    }, 0)
   }
 
   const handleRedo = () => {
@@ -1621,7 +1665,7 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
     canvas.backgroundColor = backgroundColor
     
     // 恢复下一个状态
-    if (nextState) {
+    if (nextState && nextState.length > 0) {
       nextState.forEach(obj => {
         canvas.add(obj)
       })
@@ -1629,6 +1673,23 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
     
     canvas.renderAll()
     setHistoryIndex(newIndex)
+    
+    // 手动保存当前状态到历史记录，但不触发对象事件
+    setTimeout(() => {
+      if (!canvas || !(window as any).fabric) return
+      
+      // 深拷贝当前状态
+      const currentState = canvas._objects.map(obj => {
+        if (!obj) return null
+        return (window as any).fabric?.util?.object?.clone(obj) || obj
+      }).filter(obj => obj !== null)
+      
+      // 直接更新历史记录，不触发对象事件
+      const newHistory = [...history]
+      newHistory[newIndex] = currentState // 更新当前位置的状态
+      
+      setHistory(newHistory)
+    }, 0)
   }
 
   // 层级管理功能
@@ -2146,6 +2207,10 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
           event.preventDefault()
           handleUndo()
           break
+        case 'y':
+          event.preventDefault()
+          handleRedo()
+          break
         case 'd':
           event.preventDefault()
           handleClearCanvas()
@@ -2162,10 +2227,10 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
           event.preventDefault()
           handlePasteObject()
           break
-      }
-    } else {
-      // 单键快捷键
-      switch (event.key.toLowerCase()) {
+        case 'r':
+          event.preventDefault()
+          handleToolSelect('arrow')
+          break
         case 'h':
           event.preventDefault()
           handleToolSelect('hand')
@@ -2173,10 +2238,6 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
         case 'p':
           event.preventDefault()
           handleToolSelect('pencil')
-          break
-        case 'a':
-          event.preventDefault()
-          handleToolSelect('arrow')
           break
         case 's':
           event.preventDefault()
@@ -2198,13 +2259,9 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
           event.preventDefault()
           handleToolSelect('layers')
           break
-        case 'escape':
-          event.preventDefault()
-          handleBackToUser()
-          break
       }
     }
-  }, [canvas, handleUndo, handleClearCanvas, handleSelectAll, handleCopyObject, handlePasteObject, handleBackToUser])
+  }, [canvas, handleUndo, handleRedo, handleClearCanvas, handleSelectAll, handleCopyObject, handlePasteObject, handleBackToUser, handleToolSelect])
 
   // 添加键盘事件监听
   useEffect(() => {
@@ -2376,14 +2433,14 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
         {tools.map((tool) => {
           const getShortcut = (toolId: string) => {
             switch (toolId) {
-              case 'hand': return 'H'
-              case 'pencil': return 'P'
-              case 'arrow': return 'A'
-              case 'shapes': return 'S'
-              case 'text': return 'T'
-              case 'eraser': return 'E'
-              case 'image': return 'I'
-              case 'layers': return 'L'
+              case 'hand': return 'Ctrl+H'
+              case 'pencil': return 'Ctrl+P'
+              case 'arrow': return 'Ctrl+R'
+              case 'shapes': return 'Ctrl+S'
+              case 'text': return 'Ctrl+T'
+              case 'eraser': return 'Ctrl+E'
+              case 'image': return 'Ctrl+I'
+              case 'layers': return 'Ctrl+L'
               default: return ''
             }
           }
@@ -2406,13 +2463,20 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
           )
         })}
         
-        {/* 撤销和清除画板按钮 */}
+        {/* 撤销和重做按钮 */}
         <button
           onClick={handleUndo}
           className="p-1 lg:p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"
           title="撤销 (Ctrl+Z)"
         >
           <RotateCcw className="h-4 w-4 lg:h-5 lg:w-5" />
+        </button>
+        <button
+          onClick={handleRedo}
+          className="p-1 lg:p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"
+          title="重做 (Ctrl+Y)"
+        >
+          <RotateCw className="h-4 w-4 lg:h-5 lg:w-5" />
         </button>
         <button
           onClick={handleClearCanvas}
