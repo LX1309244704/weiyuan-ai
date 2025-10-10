@@ -1,4 +1,4 @@
-// File: /Users/lixin/Desktop/weiyuan-ai/app/canvas/page.tsx
+// File: D:\aiworks\weiyuan-ai\app\canvas\page.tsx
 import * as entry from '../../../../app/canvas/page.js'
 import type { ResolvingMetadata, ResolvingViewport } from 'next/dist/lib/metadata/types/metadata-interface.js'
 

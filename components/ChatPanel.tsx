@@ -496,9 +496,9 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
   }
 
   return (
-    <div className="absolute right-4 top-16 bottom-4 w-80 bg-white dark:bg-gray-800 rounded-lg shadow-lg flex flex-col z-30" data-chat-panel="true">
+    <div className="absolute right-4 top-16 bottom-4 w-80 bg-white dark:bg-gray-800 rounded-lg shadow-lg flex flex-col z-30 border border-gray-200 dark:border-gray-600" data-chat-panel="true">
       {/* 头部 */}
-      <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
+      <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-600">
         <div className="flex items-center space-x-2">
           <MessageSquare className="h-5 w-5 text-primary-600 dark:text-primary-400" />
           <h3 className="font-semibold text-gray-900 dark:text-gray-100">AI创作助手</h3>
@@ -535,7 +535,7 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
                   <img 
                     src={message.imageData} 
                     alt="截图" 
-                    className="rounded border border-gray-200 max-w-full"
+                    className="rounded border border-gray-200 dark:border-gray-600 max-w-full"
                   />
 
                 </div>
@@ -546,7 +546,7 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
                   <img 
                     src={message.imageData} 
                     alt="AI生成图片" 
-                    className="rounded border border-gray-200 max-w-full"
+                    className="rounded border border-gray-200 dark:border-gray-600 max-w-full"
                   />
                   <button
                     onClick={() => handleDownload(message.imageData!, 'ai-generated.png')}
@@ -592,7 +592,7 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
       </div>
 
       {/* 输入区域 */}
-      <div className="p-4 border-t border-gray-200 dark:border-gray-700 space-y-2">
+      <div className="p-4 border-t border-gray-200 dark:border-gray-600 space-y-2">
 
         {/* 图片预览区域 - 移到上传按钮上方 */}
         {(screenshotPreview || uploadedImagePreviews.length > 0) && (
@@ -660,10 +660,10 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
               
               {/* 模型选择卡片 - Tab切换方式 */}
               {showModelSettings && (
-                <div className="absolute bottom-full left-0 mb-2 w-56 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 z-10">
+                <div className="absolute bottom-full left-0 mb-2 w-56 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-600 z-10">
                   <div className="p-2">
                     {/* Tab切换栏 */}
-                    <div className="flex border-b border-gray-200 dark:border-gray-700 mb-2">
+                    <div className="flex border-b border-gray-200 dark:border-gray-600 mb-2">
                       {['图像', '视频', '文本'].map((tab) => (
                         <button
                           key={tab}
@@ -773,7 +773,7 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
               
               {/* 图片比例选择卡片 */}
               {showAspectRatio && (
-                <div className="absolute bottom-full left-0 mb-2 w-32 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 z-10">
+                <div className="absolute bottom-full left-0 mb-2 w-32 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-600 z-10">
                   <div className="p-2">
                     <div className="space-y-1">
                       {['16:9', '9:16', '4:3', '3:4', '2:1', '1:2', '1:1'].map((ratio) => (
@@ -807,7 +807,7 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
               
               {/* 生成张数设置卡片 */}
               {showImageCount && (
-                <div className="absolute bottom-full left-0 mb-2 w-24 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 z-10">
+                <div className="absolute bottom-full left-0 mb-2 w-24 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-600 z-10">
                   <div className="p-3">
                     <div className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
                       张数: {imageCount}

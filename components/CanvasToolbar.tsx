@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { 
   Pencil, 
   Shapes,
@@ -67,7 +67,10 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
   const router = useRouter()
   const [showSaveModal, setShowSaveModal] = useState(false)
   const [showLayerPanel, setShowLayerPanel] = useState(false)
+
+
   const layerPanelRef = useRef<HTMLDivElement>(null)
+  const [copiedObject, setCopiedObject] = useState<any>(null)
 
   // 点击外部关闭形状选择卡片和层级面板
   useEffect(() => {
@@ -108,9 +111,554 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
     }
   }
 
+  // 全选画布上的所有对象
+  const handleSelectAll = () => {
+    if (!canvas || !(window as any).fabric) return
+    
+    try {
+      const fabric = (window as any).fabric
+      
+      // 获取画布上的所有对象
+      const allObjects = canvas.getObjects()
+      
+      if (allObjects.length === 0) {
+        console.log('画布上没有对象可选中')
+        return
+      }
+      
+      console.log(`全选 ${allObjects.length} 个对象`)
+      
+      // 取消当前选中状态
+      canvas.discardActiveObject()
+      
+      // 选中所有对象
+      const selection = new fabric.ActiveSelection(allObjects, {
+        canvas: canvas
+      })
+      canvas.setActiveObject(selection)
+      canvas.requestRenderAll()
+      
+      // 显示全选成功提示
+      const notification = document.createElement('div')
+      notification.innerHTML = `
+        <div style="position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: #10b981; color: white; padding: 8px 12px; border-radius: 6px; z-index: 10000; box-shadow: 0 2px 4px rgba(0,0,0,0.1); font-size: 14px;">
+          已全选 ${allObjects.length} 个对象 (Ctrl+A)
+        </div>
+      `
+      document.body.appendChild(notification)
+      
+      // 1.5秒后自动移除提示
+      setTimeout(() => {
+        if (document.body.contains(notification)) {
+          document.body.removeChild(notification)
+        }
+      }, 1500)
+      
+    } catch (error) {
+      console.error('全选操作失败:', error)
+    }
+  }
+
+  // 复制选中的对象（支持多对象）
+  const handleCopyObject = () => {
+    if (!canvas || !(window as any).fabric) return
+    
+    const activeObjects = canvas.getActiveObjects()
+    if (activeObjects.length === 0) return
+    
+    try {
+      // 保存所有选中对象的数据
+      const copiedObjects = activeObjects.map(obj => ({
+        type: obj.type,
+        data: obj.toObject(),
+        left: obj.left,
+        top: obj.top,
+        width: obj.width,
+        height: obj.height
+      }))
+      
+      console.log('复制对象数据:', copiedObjects)
+      
+      setCopiedObject({
+        objects: copiedObjects,
+        count: copiedObjects.length
+      })
+      
+      console.log(`已复制 ${copiedObjects.length} 个对象到剪贴板`)
+      
+      // 显示复制成功提示
+      const notification = document.createElement('div')
+      notification.innerHTML = `
+        <div style="position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: #10b981; color: white; padding: 8px 12px; border-radius: 6px; z-index: 10000; box-shadow: 0 2px 4px rgba(0,0,0,0.1); font-size: 14px;">
+          ${copiedObjects.length > 1 ? `已复制 ${copiedObjects.length} 个对象 (Ctrl+C)` : '对象已复制 (Ctrl+C)'}
+        </div>
+      `
+      document.body.appendChild(notification)
+      
+      // 1.5秒后自动移除提示
+      setTimeout(() => {
+        if (document.body.contains(notification)) {
+          document.body.removeChild(notification)
+        }
+      }, 1500)
+    } catch (error) {
+      console.error('复制对象失败:', error)
+    }
+  }
+
+  // 粘贴对象（支持多对象）
+  const handlePasteObject = () => {
+    if (!canvas || !copiedObject || !(window as any).fabric) {
+      console.log('粘贴失败: canvas, copiedObject 或 fabric 不可用')
+      return
+    }
+    
+    console.log('开始粘贴对象:', copiedObject)
+    
+    try {
+      // 保存当前状态到历史记录
+      saveCanvasState()
+      
+      const fabric = (window as any).fabric
+      
+      // 检查是否是单对象还是多对象
+      if (copiedObject.objects && Array.isArray(copiedObject.objects)) {
+        // 多对象粘贴
+        const { objects, count } = copiedObject
+        console.log(`粘贴 ${count} 个对象`)
+        
+        const pastedObjects = []
+        const imagePromises = []
+        
+        // 计算原始对象组的边界框
+        let minLeft = Infinity
+        let minTop = Infinity
+        
+        for (const objData of objects) {
+          const { left, top } = objData
+          if (left !== undefined && top !== undefined) {
+            minLeft = Math.min(minLeft, left)
+            minTop = Math.min(minTop, top)
+          }
+        }
+        
+        // 如果无法计算边界框，使用默认位置
+        if (minLeft === Infinity) {
+          minLeft = 0
+          minTop = 0
+        }
+        
+        // 计算粘贴位置 - 让整个对象组移动到画布中心附近
+        const canvasWidth = canvas.getWidth() || 800
+        const canvasHeight = canvas.getHeight() || 600
+        const targetLeft = canvasWidth / 2 - 100
+        const targetTop = canvasHeight / 2 - 100
+        
+        // 计算移动向量
+        const moveX = targetLeft - minLeft
+        const moveY = targetTop - minTop
+        
+        for (const objData of objects) {
+          const { type, data, left, top } = objData
+          // 保持对象间的相对位置关系，整体移动到新位置
+          const originalLeft = left !== undefined ? left : minLeft
+          const originalTop = top !== undefined ? top : minTop
+          const newLeft = originalLeft + moveX
+          const newTop = originalTop + moveY
+          
+          console.log(`粘贴对象类型: ${type}`)
+          
+          if (type === 'image') {
+            // 处理图片对象 - 异步加载
+            if (data.src) {
+              const imagePromise = new Promise((resolve) => {
+                const img = new Image()
+                img.crossOrigin = 'anonymous'
+                
+                img.onload = () => {
+                  const fabricImg = new fabric.Image(img, {
+                    ...data,
+                    left: newLeft,
+                    top: newTop,
+                    evented: true,
+                    selectable: true
+                  })
+                  canvas.add(fabricImg)
+                  pastedObjects.push(fabricImg)
+                  resolve(fabricImg)
+                }
+                
+                img.onerror = () => {
+                  console.error('图片加载失败:', data.src)
+                  resolve(null)
+                }
+                
+                img.src = data.src
+              })
+              imagePromises.push(imagePromise)
+            }
+          } else {
+            // 处理其他对象类型
+            let newObject = null
+            
+            switch (type) {
+              case 'rect':
+                newObject = new fabric.Rect({
+                  ...data,
+                  left: newLeft,
+                  top: newTop,
+                  evented: true,
+                  selectable: true
+                })
+                break
+              case 'circle':
+                newObject = new fabric.Circle({
+                  ...data,
+                  left: newLeft,
+                  top: newTop,
+                  evented: true,
+                  selectable: true
+                })
+                break
+              case 'triangle':
+                newObject = new fabric.Triangle({
+                  ...data,
+                  left: newLeft,
+                  top: newTop,
+                  evented: true,
+                  selectable: true
+                })
+                break
+              case 'textbox':
+                newObject = new fabric.Textbox(data.text || '文本', {
+                  ...data,
+                  left: newLeft,
+                  top: newTop,
+                  evented: true,
+                  selectable: true
+                })
+                break
+              case 'i-text':
+                newObject = new fabric.IText(data.text || '文本', {
+                  ...data,
+                  left: newLeft,
+                  top: newTop,
+                  evented: true,
+                  selectable: true
+                })
+                break
+              case 'path':
+                newObject = new fabric.Path(data.path, {
+                  ...data,
+                  left: newLeft,
+                  top: newTop,
+                  evented: true,
+                  selectable: true
+                })
+                break
+              case 'line':
+                newObject = new fabric.Line(data.points || [0, 0, 100, 0], {
+                  ...data,
+                  left: newLeft,
+                  top: newTop,
+                  evented: true,
+                  selectable: true
+                })
+                break
+              default:
+                console.warn('不支持的对象类型:', type)
+                continue
+            }
+            
+            if (newObject) {
+              canvas.add(newObject)
+              pastedObjects.push(newObject)
+            }
+          }
+        }
+        
+        // 等待所有图片加载完成
+        Promise.all(imagePromises).then(() => {
+          // 设置所有粘贴的对象为选中状态
+          if (pastedObjects.length > 0) {
+            // 使用Fabric.js的多对象选择功能，而不是创建Group
+            canvas.discardActiveObject()
+            const selection = new fabric.ActiveSelection(pastedObjects, {
+              canvas: canvas
+            })
+            canvas.setActiveObject(selection)
+            canvas.requestRenderAll()
+            
+            console.log(`成功粘贴 ${pastedObjects.length} 个对象`)
+            
+            // 显示粘贴成功提示
+            const notification = document.createElement('div')
+            notification.innerHTML = `
+              <div style="position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: #10b981; color: white; padding: 8px 12px; border-radius: 6px; z-index: 10000; box-shadow: 0 2px 4px rgba(0,0,0,0.1); font-size: 14px;">
+                ${count > 1 ? `已粘贴 ${count} 个对象 (Ctrl+V)` : '对象已粘贴 (Ctrl+V)'}
+              </div>
+            `
+            document.body.appendChild(notification)
+            
+            // 1.5秒后自动移除提示
+            setTimeout(() => {
+              if (document.body.contains(notification)) {
+                document.body.removeChild(notification)
+              }
+            }, 1500)
+          }
+        })
+      } else {
+        // 向后兼容：单对象粘贴（旧版本格式）
+        const { type, data, left, top } = copiedObject
+        console.log('粘贴对象类型:', type)
+        
+        const newLeft = (left || 0) + 20
+        const newTop = (top || 0) + 20
+        
+        let newObject = null
+        
+        switch (type) {
+          case 'rect':
+            newObject = new fabric.Rect({
+              ...data,
+              left: newLeft,
+              top: newTop,
+              evented: true,
+              selectable: true
+            })
+            break
+          case 'circle':
+            newObject = new fabric.Circle({
+              ...data,
+              left: newLeft,
+              top: newTop,
+              evented: true,
+              selectable: true
+            })
+            break
+          case 'triangle':
+            newObject = new fabric.Triangle({
+              ...data,
+              left: newLeft,
+              top: newTop,
+              evented: true,
+              selectable: true
+            })
+            break
+          case 'textbox':
+            newObject = new fabric.Textbox(data.text || '文本', {
+              ...data,
+              left: newLeft,
+              top: newTop,
+              evented: true,
+              selectable: true
+            })
+            break
+          case 'i-text':
+            newObject = new fabric.IText(data.text || '文本', {
+              ...data,
+              left: newLeft,
+              top: newTop,
+              evented: true,
+              selectable: true
+            })
+            break
+          case 'path':
+            newObject = new fabric.Path(data.path, {
+              ...data,
+              left: newLeft,
+              top: newTop,
+              evented: true,
+              selectable: true
+            })
+            break
+          case 'line':
+            newObject = new fabric.Line(data.points || [0, 0, 100, 0], {
+              ...data,
+              left: newLeft,
+              top: newTop,
+              evented: true,
+              selectable: true
+            })
+            break
+          case 'image':
+            // 处理图片对象 - 需要异步加载图片
+            if (data.src) {
+              const img = new Image()
+              img.crossOrigin = 'anonymous'
+              
+              new Promise((resolve, reject) => {
+                img.onload = () => resolve(img)
+                img.onerror = reject
+                img.src = data.src
+              }).then((loadedImg: any) => {
+                const fabricImg = new fabric.Image(loadedImg, {
+                  ...data,
+                  left: newLeft,
+                  top: newTop,
+                  evented: true,
+                  selectable: true
+                })
+                
+                canvas.add(fabricImg)
+                canvas.setActiveObject(fabricImg)
+                canvas.requestRenderAll()
+                
+                console.log('图片对象已成功粘贴')
+                
+                // 显示粘贴成功提示
+                const notification = document.createElement('div')
+                notification.innerHTML = `
+                  <div style="position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: #10b981; color: white; padding: 8px 12px; border-radius: 6px; z-index: 10000; box-shadow: 0 2px 4px rgba(0,0,0,0.1); font-size: 14px;">
+                    图片已粘贴 (Ctrl+V)
+                  </div>
+                `
+                document.body.appendChild(notification)
+                
+                // 1.5秒后自动移除提示
+                setTimeout(() => {
+                  if (document.body.contains(notification)) {
+                    document.body.removeChild(notification)
+                  }
+                }, 1500)
+              }).catch(error => {
+                console.error('图片加载失败:', error)
+              })
+              
+              return
+            }
+            break
+          default:
+            console.warn('不支持的对象类型:', type)
+            return
+        }
+        
+        if (newObject) {
+          canvas.add(newObject)
+          canvas.setActiveObject(newObject)
+          canvas.requestRenderAll()
+          
+          console.log('对象已成功粘贴，新对象:', newObject)
+          
+          // 显示粘贴成功提示
+          const notification = document.createElement('div')
+          notification.innerHTML = `
+            <div style="position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: #10b981; color: white; padding: 8px 12px; border-radius: 6px; z-index: 10000; box-shadow: 0 2px 4px rgba(0,0,0,0.1); font-size: 14px;">
+              对象已粘贴 (Ctrl+V)
+            </div>
+          `
+          document.body.appendChild(notification)
+          
+          // 1.5秒后自动移除提示
+          setTimeout(() => {
+            if (document.body.contains(notification)) {
+              document.body.removeChild(notification)
+            }
+          }, 1500)
+        }
+      }
+    } catch (error) {
+      console.error('粘贴对象失败:', error)
+    }
+  }
+
+  // 从系统剪贴板粘贴图片
+  const handlePasteFromClipboard = async (): Promise<boolean> => {
+    if (!canvas || !(window as any).fabric) {
+      console.log('剪贴板粘贴失败: canvas 或 fabric 不可用')
+      return false
+    }
+    
+    try {
+      // 检查剪贴板中是否有图片数据
+      const clipboardItems = await navigator.clipboard.read()
+      
+      for (const clipboardItem of clipboardItems) {
+        for (const type of clipboardItem.types) {
+          if (type.startsWith('image/')) {
+            console.log('检测到剪贴板中的图片类型:', type)
+            
+            const blob = await clipboardItem.getType(type)
+            const imageUrl = URL.createObjectURL(blob)
+            
+            // 使用HTML Image元素加载图片
+            const img = new Image()
+            img.crossOrigin = 'anonymous'
+            
+            return new Promise((resolve) => {
+              img.onload = () => {
+                const fabric = (window as any).fabric
+                
+                // 创建Fabric图片对象
+                const fabricImg = new fabric.Image(img, {
+                  left: canvas.width! / 2 - img.width / 2,
+                  top: canvas.height! / 2 - img.height / 2,
+                  evented: true,
+                  selectable: true
+                })
+                
+                // 设置缩放比例
+                const canvasWidth = canvas.getWidth()
+                const canvasHeight = canvas.getHeight()
+                const maxWidth = canvasWidth * 0.8
+                const maxHeight = canvasHeight * 0.8
+                const scaleX = maxWidth / img.width
+                const scaleY = maxHeight / img.height
+                const scale = Math.min(scaleX, scaleY, 1)
+                
+                fabricImg.scale(scale)
+                
+                // 添加到画布
+                canvas.add(fabricImg)
+                canvas.setActiveObject(fabricImg)
+                canvas.requestRenderAll()
+                
+                // 显示粘贴成功提示
+                const notification = document.createElement('div')
+                notification.innerHTML = `
+                  <div style="position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: #10b981; color: white; padding: 8px 12px; border-radius: 6px; z-index: 10000; box-shadow: 0 2px 4px rgba(0,0,0,0.1); font-size: 14px;">
+                    图片已从剪贴板粘贴
+                  </div>
+                `
+                document.body.appendChild(notification)
+                
+                // 1.5秒后自动移除提示
+                setTimeout(() => {
+                  if (document.body.contains(notification)) {
+                    document.body.removeChild(notification)
+                  }
+                  URL.revokeObjectURL(imageUrl)
+                }, 1500)
+                
+                console.log('系统剪贴板图片粘贴成功')
+                resolve(true)
+              }
+              
+              img.onerror = () => {
+                console.error('剪贴板图片加载失败')
+                resolve(false)
+              }
+              
+              img.src = imageUrl
+            })
+          }
+        }
+      }
+      
+      console.log('剪贴板中没有图片数据')
+      return false
+    } catch (error) {
+      console.error('剪贴板粘贴失败:', error)
+      return false
+    }
+  }
+
   // 键盘事件处理
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
+      console.log('键盘事件:', event.key, 'Ctrl:', event.ctrlKey, 'Target:', event.target)
+      
       if (!canvas) return
       
       const activeObject = canvas.getActiveObject()
@@ -131,6 +679,46 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
       if (event.key === 'Backspace' && (!activeObject || !activeObject.isEditing)) {
         event.preventDefault()
         handleDeleteSelected()
+      }
+      
+      // 控制键组合快捷键
+      if (event.ctrlKey || event.metaKey) { // 添加 metaKey 支持 Mac 的 Cmd 键
+        const key = event.key.toLowerCase()
+        console.log('检测到控制键组合:', key)
+        
+        switch (key) {
+          case 'a': // Ctrl + A - 全选
+            console.log('触发全选操作')
+            event.preventDefault()
+            handleSelectAll()
+            break
+          case 'c': // Ctrl + C - 复制
+            console.log('触发复制操作')
+            // 检查是否有选中的对象（支持多对象选择）
+            const activeObjects = canvas.getActiveObjects()
+            if (activeObjects.length > 0 && (!activeObject || !activeObject.isEditing)) {
+              event.preventDefault()
+              handleCopyObject()
+            }
+            break
+          case 'v': // Ctrl + V - 粘贴
+            console.log('触发粘贴操作')
+            event.preventDefault()
+            // 检查是否在文字编辑模式
+            if (!activeObject || !activeObject.isEditing) {
+              console.log('执行粘贴')
+              // 首先尝试从系统剪贴板粘贴图片
+              handlePasteFromClipboard().then(success => {
+                if (!success) {
+                  // 如果系统剪贴板没有图片，则粘贴内部复制的对象
+                  handlePasteObject()
+                }
+              })
+            } else {
+              console.log('跳过粘贴 - 文字编辑模式')
+            }
+            break
+        }
       }
       
       // 层级操作快捷键
@@ -165,7 +753,7 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
     return () => {
       document.removeEventListener('keydown', handleKeyDown)
     }
-  }, [canvas])
+  }, [canvas, handleCopyObject, handlePasteObject, handlePasteFromClipboard]) // 添加依赖项
 
   // 保存画布状态到历史记录
   const saveCanvasState = () => {
@@ -1001,9 +1589,12 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
     const newIndex = historyIndex - 1
     const previousState = history[newIndex]
     
-    // 清除当前画布并设置为纯白色背景
+    // 根据主题设置合适的背景颜色
+    const backgroundColor = theme === 'dark' ? '#1f2937' : '#ffffff'
+    
+    // 清除当前画布并设置背景颜色
     canvas.clear()
-    canvas.backgroundColor = '#ffffff'
+    canvas.backgroundColor = backgroundColor
     
     // 恢复之前的状态（可能为空数组，表示空画布）
     if (previousState && previousState.length > 0) {
@@ -1022,9 +1613,12 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
     const newIndex = historyIndex + 1
     const nextState = history[newIndex]
     
-    // 清除当前画布并设置为纯白色背景
+    // 根据主题设置合适的背景颜色
+    const backgroundColor = theme === 'dark' ? '#1f2937' : '#ffffff'
+    
+    // 清除当前画布并设置背景颜色
     canvas.clear()
-    canvas.backgroundColor = '#ffffff'
+    canvas.backgroundColor = backgroundColor
     
     // 恢复下一个状态
     if (nextState) {
@@ -1234,12 +1828,15 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
     // 保存当前状态到历史记录
     saveCanvasState()
     
-    // 清除画板并设置为纯白色背景
+    // 根据主题设置合适的背景颜色
+    const backgroundColor = theme === 'dark' ? '#1f2937' : '#ffffff'
+    
+    // 清除画板并设置背景颜色
     canvas.clear()
-    canvas.backgroundColor = '#ffffff'
+    canvas.backgroundColor = backgroundColor
     canvas.renderAll()
     
-    console.log('画板已清除')
+    console.log('画板已清除，背景颜色:', backgroundColor)
   }
 
   // 处理画板缩放
@@ -1537,6 +2134,86 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
     return language === 'zh' ? '中文' : 'English'
   }
 
+  // 处理键盘快捷键
+  const handleKeyDown = useCallback((event: KeyboardEvent) => {
+    if (!canvas) return
+    
+    const isCtrl = event.ctrlKey || event.metaKey
+    
+    if (isCtrl) {
+      switch (event.key.toLowerCase()) {
+        case 'z':
+          event.preventDefault()
+          handleUndo()
+          break
+        case 'd':
+          event.preventDefault()
+          handleClearCanvas()
+          break
+        case 'a':
+          event.preventDefault()
+          handleSelectAll()
+          break
+        case 'c':
+          event.preventDefault()
+          handleCopyObject()
+          break
+        case 'v':
+          event.preventDefault()
+          handlePasteObject()
+          break
+      }
+    } else {
+      // 单键快捷键
+      switch (event.key.toLowerCase()) {
+        case 'h':
+          event.preventDefault()
+          handleToolSelect('hand')
+          break
+        case 'p':
+          event.preventDefault()
+          handleToolSelect('pencil')
+          break
+        case 'a':
+          event.preventDefault()
+          handleToolSelect('arrow')
+          break
+        case 's':
+          event.preventDefault()
+          handleToolSelect('shapes')
+          break
+        case 't':
+          event.preventDefault()
+          handleToolSelect('text')
+          break
+        case 'e':
+          event.preventDefault()
+          handleToolSelect('eraser')
+          break
+        case 'i':
+          event.preventDefault()
+          handleToolSelect('image')
+          break
+        case 'l':
+          event.preventDefault()
+          handleToolSelect('layers')
+          break
+        case 'escape':
+          event.preventDefault()
+          handleBackToUser()
+          break
+      }
+    }
+  }, [canvas, handleUndo, handleClearCanvas, handleSelectAll, handleCopyObject, handlePasteObject, handleBackToUser])
+
+  // 添加键盘事件监听
+  useEffect(() => {
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [handleKeyDown])
+
   return (
     <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 px-2 sm:px-4 py-2 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-2 lg:gap-0 relative">
       {/* 形状选择卡片 */}
@@ -1691,26 +2368,63 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
         <button
           onClick={handleBackToUser}
           className="p-1 lg:p-2 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-          title="返回用户页面"
+          title="返回用户页面 (Esc)"
         >
           <ArrowLeft className="h-4 w-4 lg:h-5 lg:w-5" />
         </button>
         
-        {tools.map((tool) => (
-          <button
-            key={tool.id}
-            onClick={() => handleToolSelect(tool.id)}
-            className={`p-1 lg:p-2 rounded-lg transition-colors ${
-              activeTool === tool.id 
-                ? 'bg-primary-100 dark:bg-primary-900 text-primary-600 dark:text-primary-400' 
-                : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
-            }`}
-            title={tool.label}
-            data-tool={tool.id}
-          >
-            <tool.icon className="h-4 w-4 lg:h-5 lg:w-5" />
-          </button>
-        ))}
+        {tools.map((tool) => {
+          const getShortcut = (toolId: string) => {
+            switch (toolId) {
+              case 'hand': return 'H'
+              case 'pencil': return 'P'
+              case 'arrow': return 'A'
+              case 'shapes': return 'S'
+              case 'text': return 'T'
+              case 'eraser': return 'E'
+              case 'image': return 'I'
+              case 'layers': return 'L'
+              default: return ''
+            }
+          }
+          
+          const shortcut = getShortcut(tool.id)
+          return (
+            <button
+              key={tool.id}
+              onClick={() => handleToolSelect(tool.id)}
+              className={`p-1 lg:p-2 rounded-lg transition-colors ${
+                activeTool === tool.id 
+                  ? 'bg-primary-100 dark:bg-primary-900 text-primary-600 dark:text-primary-400' 
+                  : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+              }`}
+              title={`${tool.label} (${shortcut})`}
+              data-tool={tool.id}
+            >
+              <tool.icon className="h-4 w-4 lg:h-5 lg:w-5" />
+            </button>
+          )
+        })}
+        
+        {/* 撤销和清除画板按钮 */}
+        <button
+          onClick={handleUndo}
+          className="p-1 lg:p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"
+          title="撤销 (Ctrl+Z)"
+        >
+          <RotateCcw className="h-4 w-4 lg:h-5 lg:w-5" />
+        </button>
+        <button
+          onClick={handleClearCanvas}
+          className="p-1 lg:p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"
+          title="清除画板 (Ctrl+D)"
+        >
+          <svg className="h-4 w-4 lg:h-5 lg:w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+          </svg>
+        </button>
+        
+
       </div>
 
       {/* 中间控制组 */}
@@ -1773,24 +2487,6 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
 
       {/* 右侧操作组 */}
       <div className="flex items-center justify-center lg:justify-end flex-wrap gap-1 lg:gap-2 mt-2 lg:mt-0">
-        {/* 操作历史 */}
-        <button
-          onClick={handleUndo}
-          className="p-1 lg:p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"
-          title="撤销"
-        >
-          <RotateCcw className="h-4 w-4 lg:h-5 lg:w-5" />
-        </button>
-        <button
-          onClick={handleClearCanvas}
-          className="p-1 lg:p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"
-          title="清除画板"
-        >
-          <svg className="h-4 w-4 lg:h-5 lg:w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-          </svg>
-        </button>
-
         {/* 保存 */}
         <button
           onClick={handleSave}

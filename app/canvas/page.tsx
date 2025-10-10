@@ -45,6 +45,26 @@ export default function CanvasPage() {
           preserveObjectStacking: true
         })
 
+        // 禁用默认的鼠标滚轮缩放功能
+        c.on('mouse:wheel', (opt: any) => {
+          const delta = opt.e.deltaY
+          
+          // 只在按住Ctrl键时启用缩放功能
+          if (opt.e.ctrlKey) {
+            // 阻止默认行为
+            opt.e.preventDefault()
+            opt.e.stopPropagation()
+            
+            let zoom = c.getZoom()
+            zoom *= 0.999 ** delta
+            if (zoom > 20) zoom = 20
+            if (zoom < 0.01) zoom = 0.01
+            
+            c.zoomToPoint(new f.Point(opt.e.offsetX, opt.e.offsetY), zoom)
+          }
+          // 如果不按住Ctrl键，允许正常的页面滚动
+        })
+
         // 画板铺满整个屏幕
         c.setWidth(window.innerWidth)
         c.setHeight(window.innerHeight)
@@ -145,11 +165,24 @@ export default function CanvasPage() {
       const width = pointer.x - startX
       const height = pointer.y - startY
 
+      // 确保框选矩形的坐标计算正确
+      const newLeft = width < 0 ? pointer.x : startX
+      const newTop = height < 0 ? pointer.y : startY
+      const newWidth = Math.abs(width)
+      const newHeight = Math.abs(height)
+
+      console.log('框选矩形更新:', {
+        startX, startY,
+        pointerX: pointer.x, pointerY: pointer.y,
+        width, height,
+        newLeft, newTop, newWidth, newHeight
+      })
+
       selectionRect.set({
-        width: Math.abs(width),
-        height: Math.abs(height),
-        left: width < 0 ? pointer.x : startX,
-        top: height < 0 ? pointer.y : startY
+        width: newWidth,
+        height: newHeight,
+        left: newLeft,
+        top: newTop
       })
       fabricCanvas.renderAll()
     }
@@ -189,10 +222,33 @@ export default function CanvasPage() {
     if (!fabricCanvas || !selectedArea) return null
     const rect = selectedArea.rect
 
+    // 获取画布视口变换信息用于调试
+    const vpt = fabricCanvas.viewportTransform
+    console.log('截图调试信息:', {
+      rectProperties: {
+        left: rect.left,
+        top: rect.top,
+        width: rect.width,
+        height: rect.height,
+        scaleX: rect.scaleX,
+        scaleY: rect.scaleY
+      },
+      viewportTransform: vpt,
+      canvasSize: {
+        width: fabricCanvas.getWidth(),
+        height: fabricCanvas.getHeight()
+      }
+    })
+
+    // 直接使用框选矩形的原始坐标，Fabric.js会自动处理视口变换
     const left = rect.left ?? 0
     const top = rect.top ?? 0
     const width = rect.width ?? 0
     const height = rect.height ?? 0
+
+    console.log('截图参数 - 直接使用框选矩形坐标:', {
+      left, top, width, height
+    })
 
     if (width <= 2 || height <= 2) return null
 
