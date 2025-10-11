@@ -682,17 +682,12 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
         handleDeleteSelected()
       }
       
-      // 控制键组合快捷键
+      // 控制键组合快捷键（只处理复制操作，粘贴操作由另一个处理函数处理）
       if (event.ctrlKey || event.metaKey) { // 添加 metaKey 支持 Mac 的 Cmd 键
         const key = event.key.toLowerCase()
         console.log('检测到控制键组合:', key)
         
         switch (key) {
-          case 'a': // Ctrl + A - 全选
-            console.log('触发全选操作')
-            event.preventDefault()
-            handleSelectAll()
-            break
           case 'c': // Ctrl + C - 复制
             console.log('触发复制操作')
             // 检查是否有选中的对象（支持多对象选择）
@@ -700,23 +695,6 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
             if (activeObjects.length > 0 && (!activeObject || !activeObject.isEditing)) {
               event.preventDefault()
               handleCopyObject()
-            }
-            break
-          case 'v': // Ctrl + V - 粘贴
-            console.log('触发粘贴操作')
-            event.preventDefault()
-            // 检查是否在文字编辑模式
-            if (!activeObject || !activeObject.isEditing) {
-              console.log('执行粘贴')
-              // 首先尝试从系统剪贴板粘贴图片
-              handlePasteFromClipboard().then(success => {
-                if (!success) {
-                  // 如果系统剪贴板没有图片，则粘贴内部复制的对象
-                  handlePasteObject()
-                }
-              })
-            } else {
-              console.log('跳过粘贴 - 文字编辑模式')
             }
             break
         }
@@ -2199,8 +2177,57 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
   const handleKeyDown = useCallback((event: KeyboardEvent) => {
     if (!canvas) return
     
+    // 检查是否在文字编辑模式
+    const activeObject = canvas.getActiveObject()
+    if (activeObject && activeObject.isEditing) {
+      // 如果正在编辑文字，让Fabric.js处理键盘事件，不执行快捷键
+      return
+    }
+    
     const isCtrl = event.ctrlKey || event.metaKey
     
+    // 工具快捷键（单字母）
+    switch (event.key.toLowerCase()) {
+      case 'h':
+        event.preventDefault()
+        handleToolSelect('hand')
+        break
+      case 'p':
+        event.preventDefault()
+        handleToolSelect('pencil')
+        break
+      case 'r':
+        event.preventDefault()
+        handleToolSelect('arrow')
+        break
+      case 's':
+        event.preventDefault()
+        handleToolSelect('shapes')
+        break
+      case 't':
+        event.preventDefault()
+        handleToolSelect('text')
+        break
+      case 'e':
+        event.preventDefault()
+        handleToolSelect('eraser')
+        break
+      case 'i':
+        event.preventDefault()
+        handleToolSelect('image')
+        break
+      case 'l':
+        event.preventDefault()
+        handleToolSelect('layers')
+        break
+      case 'a':
+        // A键作为全选快捷键（单字母）
+        event.preventDefault()
+        handleSelectAll()
+        break
+    }
+    
+    // 控制键组合快捷键
     if (isCtrl) {
       switch (event.key.toLowerCase()) {
         case 'z':
@@ -2215,10 +2242,6 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
           event.preventDefault()
           handleClearCanvas()
           break
-        case 'a':
-          event.preventDefault()
-          handleSelectAll()
-          break
         case 'c':
           event.preventDefault()
           handleCopyObject()
@@ -2226,38 +2249,6 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
         case 'v':
           event.preventDefault()
           handlePasteObject()
-          break
-        case 'r':
-          event.preventDefault()
-          handleToolSelect('arrow')
-          break
-        case 'h':
-          event.preventDefault()
-          handleToolSelect('hand')
-          break
-        case 'p':
-          event.preventDefault()
-          handleToolSelect('pencil')
-          break
-        case 's':
-          event.preventDefault()
-          handleToolSelect('shapes')
-          break
-        case 't':
-          event.preventDefault()
-          handleToolSelect('text')
-          break
-        case 'e':
-          event.preventDefault()
-          handleToolSelect('eraser')
-          break
-        case 'i':
-          event.preventDefault()
-          handleToolSelect('image')
-          break
-        case 'l':
-          event.preventDefault()
-          handleToolSelect('layers')
           break
       }
     }
@@ -2433,14 +2424,14 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
         {tools.map((tool) => {
           const getShortcut = (toolId: string) => {
             switch (toolId) {
-              case 'hand': return 'Ctrl+H'
-              case 'pencil': return 'Ctrl+P'
-              case 'arrow': return 'Ctrl+R'
-              case 'shapes': return 'Ctrl+S'
-              case 'text': return 'Ctrl+T'
-              case 'eraser': return 'Ctrl+E'
-              case 'image': return 'Ctrl+I'
-              case 'layers': return 'Ctrl+L'
+              case 'hand': return 'H'
+              case 'pencil': return 'P'
+              case 'arrow': return 'R'
+              case 'shapes': return 'S'
+              case 'text': return 'T'
+              case 'eraser': return 'E'
+              case 'image': return 'I'
+              case 'layers': return 'L'
               default: return ''
             }
           }

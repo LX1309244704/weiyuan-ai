@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect, forwardRef, useImperativeHandle } from 'react'
+import { useState, useRef, useEffect, forwardRef, useImperativeHandle, useCallback } from 'react'
 import { Send, Image, Video, Download, X, MessageSquare, ChevronLeft, Settings, Monitor, Film, Type } from 'lucide-react'
 
 interface Message {
@@ -32,6 +32,70 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
   const [selectedAspectRatio, setSelectedAspectRatio] = useState('16:9')
   const [imageCount, setImageCount] = useState(1)
   const [activeModelTab, setActiveModelTab] = useState('图像')
+  const [panelWidth, setPanelWidth] = useState(320) // 默认宽度320px
+  const [isResizing, setIsResizing] = useState(false)
+  const resizeStartXRef = useRef(0)
+  const resizeStartWidthRef = useRef(0)
+
+  // 拖拽相关引用
+  const animationFrameRef = useRef<number>()
+  const lastWidthRef = useRef(panelWidth)
+
+  // 拖拽移动处理函数
+  const handleResizeMove = (e: MouseEvent) => {
+    if (!isResizing) return
+    
+    // 使用requestAnimationFrame优化性能
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current)
+    }
+    
+    animationFrameRef.current = requestAnimationFrame(() => {
+      const deltaX = e.clientX - resizeStartXRef.current
+      const newWidth = Math.max(280, Math.min(600, resizeStartWidthRef.current - deltaX))
+      
+      // 只有当宽度变化超过2px时才更新，减少重绘次数
+      if (Math.abs(newWidth - lastWidthRef.current) > 2) {
+        setPanelWidth(newWidth)
+        lastWidthRef.current = newWidth
+      }
+    })
+  }
+
+  // 拖拽结束处理函数
+  const handleResizeEnd = () => {
+    setIsResizing(false)
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current)
+    }
+    document.removeEventListener('mousemove', handleResizeMove)
+    document.removeEventListener('mouseup', handleResizeEnd)
+  }
+
+  // 开始拖拽调整宽度
+  const handleResizeStart = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsResizing(true)
+    resizeStartXRef.current = e.clientX
+    resizeStartWidthRef.current = panelWidth
+    lastWidthRef.current = panelWidth
+    
+    // 添加全局鼠标事件监听器
+    document.addEventListener('mousemove', handleResizeMove)
+    document.addEventListener('mouseup', handleResizeEnd, { once: true })
+  }
+
+  // 清理事件监听器和动画帧
+  useEffect(() => {
+    return () => {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current)
+      }
+      document.removeEventListener('mousemove', handleResizeMove)
+      document.removeEventListener('mouseup', handleResizeEnd)
+    }
+  }, [])
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const modelSettingsRef = useRef<HTMLDivElement>(null)
@@ -496,7 +560,21 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
   }
 
   return (
-    <div className="absolute right-4 top-16 bottom-4 w-80 bg-white dark:bg-gray-800 rounded-lg shadow-lg flex flex-col z-30 border border-gray-200 dark:border-gray-600" data-chat-panel="true">
+    <div 
+      className={`absolute right-4 top-16 bottom-4 bg-white dark:bg-gray-800 rounded-lg shadow-lg flex flex-col z-30 border border-gray-200 dark:border-gray-600 transition-all duration-200 ${
+        isResizing ? 'cursor-col-resize select-none' : ''
+      }`}
+      style={{ width: `${panelWidth}px` }}
+      data-chat-panel="true"
+    >
+      {/* 拖拽手柄 - 放在左侧外部 */}
+      <div
+        className="absolute -left-2 top-0 bottom-0 w-4 cursor-col-resize z-40"
+        onMouseDown={handleResizeStart}
+        title="拖拽调整宽度"
+      >
+        <div className="absolute left-1 top-1/2 transform -translate-y-1/2 w-1 h-16 bg-gray-300 dark:bg-gray-600 rounded-full hover:bg-blue-400 dark:hover:bg-blue-500 transition-colors"></div>
+      </div>
       {/* 头部 */}
       <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-600">
         <div className="flex items-center space-x-2">
