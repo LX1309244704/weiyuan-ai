@@ -36,41 +36,32 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
   const [isResizing, setIsResizing] = useState(false)
   const resizeStartXRef = useRef(0)
   const resizeStartWidthRef = useRef(0)
+  const currentWidthRef = useRef(320) // 使用ref存储当前宽度，避免频繁状态更新
 
-  // 拖拽相关引用
-  const animationFrameRef = useRef<number>()
-  const lastWidthRef = useRef(panelWidth)
-
-  // 拖拽移动处理函数
-  const handleResizeMove = (e: MouseEvent) => {
+  // 使用useCallback确保函数引用稳定，优化性能
+  const handleResizeMove = useCallback((e: MouseEvent) => {
     if (!isResizing) return
     
-    // 使用requestAnimationFrame优化性能
-    if (animationFrameRef.current) {
-      cancelAnimationFrame(animationFrameRef.current)
-    }
+    const deltaX = e.clientX - resizeStartXRef.current
+    const newWidth = Math.max(280, Math.min(600, resizeStartWidthRef.current - deltaX))
     
-    animationFrameRef.current = requestAnimationFrame(() => {
-      const deltaX = e.clientX - resizeStartXRef.current
-      const newWidth = Math.max(280, Math.min(600, resizeStartWidthRef.current - deltaX))
-      
-      // 只有当宽度变化超过2px时才更新，减少重绘次数
-      if (Math.abs(newWidth - lastWidthRef.current) > 2) {
-        setPanelWidth(newWidth)
-        lastWidthRef.current = newWidth
-      }
-    })
-  }
-
-  // 拖拽结束处理函数
-  const handleResizeEnd = () => {
-    setIsResizing(false)
-    if (animationFrameRef.current) {
-      cancelAnimationFrame(animationFrameRef.current)
+    // 直接更新ref，不触发重渲染
+    currentWidthRef.current = newWidth
+    
+    // 直接设置DOM元素的宽度，避免React重渲染
+    const panelElement = document.querySelector('[data-chat-panel="true"]') as HTMLElement
+    if (panelElement) {
+      panelElement.style.width = `${newWidth}px`
     }
+  }, [isResizing])
+
+  const handleResizeEnd = useCallback(() => {
+    setIsResizing(false)
+    // 拖拽结束时才更新状态，触发一次重渲染
+    setPanelWidth(currentWidthRef.current)
     document.removeEventListener('mousemove', handleResizeMove)
     document.removeEventListener('mouseup', handleResizeEnd)
-  }
+  }, [handleResizeMove])
 
   // 开始拖拽调整宽度
   const handleResizeStart = (e: React.MouseEvent) => {
@@ -79,23 +70,20 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
     setIsResizing(true)
     resizeStartXRef.current = e.clientX
     resizeStartWidthRef.current = panelWidth
-    lastWidthRef.current = panelWidth
+    currentWidthRef.current = panelWidth
     
-    // 添加全局鼠标事件监听器
-    document.addEventListener('mousemove', handleResizeMove)
+    // 添加全局鼠标事件监听器，使用passive: true优化性能
+    document.addEventListener('mousemove', handleResizeMove, { passive: true })
     document.addEventListener('mouseup', handleResizeEnd, { once: true })
   }
 
-  // 清理事件监听器和动画帧
+  // 清理事件监听器
   useEffect(() => {
     return () => {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current)
-      }
       document.removeEventListener('mousemove', handleResizeMove)
       document.removeEventListener('mouseup', handleResizeEnd)
     }
-  }, [])
+  }, [handleResizeMove, handleResizeEnd])
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const modelSettingsRef = useRef<HTMLDivElement>(null)
