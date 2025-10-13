@@ -435,11 +435,18 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
     event.target.value = ''
   }
 
-  // 接收截图并显示在输入区域左侧
+  // 接收截图并显示在输入区域左侧 - 如果有已有截图就替换
   const handleReceiveScreenshot = (imageData: string, prompt: string) => {
-    console.log('接收到截图，显示在输入区域左侧:', { imageData: imageData.substring(0, 50) + '...', prompt })
-    // 将截图添加到上传图片预览列表
-    setUploadedImagePreviews(prev => [...prev, imageData])
+    console.log('接收到截图，替换输入区域左侧的截图:', { imageData: imageData.substring(0, 50) + '...', prompt })
+    // 替换上传图片预览列表中的截图（如果有截图就替换，没有就添加）
+    setUploadedImagePreviews(prev => {
+      // 如果已经有截图，替换第一个截图；如果没有，添加新截图
+      if (prev.length > 0) {
+        return [imageData, ...prev.slice(1)]
+      } else {
+        return [imageData]
+      }
+    })
     // 自动填充提示词到输入框
     setInputText(prompt)
   }

@@ -5,6 +5,9 @@ import { useEffect, useRef, useState } from 'react'
 import CanvasToolbar from '../../components/CanvasToolbar'
 import SelectionPanel from '../../components/SelectionPanel'
 import ChatPanel from '../../components/ChatPanel'
+import ShapePropertiesPanel from '../../components/ShapePropertiesPanel'
+import BrushPropertiesPanel from '../../components/BrushPropertiesPanel'
+import TextPropertiesPanel from '../../components/TextPropertiesPanel'
 import { useUserStore } from '@/stores/userStore'
 
 type SelectionData = {
@@ -21,6 +24,8 @@ export default function CanvasPage() {
   const fabricNSRef = useRef<any>(null)
   const { theme } = useUserStore()
   const [contextMenu, setContextMenu] = useState<{ visible: boolean; x: number; y: number }>({ visible: false, x: 0, y: 0 })
+  const [brushSize, setBrushSize] = useState(3)
+  const [brushColor, setBrushColor] = useState('#000000')
 
   // 初始化 Fabric 画布
   useEffect(() => {
@@ -140,6 +145,8 @@ export default function CanvasPage() {
 
       isSelecting = true
       const pointer = fabricCanvas.getPointer(evt)
+      
+      // 使用原始虚拟坐标（不进行缩放转换）
       startX = pointer.x
       startY = pointer.y
 
@@ -162,18 +169,23 @@ export default function CanvasPage() {
       if (!isSelecting || !selectionRect) return
       const evt = opt.e as MouseEvent
       const pointer = fabricCanvas.getPointer(evt)
-      const width = pointer.x - startX
-      const height = pointer.y - startY
+      
+      // 使用原始虚拟坐标（不进行缩放转换）
+      const currentX = pointer.x
+      const currentY = pointer.y
+      
+      const width = currentX - startX
+      const height = currentY - startY
 
       // 确保框选矩形的坐标计算正确
-      const newLeft = width < 0 ? pointer.x : startX
-      const newTop = height < 0 ? pointer.y : startY
+      const newLeft = width < 0 ? currentX : startX
+      const newTop = height < 0 ? currentY : startY
       const newWidth = Math.abs(width)
       const newHeight = Math.abs(height)
 
       console.log('框选矩形更新:', {
         startX, startY,
-        pointerX: pointer.x, pointerY: pointer.y,
+        currentX, currentY,
         width, height,
         newLeft, newTop, newWidth, newHeight
       })
@@ -222,8 +234,10 @@ export default function CanvasPage() {
     if (!fabricCanvas || !selectedArea) return null
     const rect = selectedArea.rect
 
-    // 获取画布视口变换信息用于调试
-    const vpt = fabricCanvas.viewportTransform
+    // 获取当前缩放状态
+    const originalZoom = fabricCanvas.getZoom()
+    const originalVpt = [...(fabricCanvas.viewportTransform || [1, 0, 0, 1, 0, 0])]
+    
     console.log('截图调试信息:', {
       rectProperties: {
         left: rect.left,
@@ -233,37 +247,55 @@ export default function CanvasPage() {
         scaleX: rect.scaleX,
         scaleY: rect.scaleY
       },
-      viewportTransform: vpt,
+      originalZoom: originalZoom,
+      originalVpt: originalVpt,
       canvasSize: {
         width: fabricCanvas.getWidth(),
         height: fabricCanvas.getHeight()
       }
     })
 
-    // 直接使用框选矩形的原始坐标，Fabric.js会自动处理视口变换
-    const left = rect.left ?? 0
-    const top = rect.top ?? 0
-    const width = rect.width ?? 0
-    const height = rect.height ?? 0
+    // 关键修复：临时重置缩放为1:1进行截图
+    try {
+      // 保存当前状态
+      fabricCanvas.viewportTransform = [1, 0, 0, 1, 0, 0]
+      fabricCanvas.setZoom(1)
+      fabricCanvas.renderAll()
 
-    console.log('截图参数 - 直接使用框选矩形坐标:', {
-      left, top, width, height
-    })
+      // 使用框选矩形的原始坐标（现在缩放为1:1，坐标就是实际坐标）
+      const left = rect.left ?? 0
+      const top = rect.top ?? 0
+      const width = rect.width ?? 0
+      const height = rect.height ?? 0
 
-    if (width <= 2 || height <= 2) return null
+      console.log('截图参数 - 重置缩放后的坐标:', {
+        left, top, width, height,
+        originalLeft: rect.left,
+        originalTop: rect.top,
+        originalWidth: rect.width,
+        originalHeight: rect.height
+      })
 
-    // 使用 toDataURLWithMultiplier 提升质量
-    const dataUrl = fabricCanvas.toDataURL({
-      format: 'png',
-      quality: 1.0,
-      left,
-      top,
-      width,
-      height,
-      multiplier: 2
-    } as any)
+      if (width <= 2 || height <= 2) return null
 
-    return dataUrl
+      // 使用 toDataURLWithMultiplier 提升质量
+      const dataUrl = fabricCanvas.toDataURL({
+        format: 'png',
+        quality: 1.0,
+        left,
+        top,
+        width,
+        height,
+        multiplier: 2
+      } as any)
+
+      return dataUrl
+    } finally {
+      // 恢复原始缩放状态
+      fabricCanvas.viewportTransform = originalVpt
+      fabricCanvas.setZoom(originalZoom)
+      fabricCanvas.renderAll()
+    }
   }
 
   // 供 SelectionPanel 将截图传给 ChatPanel 的桥接
@@ -285,9 +317,93 @@ export default function CanvasPage() {
   }, [])
 
   // AI 生成占位逻辑（与 ChatPanel 的模拟一致）
-  const handleGenerateImage = async (prompt: string) => {
+  const handleGenerateImage = async (prompt: string, model: string, position: { x: number; y: number }) => {
     // 这里可对接真实后端/模型；先由 ChatPanel 自身模拟
-    console.log('请求生成图片:', prompt)
+    console.log('请求生成图片:', { prompt, model, position })
+    
+    // 模拟生成图片并添加到画布
+    if (fabricCanvas && fabricNSRef.current) {
+      try {
+        const F = fabricNSRef.current
+        
+        // 创建模拟的AI生成图片（使用SVG作为占位符）
+        const svgData = `
+          <svg width="200" height="200" xmlns="http://www.w3.org/2000/svg">
+            <rect width="200" height="200" fill="#f3f4f6"/>
+            <text x="100" y="100" font-family="Arial" font-size="14" fill="#666" text-anchor="middle">AI生成图片</text>
+            <text x="100" y="120" font-family="Arial" font-size="12" fill="#999" text-anchor="middle">${prompt.substring(0, 20)}...</text>
+          </svg>
+        `
+        
+        const svgBlob = new Blob([svgData], { type: 'image/svg+xml' })
+        const svgUrl = URL.createObjectURL(svgBlob)
+        
+        // 使用HTML Image元素加载图片
+        const img = new Image()
+        img.onload = () => {
+          const fabricImg = new F.Image(img, {
+            left: position.x,
+            top: position.y,
+            selectable: true,
+            hasControls: true,
+            cornerStyle: 'circle',
+            transparentCorners: false,
+            cornerColor: '#3b82f6',
+            cornerSize: 12,
+            rotatingPointOffset: 40
+          })
+          
+          // 设置合适的缩放比例
+          const maxSize = 200
+          const scale = Math.min(maxSize / img.width, maxSize / img.height, 1)
+          fabricImg.scale(scale)
+          
+          // 添加到画布
+          fabricCanvas.add(fabricImg)
+          fabricCanvas.setActiveObject(fabricImg)
+          fabricCanvas.renderAll()
+          
+          // 清理URL
+          URL.revokeObjectURL(svgUrl)
+          
+          console.log('AI生成图片已添加到画布，位置:', position)
+        }
+        
+        img.onerror = (error) => {
+          console.error('图片加载失败:', error)
+          // 如果SVG加载失败，创建一个矩形作为占位符
+          const placeholderRect = new F.Rect({
+            left: position.x,
+            top: position.y,
+            width: 200,
+            height: 200,
+            fill: '#f3f4f6',
+            stroke: '#3b82f6',
+            strokeWidth: 2,
+            selectable: true,
+            hasControls: true
+          })
+          
+          // 添加文字标签
+          const text = new F.Text(prompt.substring(0, 20) + '...', {
+            left: position.x + 10,
+            top: position.y + 90,
+            fontSize: 14,
+            fill: '#666',
+            selectable: false
+          })
+          
+          fabricCanvas.add(placeholderRect)
+          fabricCanvas.add(text)
+          fabricCanvas.renderAll()
+        }
+        
+        img.src = svgUrl
+        
+      } catch (error) {
+        console.error('生成图片失败:', error)
+      }
+    }
   }
   const handleGenerateVideo = async (prompt: string) => {
     console.log('请求生成视频:', prompt)
@@ -502,6 +618,21 @@ export default function CanvasPage() {
         onReceiveScreenshot={handleReceiveScreenshot}
         onClearSelection={handleClearSelection}
       />
+
+      {/* 形状属性编辑面板 */}
+      <ShapePropertiesPanel canvas={fabricCanvas} />
+
+      {/* 画笔属性编辑面板 */}
+      <BrushPropertiesPanel 
+        canvas={fabricCanvas}
+        brushSize={brushSize}
+        brushColor={brushColor}
+        onBrushSizeChange={setBrushSize}
+        onBrushColorChange={setBrushColor}
+      />
+
+      {/* 文字属性编辑面板 */}
+      <TextPropertiesPanel canvas={fabricCanvas} />
 
       {/* 悬浮 AI 创作助手 */}
       <ChatPanel

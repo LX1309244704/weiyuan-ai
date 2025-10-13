@@ -37,7 +37,7 @@ import {
   MoveDown,
   Redo
 } from 'lucide-react'
-import TextToolPanel from './TextToolPanel'
+
 import { useUserStore } from '../stores/userStore'
 import { useRouter } from 'next/navigation'
 import SaveProjectModal from './SaveProjectModal'
@@ -61,9 +61,7 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
   const [history, setHistory] = useState<any[][]>([])
   const [historyIndex, setHistoryIndex] = useState(-1)
   const [zoomLevel, setZoomLevel] = useState(100)
-  const [showTextToolPanel, setShowTextToolPanel] = useState(false)
-  const [textToolPosition, setTextToolPosition] = useState({ left: 0, top: 0 })
-  const textToolRef = useRef<HTMLDivElement>(null)
+
   const { theme, language, setTheme, setLanguage, userInfo } = useUserStore()
   const router = useRouter()
   const [showSaveModal, setShowSaveModal] = useState(false)
@@ -79,22 +77,20 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
       if (shapePickerRef.current && !shapePickerRef.current.contains(event.target as Node)) {
         setShowShapePicker(false)
       }
-      if (textToolRef.current && !textToolRef.current.contains(event.target as Node)) {
-        setShowTextToolPanel(false)
-      }
+
       if (layerPanelRef.current && !layerPanelRef.current.contains(event.target as Node)) {
         setShowLayerPanel(false)
       }
     }
 
-    if (showShapePicker || showTextToolPanel || showLayerPanel) {
+    if (showShapePicker || showLayerPanel) {
       document.addEventListener('mousedown', handleClickOutside)
     }
 
     return () => {
       document.removeEventListener('mousedown', handleClickOutside)
     }
-  }, [showShapePicker, showTextToolPanel, showLayerPanel])
+  }, [showShapePicker, showLayerPanel])
 
   // 删除选中的对象
   const handleDeleteSelected = () => {
@@ -207,7 +203,7 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
     }
   }
 
-  // 粘贴对象（支持多对象）
+  // 粘贴对象（支持多对象）- 根据鼠标位置粘贴
   const handlePasteObject = () => {
     if (!canvas || !copiedObject || !(window as any).fabric) {
       console.log('粘贴失败: canvas, copiedObject 或 fabric 不可用')
@@ -222,24 +218,49 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
       
       const fabric = (window as any).fabric
       
+      // 获取鼠标在画板上的当前位置
+      let mouseX = 0
+      let mouseY = 0
+      
+      // 尝试从画布事件中获取鼠标位置
+      const lastMouseEvent = canvas.__lastMouseEvent
+      if (lastMouseEvent && lastMouseEvent.e) {
+        // 使用画布转换将鼠标坐标转换为画布坐标
+        const pointer = canvas.getPointer(lastMouseEvent.e)
+        mouseX = pointer.x
+        mouseY = pointer.y
+        console.log('使用画布鼠标位置:', mouseX, mouseY)
+      } else {
+        // 如果没有鼠标事件记录，使用画布中心
+        const canvasWidth = canvas.getWidth() || 800
+        const canvasHeight = canvas.getHeight() || 600
+        mouseX = canvasWidth / 2
+        mouseY = canvasHeight / 2
+        console.log('使用画布中心位置:', mouseX, mouseY)
+      }
+      
       // 检查是否是单对象还是多对象
       if (copiedObject.objects && Array.isArray(copiedObject.objects)) {
         // 多对象粘贴
         const { objects, count } = copiedObject
-        console.log(`粘贴 ${count} 个对象`)
+        console.log(`粘贴 ${count} 个对象到位置:`, mouseX, mouseY)
         
         const pastedObjects = []
         const imagePromises = []
         
-        // 计算原始对象组的边界框
+        // 计算原始对象组的边界框中心
         let minLeft = Infinity
         let minTop = Infinity
+        let maxRight = -Infinity
+        let maxBottom = -Infinity
         
         for (const objData of objects) {
-          const { left, top } = objData
+          const { left, top, width, height } = objData
           if (left !== undefined && top !== undefined) {
             minLeft = Math.min(minLeft, left)
             minTop = Math.min(minTop, top)
+            maxRight = Math.max(maxRight, left + (width || 0))
+            maxBottom = Math.max(maxBottom, top + (height || 0))
           }
         }
         
@@ -247,27 +268,27 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
         if (minLeft === Infinity) {
           minLeft = 0
           minTop = 0
+          maxRight = 100
+          maxBottom = 100
         }
         
-        // 计算粘贴位置 - 让整个对象组移动到画布中心附近
-        const canvasWidth = canvas.getWidth() || 800
-        const canvasHeight = canvas.getHeight() || 600
-        const targetLeft = canvasWidth / 2 - 100
-        const targetTop = canvasHeight / 2 - 100
+        // 计算原始对象组的中心点
+        const originalCenterX = (minLeft + maxRight) / 2
+        const originalCenterY = (minTop + maxBottom) / 2
         
-        // 计算移动向量
-        const moveX = targetLeft - minLeft
-        const moveY = targetTop - minTop
+        // 计算移动向量 - 将对象组中心移动到鼠标位置
+        const moveX = mouseX - originalCenterX
+        const moveY = mouseY - originalCenterY
         
         for (const objData of objects) {
           const { type, data, left, top } = objData
-          // 保持对象间的相对位置关系，整体移动到新位置
+          // 保持对象间的相对位置关系，整体移动到鼠标位置
           const originalLeft = left !== undefined ? left : minLeft
           const originalTop = top !== undefined ? top : minTop
           const newLeft = originalLeft + moveX
           const newTop = originalTop + moveY
           
-          console.log(`粘贴对象类型: ${type}`)
+          console.log(`粘贴对象类型: ${type}, 位置:`, newLeft, newTop)
           
           if (type === 'image') {
             // 处理图片对象 - 异步加载
@@ -414,8 +435,11 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
         const { type, data, left, top } = copiedObject
         console.log('粘贴对象类型:', type)
         
-        const newLeft = (left || 0) + 20
-        const newTop = (top || 0) + 20
+        // 使用鼠标位置作为单对象粘贴的中心
+        const newLeft = mouseX - (data.width || 100) / 2
+        const newTop = mouseY - (data.height || 100) / 2
+        
+        console.log('单对象粘贴位置:', newLeft, newTop)
         
         let newObject = null
         
@@ -697,6 +721,11 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
               handleCopyObject()
             }
             break
+          case 's': // Ctrl + S - 下载JSON
+            console.log('触发下载JSON操作')
+            event.preventDefault()
+            handleDownloadCanvas()
+            break
         }
       }
       
@@ -858,6 +887,24 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
     }
   }, [canvas])
 
+  // 监听鼠标移动事件，记录鼠标位置
+  useEffect(() => {
+    if (!canvas) return
+    
+    const handleMouseMove = (opt: any) => {
+      // 记录鼠标事件，用于粘贴时获取位置
+      canvas.__lastMouseEvent = opt
+    }
+    
+    canvas.on('mouse:move', handleMouseMove)
+    canvas.on('mouse:down', handleMouseMove)
+    
+    return () => {
+      canvas.off('mouse:move', handleMouseMove)
+      canvas.off('mouse:down', handleMouseMove)
+    }
+  }, [canvas])
+
   // 当画布内容变化时保存状态
   useEffect(() => {
     if (!canvas) return
@@ -959,28 +1006,83 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
         setIsDrawingMode(true)
         if (canvas.freeDrawingBrush) {
           canvas.freeDrawingBrush.width = brushSize
-          canvas.freeDrawingBrush.color = '#ffffff'
+          // 根据主题动态设置橡皮擦颜色
+          const eraserColor = theme === 'dark' ? '#1f2937' : '#ffffff'
+          canvas.freeDrawingBrush.color = eraserColor
+          
+          // 添加橡皮擦绘制完成后的对象删除逻辑
+          const originalOnMouseUp = canvas.freeDrawingBrush._onMouseUp
+          canvas.freeDrawingBrush._onMouseUp = function() {
+            // 先调用原始的鼠标抬起逻辑，创建橡皮擦路径
+            if (originalOnMouseUp) {
+              originalOnMouseUp.call(this)
+            }
+            
+            // 延迟执行删除逻辑，确保路径已创建
+            setTimeout(() => {
+              // 获取所有路径对象
+              const paths = canvas.getObjects().filter(obj => obj.type === 'path')
+              const lastPath = paths[paths.length - 1]
+              
+              if (lastPath) {
+                // 查找与橡皮擦路径相交的非路径对象并删除
+                const objectsToRemove = canvas.getObjects().filter(obj => {
+                  if (obj.type === 'path') return false // 排除所有路径对象
+                  if (!obj.intersectsWithObject || !lastPath.intersectsWithObject) return false
+                  
+                  // 检查对象是否与橡皮擦路径相交
+                  return obj.intersectsWithObject(lastPath)
+                })
+                
+                // 删除相交的对象
+                if (objectsToRemove.length > 0) {
+                  objectsToRemove.forEach(obj => {
+                    canvas.remove(obj)
+                  })
+                  canvas.requestRenderAll()
+                  console.log(`橡皮擦删除了 ${objectsToRemove.length} 个对象`)
+                }
+                
+                // 删除橡皮擦路径本身，避免在画布上留下痕迹
+                canvas.remove(lastPath)
+                canvas.requestRenderAll()
+              }
+            }, 10)
+          }
         }
         canvas.defaultCursor = 'crosshair'
         canvas.hoverCursor = 'crosshair'
-        console.log('Eraser mode activated')
+        console.log('Eraser mode activated - will remove intersecting objects')
         break
       case 'text':
         canvas.isDrawingMode = false
         setIsDrawingMode(false)
-        // 计算文字工具面板位置
-        const textToolButton = document.querySelector('[data-tool="text"]') as HTMLElement
-        if (textToolButton) {
-          const rect = textToolButton.getBoundingClientRect()
-          setTextToolPosition({
-            left: rect.left,
-            top: rect.bottom + 10
-          })
-        }
         canvas.defaultCursor = 'text'
         canvas.hoverCursor = 'text'
-        setShowTextToolPanel(true)
         console.log('Text mode activated')
+        
+        // 添加画布点击事件监听器来创建文字
+        const handleCanvasClick = (opt: any) => {
+          const pointer = canvas.getPointer(opt.e)
+          const text = new (window as any).fabric.Textbox('双击编辑文字', {
+            left: pointer.x,
+            top: pointer.y,
+            fontFamily: 'Arial',
+            fill: brushColor,
+            fontSize: 20,
+            editable: true,
+            textAlign: 'left'
+          })
+          canvas.add(text)
+          canvas.setActiveObject(text)
+          canvas.renderAll()
+          
+          // 移除点击监听器，避免重复创建
+          canvas.off('mouse:down', handleCanvasClick)
+        }
+        
+        // 添加点击监听器
+        canvas.on('mouse:down', handleCanvasClick)
         break
       case 'image':
         canvas.isDrawingMode = false
@@ -2220,16 +2322,16 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
         event.preventDefault()
         handleToolSelect('layers')
         break
-      case 'a':
-        // A键作为全选快捷键（单字母）
-        event.preventDefault()
-        handleSelectAll()
-        break
     }
     
     // 控制键组合快捷键
     if (isCtrl) {
       switch (event.key.toLowerCase()) {
+        case 'a':
+          // Ctrl + A 作为全选快捷键
+          event.preventDefault()
+          handleSelectAll()
+          break
         case 'z':
           event.preventDefault()
           handleUndo()
@@ -2394,13 +2496,7 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
         </div>
       )}
 
-      {/* 文字工具面板 */}
-      <TextToolPanel
-        canvas={canvas}
-        isVisible={showTextToolPanel}
-        onClose={() => setShowTextToolPanel(false)}
-        position={textToolPosition}
-      />
+
 
       {/* 保存项目弹窗 */}
       <SaveProjectModal
