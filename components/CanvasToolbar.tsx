@@ -35,12 +35,16 @@ import {
   ArrowDown,
   MoveUp,
   MoveDown,
-  Redo
+  Redo,
+  History,
+  Clock,
+  Trash2
 } from 'lucide-react'
 
 import { useUserStore } from '../stores/userStore'
 import { useRouter } from 'next/navigation'
 import SaveProjectModal from './SaveProjectModal'
+import { historyDB, type HistoryRecord } from '../utils/historyDB'
 
 interface CanvasToolbarProps {
   canvas: any
@@ -48,7 +52,7 @@ interface CanvasToolbarProps {
   selectedArea: any
 }
 
-type Tool = 'pencil' | 'shapes' | 'text' | 'eraser' | 'image' | 'hand' | 'arrow' | 'layers'
+type Tool = 'pencil' | 'shapes' | 'text' | 'eraser' | 'image' | 'hand' | 'arrow' | 'layers' | 'history'
 type ShapeType = 'rectangle' | 'circle' | 'triangle' | 'star' | 'heart' | 'diamond' | 'octagon' | 'arrow' | 'line' | 'dashed-line' | 'left-brace' | 'right-brace'
 
 export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: CanvasToolbarProps) {
@@ -66,12 +70,15 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
   const router = useRouter()
   const [showSaveModal, setShowSaveModal] = useState(false)
   const [showLayerPanel, setShowLayerPanel] = useState(false)
+  const [showHistoryPanel, setShowHistoryPanel] = useState(false)
+  const [historyRecords, setHistoryRecords] = useState<HistoryRecord[]>([])
 
 
   const layerPanelRef = useRef<HTMLDivElement>(null)
+  const historyPanelRef = useRef<HTMLDivElement>(null)
   const [copiedObject, setCopiedObject] = useState<any>(null)
 
-  // 点击外部关闭形状选择卡片和层级面板
+  // 点击外部关闭形状选择卡片、层级面板和历史面板
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (shapePickerRef.current && !shapePickerRef.current.contains(event.target as Node)) {
@@ -81,16 +88,20 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
       if (layerPanelRef.current && !layerPanelRef.current.contains(event.target as Node)) {
         setShowLayerPanel(false)
       }
+
+      if (historyPanelRef.current && !historyPanelRef.current.contains(event.target as Node)) {
+        setShowHistoryPanel(false)
+      }
     }
 
-    if (showShapePicker || showLayerPanel) {
+    if (showShapePicker || showLayerPanel || showHistoryPanel) {
       document.addEventListener('mousedown', handleClickOutside)
     }
 
     return () => {
       document.removeEventListener('mousedown', handleClickOutside)
     }
-  }, [showShapePicker, showLayerPanel])
+  }, [showShapePicker, showLayerPanel, showHistoryPanel])
 
   // 删除选中的对象
   const handleDeleteSelected = () => {
@@ -596,6 +607,27 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
     }
     
     try {
+      // 获取鼠标在画板上的当前位置
+      let mouseX = 0
+      let mouseY = 0
+      
+      // 尝试从画布事件中获取鼠标位置
+      const lastMouseEvent = canvas.__lastMouseEvent
+      if (lastMouseEvent && lastMouseEvent.e) {
+        // 使用画布转换将鼠标坐标转换为画布坐标
+        const pointer = canvas.getPointer(lastMouseEvent.e)
+        mouseX = pointer.x
+        mouseY = pointer.y
+        console.log('使用画布鼠标位置粘贴图片:', mouseX, mouseY)
+      } else {
+        // 如果没有鼠标事件记录，使用画布中心
+        const canvasWidth = canvas.getWidth() || 800
+        const canvasHeight = canvas.getHeight() || 600
+        mouseX = canvasWidth / 2
+        mouseY = canvasHeight / 2
+        console.log('使用画布中心位置粘贴图片:', mouseX, mouseY)
+      }
+      
       // 检查剪贴板中是否有图片数据
       const clipboardItems = await navigator.clipboard.read()
       
@@ -615,10 +647,10 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
               img.onload = () => {
                 const fabric = (window as any).fabric
                 
-                // 创建Fabric图片对象
+                // 创建Fabric图片对象，使用鼠标位置
                 const fabricImg = new fabric.Image(img, {
-                  left: canvas.width! / 2 - img.width / 2,
-                  top: canvas.height! / 2 - img.height / 2,
+                  left: mouseX - img.width / 2,
+                  top: mouseY - img.height / 2,
                   evented: true,
                   selectable: true
                 })
@@ -679,6 +711,144 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
     }
   }
 
+  // 历史记录功能
+  // 保存当前画板状态到历史记录
+  const saveToHistory = useCallback(async () => {
+    if (!canvas) return
+    
+    try {
+      // 生成画布预览图
+      const previewDataURL = canvas.toDataURL({
+        format: 'png',
+        quality: 0.3,
+        width: 200,
+        height: 150
+      })
+      
+      // 获取画布数据
+      const canvasData = canvas.toJSON()
+      
+      // 创建历史记录
+      const record = {
+        timestamp: Date.now(),
+        name: `历史记录 ${new Date().toLocaleTimeString()}`,
+        canvasData: canvasData,
+        preview: previewDataURL,
+        metadata: {
+          objectCount: canvas.getObjects().length,
+          zoomLevel: zoomLevel,
+          brushSettings: {
+            size: brushSize,
+            color: brushColor
+          }
+        }
+      }
+      
+      await historyDB.addRecord(record)
+      console.log('历史记录已保存')
+      
+      // 显示保存成功提示
+      const notification = document.createElement('div')
+      notification.innerHTML = `
+        <div style="position: fixed; top: 20px; right: 20px; background: #10b981; color: white; padding: 12px 16px; border-radius: 8px; z-index: 10000; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+          <strong>已保存到历史记录</strong><br>
+          ${record.name}
+        </div>
+      `
+      document.body.appendChild(notification)
+      
+      // 3秒后自动移除提示
+      setTimeout(() => {
+        if (document.body.contains(notification)) {
+          document.body.removeChild(notification)
+        }
+      }, 3000)
+      
+    } catch (error) {
+      console.error('保存历史记录失败:', error)
+    }
+  }, [canvas, zoomLevel, brushSize, brushColor])
+
+  // 加载历史记录到画板
+  const loadHistoryRecord = useCallback(async (record: HistoryRecord) => {
+    if (!canvas) return
+    
+    try {
+      // 保存当前状态到历史记录
+      saveCanvasState()
+      
+      // 清除当前画布
+      canvas.clear()
+      
+      // 加载历史记录数据
+      canvas.loadFromJSON(record.canvasData, () => {
+        canvas.renderAll()
+        
+        // 恢复元数据设置
+        if (record.metadata) {
+          const { zoomLevel: recordZoomLevel, brushSettings } = record.metadata
+          
+          if (recordZoomLevel) {
+            setZoomLevel(recordZoomLevel)
+            const scale = recordZoomLevel / 100
+            const vpt = canvas.viewportTransform || [1, 0, 0, 1, 0, 0]
+            vpt[0] = scale
+            vpt[3] = scale
+            canvas.setViewportTransform(vpt)
+          }
+          
+          if (brushSettings) {
+            setBrushSize(brushSettings.size || 3)
+            setBrushColor(brushSettings.color || '#000000')
+          }
+        }
+        
+        canvas.requestRenderAll()
+        console.log('历史记录已加载')
+        
+        // 关闭历史面板
+        setShowHistoryPanel(false)
+      })
+      
+    } catch (error) {
+      console.error('加载历史记录失败:', error)
+      alert('加载历史记录失败，请重试')
+    }
+  }, [canvas])
+
+  // 加载历史记录列表
+  const loadHistoryRecords = useCallback(async () => {
+    try {
+      const records = await historyDB.getAllRecords()
+      setHistoryRecords(records)
+    } catch (error) {
+      console.error('加载历史记录列表失败:', error)
+    }
+  }, [])
+
+  // 清空历史记录
+  const clearHistory = async () => {
+    try {
+      await historyDB.clearAll()
+      setHistoryRecords([])
+      console.log('历史记录已清空')
+    } catch (error) {
+      console.error('清空历史记录失败:', error)
+    }
+  }
+
+  // 删除单个历史记录
+  const deleteHistoryRecord = async (recordId: string) => {
+    try {
+      await historyDB.deleteRecord(recordId)
+      // 从当前记录列表中移除
+      setHistoryRecords(prev => prev.filter(record => record.id !== recordId))
+      console.log('历史记录已删除:', recordId)
+    } catch (error) {
+      console.error('删除历史记录失败:', error)
+    }
+  }
+
   // 键盘事件处理
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -721,7 +891,12 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
               handleCopyObject()
             }
             break
-          case 's': // Ctrl + S - 下载JSON
+          case 's': // Ctrl + S - 保存到历史记录
+            console.log('触发保存到历史记录操作')
+            event.preventDefault()
+            saveToHistory()
+            break
+          case 'd': // Ctrl + D - 下载JSON
             console.log('触发下载JSON操作')
             event.preventDefault()
             handleDownloadCanvas()
@@ -761,7 +936,7 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
     return () => {
       document.removeEventListener('keydown', handleKeyDown)
     }
-  }, [canvas, handleCopyObject, handlePasteObject, handlePasteFromClipboard]) // 添加依赖项
+  }, [canvas, handleCopyObject, handlePasteObject, handlePasteFromClipboard, saveToHistory]) // 添加依赖项
 
   // 保存画布状态到历史记录
   const saveCanvasState = () => {
@@ -1120,6 +1295,18 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
         canvas.hoverCursor = 'default'
         setShowLayerPanel(true)
         console.log('Layers mode activated')
+        break
+      case 'history':
+        canvas.isDrawingMode = false
+        setIsDrawingMode(false)
+        // 启用选择模式
+        canvas.selection = true
+        canvas.defaultCursor = 'default'
+        canvas.hoverCursor = 'default'
+        setShowHistoryPanel(true)
+        // 加载历史记录列表
+        loadHistoryRecords()
+        console.log('History mode activated')
         break
       default:
         canvas.isDrawingMode = false
@@ -2350,7 +2537,13 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
           break
         case 'v':
           event.preventDefault()
-          handlePasteObject()
+          // 先尝试从系统剪贴板粘贴图片
+          handlePasteFromClipboard().then((imagePasted) => {
+            // 如果没有粘贴图片，则尝试粘贴对象
+            if (!imagePasted) {
+              handlePasteObject()
+            }
+          })
           break
       }
     }
@@ -2363,6 +2556,40 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
       document.removeEventListener('keydown', handleKeyDown)
     }
   }, [handleKeyDown])
+
+  // Tooltip组件
+  const Tooltip = ({ children, content, position = 'top' }: { children: React.ReactNode; content: string; position?: 'top' | 'bottom' | 'left' | 'right' }) => {
+    const [show, setShow] = useState(false)
+    
+    return (
+      <div className="relative inline-block">
+        <div
+          onMouseEnter={() => setShow(true)}
+          onMouseLeave={() => setShow(false)}
+        >
+          {children}
+        </div>
+        {show && (
+          <div className={`
+            absolute z-[9999] px-3 py-2 text-sm font-medium text-white bg-gray-900 dark:bg-gray-700 rounded-lg shadow-sm whitespace-nowrap
+            ${position === 'top' ? 'bottom-full left-1/2 transform -translate-x-1/2 -translate-y-2' : ''}
+            ${position === 'bottom' ? 'top-full left-1/2 transform -translate-x-1/2 translate-y-2' : ''}
+            ${position === 'left' ? 'right-full top-1/2 transform -translate-y-1/2 -translate-x-2' : ''}
+            ${position === 'right' ? 'left-full top-1/2 transform -translate-y-1/2 translate-x-2' : ''}
+          `}>
+            {content}
+            <div className={`
+              absolute w-2 h-2 bg-gray-900 dark:bg-gray-700 transform rotate-45
+              ${position === 'top' ? 'bottom-0 left-1/2 -translate-x-1/2 translate-y-1' : ''}
+              ${position === 'bottom' ? 'top-0 left-1/2 -translate-x-1/2 -translate-y-1' : ''}
+              ${position === 'left' ? 'right-0 top-1/2 -translate-y-1/2 translate-x-1' : ''}
+              ${position === 'right' ? 'left-0 top-1/2 -translate-y-1/2 -translate-x-1' : ''}
+            `}></div>
+          </div>
+        )}
+      </div>
+    )
+  }
 
   return (
     <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 px-2 sm:px-4 py-2 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-2 lg:gap-0 relative">
@@ -2394,6 +2621,8 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
         </div>
       )}
 
+
+
       {/* 层级管理面板 */}
       {showLayerPanel && (
         <div ref={layerPanelRef} className="absolute right-16 top-12 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-3 z-10 w-64">
@@ -2409,42 +2638,46 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
           
           {/* 层级操作按钮 */}
           <div className="grid grid-cols-2 gap-2 mb-3">
-            <button
-              onClick={handleBringToFront}
-              className="flex items-center justify-center p-2 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded text-xs hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors"
-              title="置顶 (Ctrl + Shift + ])"
-            >
-              <MoveUp className="h-3 w-3 mr-1" />
-              置顶
-              <span className="text-xs opacity-70 ml-1">Ctrl+Shift+]</span>
-            </button>
-            <button
-              onClick={handleSendToBack}
-              className="flex items-center justify-center p-2 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded text-xs hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors"
-              title="置底 (Ctrl + Shift + [)"
-            >
-              <MoveDown className="h-3 w-3 mr-1" />
-              置底
-              <span className="text-xs opacity-70 ml-1">Ctrl+Shift+[</span>
-            </button>
-            <button
-              onClick={handleBringForward}
-              className="flex items-center justify-center p-2 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded text-xs hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors"
-              title="上移一层 (Ctrl + ])"
-            >
-              <ArrowUp className="h-3 w-3 mr-1" />
-              上移一层
-              <span className="text-xs opacity-70 ml-1">Ctrl+]</span>
-            </button>
-            <button
-              onClick={handleSendBackward}
-              className="flex items-center justify-center p-2 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded text-xs hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors"
-              title="下移一层 (Ctrl + [)"
-            >
-              <ArrowDown className="h-3 w-3 mr-1" />
-              下移一层
-              <span className="text-xs opacity-70 ml-1">Ctrl+[</span>
-            </button>
+            <Tooltip content="置顶 (Ctrl + Shift + ])" position="top">
+              <button
+                onClick={handleBringToFront}
+                className="flex items-center justify-center p-2 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded text-xs hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors"
+              >
+                <MoveUp className="h-3 w-3 mr-1" />
+                置顶
+                <span className="text-xs opacity-70 ml-1">Ctrl+Shift+]</span>
+              </button>
+            </Tooltip>
+            <Tooltip content="置底 (Ctrl + Shift + [)" position="top">
+              <button
+                onClick={handleSendToBack}
+                className="flex items-center justify-center p-2 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded text-xs hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors"
+              >
+                <MoveDown className="h-3 w-3 mr-1" />
+                置底
+                <span className="text-xs opacity-70 ml-1">Ctrl+Shift+[</span>
+              </button>
+            </Tooltip>
+            <Tooltip content="上移一层 (Ctrl + ])" position="top">
+              <button
+                onClick={handleBringForward}
+                className="flex items-center justify-center p-2 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded text-xs hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors"
+              >
+                <ArrowUp className="h-3 w-3 mr-1" />
+                上移一层
+                <span className="text-xs opacity-70 ml-1">Ctrl+]</span>
+              </button>
+            </Tooltip>
+            <Tooltip content="下移一层 (Ctrl + [)" position="top">
+              <button
+                onClick={handleSendBackward}
+                className="flex items-center justify-center p-2 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded text-xs hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors"
+              >
+                <ArrowDown className="h-3 w-3 mr-1" />
+                下移一层
+                <span className="text-xs opacity-70 ml-1">Ctrl+[</span>
+              </button>
+            </Tooltip>
           </div>
           
           {/* 层级列表 */}
@@ -2509,13 +2742,14 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
       {/* 左侧工具组 */}
       <div className="flex items-center justify-center lg:justify-start flex-wrap gap-1 lg:gap-2">
         {/* 返回按钮 */}
-        <button
-          onClick={handleBackToUser}
-          className="p-1 lg:p-2 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-          title="返回用户页面 (Esc)"
-        >
-          <ArrowLeft className="h-4 w-4 lg:h-5 lg:w-5" />
-        </button>
+        <Tooltip content="返回用户页面 (Esc)" position="bottom">
+          <button
+            onClick={handleBackToUser}
+            className="p-1 lg:p-2 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+          >
+            <ArrowLeft className="h-4 w-4 lg:h-5 lg:w-5" />
+          </button>
+        </Tooltip>
         
         {tools.map((tool) => {
           const getShortcut = (toolId: string) => {
@@ -2534,46 +2768,49 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
           
           const shortcut = getShortcut(tool.id)
           return (
-            <button
-              key={tool.id}
-              onClick={() => handleToolSelect(tool.id)}
-              className={`p-1 lg:p-2 rounded-lg transition-colors ${
-                activeTool === tool.id 
-                  ? 'bg-primary-100 dark:bg-primary-900 text-primary-600 dark:text-primary-400' 
-                  : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
-              }`}
-              title={`${tool.label} (${shortcut})`}
-              data-tool={tool.id}
-            >
-              <tool.icon className="h-4 w-4 lg:h-5 lg:w-5" />
-            </button>
+            <Tooltip key={tool.id} content={`${tool.label} (${shortcut})`} position="bottom">
+              <button
+                onClick={() => handleToolSelect(tool.id)}
+                className={`p-1 lg:p-2 rounded-lg transition-colors ${
+                  activeTool === tool.id 
+                    ? 'bg-primary-100 dark:bg-primary-900 text-primary-600 dark:text-primary-400' 
+                    : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+                }`}
+                data-tool={tool.id}
+              >
+                <tool.icon className="h-4 w-4 lg:h-5 lg:w-5" />
+              </button>
+            </Tooltip>
           )
         })}
         
         {/* 撤销和重做按钮 */}
-        <button
-          onClick={handleUndo}
-          className="p-1 lg:p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"
-          title="撤销 (Ctrl+Z)"
-        >
-          <RotateCcw className="h-4 w-4 lg:h-5 lg:w-5" />
-        </button>
-        <button
-          onClick={handleRedo}
-          className="p-1 lg:p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"
-          title="重做 (Ctrl+Y)"
-        >
-          <RotateCw className="h-4 w-4 lg:h-5 lg:w-5" />
-        </button>
-        <button
-          onClick={handleClearCanvas}
-          className="p-1 lg:p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"
-          title="清除画板 (Ctrl+D)"
-        >
-          <svg className="h-4 w-4 lg:h-5 lg:w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-          </svg>
-        </button>
+        <Tooltip content="撤销 (Ctrl+Z)" position="bottom">
+          <button
+            onClick={handleUndo}
+            className="p-1 lg:p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"
+          >
+            <RotateCcw className="h-4 w-4 lg:h-5 lg:w-5" />
+          </button>
+        </Tooltip>
+        <Tooltip content="重做 (Ctrl+Y)" position="bottom">
+          <button
+            onClick={handleRedo}
+            className="p-1 lg:p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"
+          >
+            <RotateCw className="h-4 w-4 lg:h-5 lg:w-5" />
+          </button>
+        </Tooltip>
+        <Tooltip content="清除画板 (Ctrl+D)" position="bottom">
+          <button
+            onClick={handleClearCanvas}
+            className="p-1 lg:p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"
+          >
+            <svg className="h-4 w-4 lg:h-5 lg:w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+          </button>
+        </Tooltip>
         
 
       </div>
@@ -2603,33 +2840,148 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
           />
         </div>
 
-        {/* 画板缩放控制 */}
-        <div className="flex items-center space-x-1 lg:space-x-2">
-          <button
-            onClick={() => handleZoomChange(-10)}
-            className="p-1 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded"
-            title="缩小"
-          >
-            <svg className="h-3 w-3 lg:h-4 lg:w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
-          </button>
-          <button
-            onClick={() => handleZoomReset()}
-            className="text-xs lg:text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 px-1 lg:px-2 py-1 rounded"
-            title="重置缩放"
-          >
-            {zoomLevel}%
-          </button>
-          <button
-            onClick={() => handleZoomChange(10)}
-            className="p-1 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded"
-            title="放大"
-          >
-            <svg className="h-3 w-3 lg:h-4 lg:w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-            </svg>
-          </button>
+        {/* 画板缩放控制和历史记录 */}
+        <div className="flex items-center space-x-1 lg:space-x-2 relative">
+          <Tooltip content="缩小" position="bottom">
+            <button
+              onClick={() => handleZoomChange(-10)}
+              className="p-1 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded"
+            >
+              <svg className="h-3 w-3 lg:h-4 lg:w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+          </Tooltip>
+          <Tooltip content="重置缩放" position="bottom">
+            <button
+              onClick={() => handleZoomReset()}
+              className="text-xs lg:text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 px-1 lg:px-2 py-1 rounded"
+            >
+              {zoomLevel}%
+            </button>
+          </Tooltip>
+          <Tooltip content="放大" position="bottom">
+            <button
+              onClick={() => handleZoomChange(10)}
+              className="p-1 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded"
+            >
+              <svg className="h-3 w-3 lg:h-4 lg:w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+              </svg>
+            </button>
+          </Tooltip>
+
+          {/* 历史记录按钮 */}
+          <div className="relative">
+            <Tooltip content="历史记录 (Ctrl+S)" position="bottom">
+              <button
+                onClick={() => {
+                  setActiveTool('history')
+                  setShowHistoryPanel(true)
+                  loadHistoryRecords()
+                }}
+                className={`p-1 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded ${
+                  activeTool === 'history' ? 'bg-blue-100 dark:bg-blue-900' : ''
+                }`}
+              >
+                <History className="h-4 w-4 lg:h-5 lg:w-5" />
+              </button>
+            </Tooltip>
+            
+            {/* 历史记录面板 */}
+            {showHistoryPanel && (
+              <div ref={historyPanelRef} className="absolute top-full left-0 mt-1 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-3 z-10 w-80 max-h-96 overflow-y-auto">
+                <div className="flex justify-between items-center mb-3">
+                  <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100">历史记录</h4>
+                  <div className="flex items-center space-x-2">
+                    <Tooltip content="清空历史记录" position="top">
+                      <button
+                        onClick={clearHistory}
+                        className="text-xs text-red-500 hover:text-red-700 dark:hover:text-red-400 px-2 py-1 border border-red-300 dark:border-red-600 rounded"
+                      >
+                        清空
+                      </button>
+                    </Tooltip>
+                    <button 
+                      onClick={() => setShowHistoryPanel(false)}
+                      className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-400"
+                    >
+                      ×
+                    </button>
+                  </div>
+                </div>
+                
+                {/* 历史记录列表 */}
+                <div className="space-y-2">
+                  {historyRecords.length === 0 ? (
+                    <div className="text-center py-4 text-gray-500 dark:text-gray-400">
+                      <Clock className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                      <p className="text-sm">暂无历史记录</p>
+                      <p className="text-xs mt-1">使用 Ctrl+S 保存当前状态</p>
+                    </div>
+                  ) : (
+                    historyRecords.map((record) => (
+                      <div
+                        key={record.id}
+                        className="flex items-center space-x-3 p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors group"
+                      >
+                        <div 
+                          className="flex-1 flex items-center space-x-3 cursor-pointer"
+                          onClick={() => loadHistoryRecord(record)}
+                        >
+                          {record.preview ? (
+                            <img 
+                              src={record.preview} 
+                              alt="预览" 
+                              className="w-12 h-9 object-cover rounded border border-gray-200 dark:border-gray-600"
+                            />
+                          ) : (
+                            <div className="w-12 h-9 bg-gray-200 dark:bg-gray-700 rounded flex items-center justify-center">
+                              <History className="h-4 w-4 text-gray-500" />
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+                              {record.name}
+                            </div>
+                            <div className="text-xs text-gray-500 dark:text-gray-400">
+                              {new Date(record.timestamp).toLocaleString()}
+                            </div>
+                            {record.metadata && (
+                              <div className="text-xs text-gray-400 dark:text-gray-500">
+                                {record.metadata.objectCount} 个对象
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        <Tooltip content="删除此记录" position="top">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              deleteHistoryRecord(record.id)
+                            }}
+                            className="opacity-0 group-hover:opacity-100 p-1 text-red-500 hover:text-red-700 dark:hover:text-red-400 transition-opacity"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </button>
+                        </Tooltip>
+                      </div>
+                    ))
+                  )}
+                </div>
+                
+                {/* 操作提示 */}
+                <div className="border-t border-gray-200 dark:border-gray-700 pt-3 mt-3">
+                  <div className="text-xs text-gray-500 dark:text-gray-400">
+                    <div className="font-medium mb-1">使用提示：</div>
+                    <div>• 点击记录可加载到画板</div>
+                    <div>• 使用 Ctrl+S 保存当前状态</div>
+                    <div>• 历史记录自动保存到浏览器</div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
 
@@ -2639,52 +2991,60 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
       {/* 右侧操作组 */}
       <div className="flex items-center justify-center lg:justify-end flex-wrap gap-1 lg:gap-2 mt-2 lg:mt-0">
         {/* 保存 */}
-        <button
-          onClick={handleSave}
-          className="p-1 lg:p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"
-          title="保存画板"
-        >
-          <Save className="h-4 w-4 lg:h-5 lg:w-5" />
-        </button>
-        <button
-          onClick={handleImportCanvas}
-          className="p-1 lg:p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"
-          title="导入画板(JSON)"
-        >
-          <Upload className="h-4 w-4 lg:h-5 lg:w-5" />
-        </button>
-        <button
-          onClick={handleDownloadCanvas}
-          className="p-1 lg:p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"
-          title="下载画板(JSON)"
-        >
-          <Download className="h-4 w-4 lg:h-5 lg:w-5" />
-        </button>
+        <Tooltip content="保存画板" position="bottom">
+          <button
+            onClick={handleSave}
+            className="p-1 lg:p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"
+          >
+            <Save className="h-4 w-4 lg:h-5 lg:w-5" />
+          </button>
+        </Tooltip>
+        <Tooltip content="导入画板(JSON)" position="bottom">
+          <button
+            onClick={handleImportCanvas}
+            className="p-1 lg:p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"
+          >
+            <Upload className="h-4 w-4 lg:h-5 lg:w-5" />
+          </button>
+        </Tooltip>
+        <Tooltip content="下载画板(JSON)" position="bottom">
+          <button
+            onClick={handleDownloadCanvas}
+            className="p-1 lg:p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"
+          >
+            <Download className="h-4 w-4 lg:h-5 lg:w-5" />
+          </button>
+        </Tooltip>
 
         {/* 主题切换按钮 */}
-        <button
-          onClick={handleToggleTheme}
-          className="p-1 lg:p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"
-          title={`切换到${theme === 'light' ? '深色' : '浅色'}主题`}
-        >
-          {theme === 'light' ? <Moon className="h-4 w-4 lg:h-5 lg:w-5" /> : <Sun className="h-4 w-4 lg:h-5 lg:w-5" />}
-        </button>
+        <Tooltip content={`切换到${theme === 'light' ? '深色' : '浅色'}主题`} position="bottom">
+          <button
+            onClick={handleToggleTheme}
+            className="p-1 lg:p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"
+          >
+            {theme === 'light' ? <Moon className="h-4 w-4 lg:h-5 lg:w-5" /> : <Sun className="h-4 w-4 lg:h-5 lg:w-5" />}
+          </button>
+        </Tooltip>
 
         {/* 国际化按钮 */}
-        <button
-          onClick={handleToggleLanguage}
-          className="p-1 lg:p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"
-          title={`切换到${language === 'zh' ? 'English' : '中文'}`}
-        >
-          <Languages className="h-4 w-4 lg:h-5 lg:w-5" />
-        </button>
+        <Tooltip content={`切换到${language === 'zh' ? 'English' : '中文'}`} position="bottom">
+          <button
+            onClick={handleToggleLanguage}
+            className="p-1 lg:p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"
+          >
+            <Languages className="h-4 w-4 lg:h-5 lg:w-5" />
+          </button>
+        </Tooltip>
 
         {/* 用户信息胶囊 */}
-        {userInfo && (
-          <div className="flex items-center space-x-1 lg:space-x-2 bg-gray-100 dark:bg-gray-800 rounded-full px-2 lg:px-3 py-1">
+        <Tooltip content={userInfo ? `${userInfo.username} - 剩余${userInfo.points}点` : "用户信息"} position="bottom">
+          <div className="flex items-center space-x-1 lg:space-x-2 bg-gray-100 dark:bg-gray-800 rounded-full px-2 lg:px-3 py-1 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors cursor-pointer">
             {/* 消耗点数 */}
             <div className="flex items-center space-x-1">
-              <span className="text-xs lg:text-sm font-medium text-gray-700 dark:text-gray-300">{userInfo.points}</span>
+              <svg className="w-3 h-3 lg:w-4 lg:h-4 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M10 2a8 8 0 100 16 8 8 0 000-16zm0 14a6 6 0 110-12 6 6 0 010 12zm-1-9a1 1 0 112 0v4a1 1 0 11-2 0V7zm1 8a1 1 0 100-2 1 1 0 000 2z"/>
+              </svg>
+              <span className="text-xs lg:text-sm font-medium text-gray-700 dark:text-gray-300">{userInfo?.points || 0}</span>
               <span className="text-xs text-gray-500 dark:text-gray-400">点</span>
             </div>
             
@@ -2694,13 +3054,13 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
             {/* 用户头像 */}
             <div className="flex items-center">
               <img 
-                src={userInfo.avatar} 
-                alt={userInfo.username}
+                src={userInfo?.avatar || "/default-avatar.png"} 
+                alt={userInfo?.username || "用户"}
                 className="w-4 h-4 lg:w-6 lg:h-6 rounded-full"
               />
             </div>
           </div>
-        )}
+        </Tooltip>
       </div>
     </div>
   )
