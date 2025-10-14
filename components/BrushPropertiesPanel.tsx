@@ -34,9 +34,26 @@ export default function BrushPropertiesPanel({
 
     const checkDrawingMode = () => {
       if (canvas.isDrawingMode && canvas.freeDrawingBrush) {
-        // 检查是否是橡皮擦模式（通过画笔颜色判断）
-        const isEraser = canvas.freeDrawingBrush.color === '#ffffff' || 
-                        canvas.freeDrawingBrush.color === '#1f2937'
+        // 检查是否是橡皮擦模式 - 更精确的判断，包括颜色格式转换
+        const brushColor = canvas.freeDrawingBrush.color
+        
+        // 将颜色转换为标准格式进行比较
+        const normalizedColor = brushColor.toLowerCase().replace(/\s/g, '')
+        
+        // 橡皮擦颜色检测（检测白色和深色主题的深灰色）
+        const isEraser = normalizedColor === '#ffffff' || 
+                        normalizedColor === '#1f2937' ||
+                        normalizedColor === 'rgba(255,255,255,1)' ||
+                        normalizedColor === 'rgba(31,41,55,1)' ||
+                        normalizedColor === 'rgb(255,255,255)' ||
+                        normalizedColor === 'rgb(31,41,55)'
+        
+        console.log('画笔属性面板检查:', {
+          isDrawingMode: canvas.isDrawingMode,
+          originalColor: brushColor,
+          normalizedColor: normalizedColor,
+          isEraser: isEraser
+        })
         
         if (!isEraser) {
           setIsVisible(true)
@@ -71,9 +88,36 @@ export default function BrushPropertiesPanel({
     
     const brush = canvas.freeDrawingBrush
     brush.width = brushSize
-    brush.color = brushColor
+    
+    // 使用RGBA颜色格式来设置透明度
+    const rgbaColor = hexToRgba(brushColor, opacity)
+    brush.color = rgbaColor
+    
     canvas.requestRenderAll()
-  }, [canvas, brushSize, brushColor])
+  }, [canvas, brushSize, brushColor, opacity])
+
+  // 将十六进制颜色转换为RGBA格式
+  const hexToRgba = (hex: string, alpha: number): string => {
+    // 移除#号
+    hex = hex.replace('#', '')
+    
+    // 解析RGB值
+    let r, g, b
+    if (hex.length === 3) {
+      r = parseInt(hex[0] + hex[0], 16)
+      g = parseInt(hex[1] + hex[1], 16)
+      b = parseInt(hex[2] + hex[2], 16)
+    } else if (hex.length === 6) {
+      r = parseInt(hex.substring(0, 2), 16)
+      g = parseInt(hex.substring(2, 4), 16)
+      b = parseInt(hex.substring(4, 6), 16)
+    } else {
+      // 如果颜色格式无效，返回默认黑色
+      return `rgba(0, 0, 0, ${alpha})`
+    }
+    
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`
+  }
 
   // 更新画笔属性
   const updateBrushProperties = () => {
@@ -83,10 +127,10 @@ export default function BrushPropertiesPanel({
     
     // 设置基本属性
     brush.width = brushSize
-    brush.color = brushColor
     
-    // 设置透明度
-    brush.globalAlpha = opacity
+    // 使用RGBA颜色格式来设置透明度
+    const rgbaColor = hexToRgba(brushColor, opacity)
+    brush.color = rgbaColor
     
     // 设置阴影效果
     if (shadowEnabled) {
@@ -262,7 +306,7 @@ export default function BrushPropertiesPanel({
                       : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
                   }`}
                 >
-                  {shadowEnabled ? '开启' : '关闭'}
+                  {shadowEnabled ? '关闭' : '开启'}
                 </button>
               </div>
 
@@ -341,9 +385,12 @@ export default function BrushPropertiesPanel({
                     onClick={() => {
                       onBrushSizeChange(preset.size)
                       handleOpacityChange(preset.opacity)
-                      handleShadowToggle(preset.shadow || false)
-                      if (preset.shadowBlur) {
-                        handleShadowBlurChange(preset.shadowBlur)
+                      // 只有当预设明确指定了阴影效果时才设置阴影
+                      if (preset.shadow !== undefined) {
+                        handleShadowToggle(preset.shadow)
+                        if (preset.shadowBlur) {
+                          handleShadowBlurChange(preset.shadowBlur)
+                        }
                       }
                     }}
                     className="px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded border border-gray-200 dark:border-gray-600"

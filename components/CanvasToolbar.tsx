@@ -2585,7 +2585,7 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
           <input
             type="range"
             min="1"
-            max="20"
+            max="100"
             value={brushSize}
             onChange={(e) => handleBrushSizeChange(Number(e.target.value))}
             className="w-16 lg:w-20 dark:bg-gray-700 dark:border-gray-600"

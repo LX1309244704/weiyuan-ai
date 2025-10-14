@@ -95,35 +95,55 @@ export default function SelectionPanel({ selectedArea, onGenerateImage, onCaptur
     
     console.log('SelectionPanel: 鼠标屏幕位置:', screenPosition)
     
-    // 计算主面板位置（吸附在"添加到聊天"按钮下方）
+    // 计算主面板位置（吸附在"添加到聊天"按钮下方，智能边界对齐）
     const calculatePanelPosition = () => {
       const panelWidth = 250
       const panelHeight = 80
       
       // 先计算"+"按钮的位置
       const addButtonPos = calculateAddButtonPosition()
-      const buttonSize = 24
+      const buttonSize = 24 * canvasScale
       
-      // 面板放在"+"按钮的下方，稍微偏移
-      let panelLeft = addButtonPos.left
-      let panelTop = addButtonPos.top + buttonSize + 10  // 按钮下方10px
+      // 默认位置：面板放在"+"按钮的下方，右侧边缘对齐
+      let panelLeft = addButtonPos.left + buttonSize - panelWidth
+      let panelTop = addButtonPos.top + buttonSize + 10
       
-      // 边界检查 - 如果超出屏幕右侧，调整到左侧
-      if (panelLeft + panelWidth > window.innerWidth) {
-        panelLeft = Math.max(10, addButtonPos.left - panelWidth - 10)
+      // 智能边界检查：根据按钮在屏幕中的位置决定对齐方式
+      const screenCenterX = window.innerWidth / 2
+      const isButtonOnRightSide = addButtonPos.left > screenCenterX
+      
+      if (isButtonOnRightSide) {
+        // 按钮在屏幕右侧：右侧边缘对齐
+        panelLeft = addButtonPos.left + buttonSize - panelWidth
+        
+        // 如果超出左侧边界，改为左侧对齐
+        if (panelLeft < 10) {
+          panelLeft = addButtonPos.left
+        }
+      } else {
+        // 按钮在屏幕左侧：左侧对齐
+        panelLeft = addButtonPos.left
+        
+        // 如果超出右侧边界，改为右侧边缘对齐
+        if (panelLeft + panelWidth > window.innerWidth - 10) {
+          panelLeft = addButtonPos.left + buttonSize - panelWidth
+        }
       }
       
-      // 边界检查 - 如果超出屏幕底部，调整到上方
-      if (panelTop + panelHeight > window.innerHeight) {
-        panelTop = Math.max(10, addButtonPos.top - panelHeight - 10)
+      // 垂直边界检查
+      if (panelTop + panelHeight > window.innerHeight - 10) {
+        // 如果超出底部边界，放在按钮上方
+        panelTop = addButtonPos.top - panelHeight - 10
       }
       
-      // 确保位置不会超出屏幕边界
+      // 最终边界约束
       const finalLeft = Math.max(10, Math.min(panelLeft, window.innerWidth - panelWidth - 10))
       const finalTop = Math.max(10, Math.min(panelTop, window.innerHeight - panelHeight - 10))
       
-      console.log('SelectionPanel: 面板位置（吸附在按钮下方）:', {
+      console.log('SelectionPanel: 智能定位面板:', {
         addButtonPos,
+        isButtonOnRightSide,
+        screenCenterX,
         panelLeft, panelTop,
         finalLeft, finalTop
       })
