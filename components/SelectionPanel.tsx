@@ -491,15 +491,6 @@ export default function SelectionPanel({ selectedArea, onGenerateImage, onCaptur
             value={customPrompt}
             onChange={(e) => setCustomPrompt(e.target.value)}
             onKeyDown={(e) => {
-              // 阻止快捷键事件冒泡和默认行为，避免影响全局快捷键
-              e.stopPropagation()
-              e.nativeEvent?.stopImmediatePropagation?.()
-              
-              // 如果是控制键组合，阻止默认行为
-              if (e.ctrlKey || e.metaKey) {
-                e.preventDefault()
-              }
-              
               // 特殊处理：允许基本的文本编辑快捷键
               const key = e.key.toLowerCase()
               if ((e.ctrlKey || e.metaKey) && ['a', 'x', 'v', 'z', 'y'].includes(key)) {
@@ -507,10 +498,15 @@ export default function SelectionPanel({ selectedArea, onGenerateImage, onCaptur
                 return
               }
               
-              // 阻止其他所有快捷键的默认行为
+              // 确保删除键和退格键正常工作
               if (['delete', 'backspace', 'enter', 'escape', 'tab'].includes(key)) {
-                // 这些键在输入框中应该有正常行为，不阻止
+                // 这些键在输入框中应该有正常行为
                 return
+              }
+              
+              // 阻止其他快捷键的默认行为，但不要阻止冒泡
+              if (e.ctrlKey || e.metaKey) {
+                e.preventDefault()
               }
             }}
             placeholder="输入提示词..."

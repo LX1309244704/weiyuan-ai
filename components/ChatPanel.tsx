@@ -22,6 +22,7 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
   const [isCollapsed, setIsCollapsed] = useState(false)
   const [messages, setMessages] = useState<Message[]>([])
   const [inputText, setInputText] = useState('')
+  const inputRef = useRef<HTMLInputElement>(null)
   const [isGenerating, setIsGenerating] = useState(false)
   const [screenshotPreview, setScreenshotPreview] = useState<string | null>(null)
   const [uploadedImagePreviews, setUploadedImagePreviews] = useState<string[]>([])
@@ -356,6 +357,11 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
     })
     
     setInputText('')
+    // 清空contentEditable div的内容
+    const contentEditableDiv = document.querySelector('[contenteditable="true"]') as HTMLElement
+    if (contentEditableDiv) {
+      contentEditableDiv.textContent = ''
+    }
     setIsGenerating(true)
 
     // 模拟AI响应
@@ -915,13 +921,18 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
         />
 
         <div className="flex space-x-2">
-          <input
-            type="text"
+          <textarea
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
-            onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault()
+                handleSendMessage()
+              }
+            }}
             placeholder="输入提示词或描述..."
-            className="flex-1 input-field text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-400"
+            className="flex-1 input-field text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-400 min-h-[38px] resize-none"
+            rows={1}
           />
           <button
             onClick={handleSendMessage}

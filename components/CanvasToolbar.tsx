@@ -854,6 +854,36 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
     const handleKeyDown = (event: KeyboardEvent) => {
       console.log('键盘事件:', event.key, 'Ctrl:', event.ctrlKey, 'Target:', event.target)
       
+      // 检查事件目标是否是输入框，如果是则跳过所有快捷键处理
+      const target = event.target as HTMLElement
+      
+      // 更完善的输入框检测逻辑
+      const isInputElement = 
+        target.tagName === 'INPUT' || 
+        target.tagName === 'TEXTAREA' || 
+        target.isContentEditable ||
+        (target.closest && (
+          target.closest('input') || 
+          target.closest('textarea') || 
+          target.closest('[contenteditable="true"]')
+        ))
+      
+      if (isInputElement) {
+        console.log('检测到输入框元素，跳过快捷键处理', {
+          tagName: target.tagName,
+          isContentEditable: target.isContentEditable,
+          closestInput: target.closest && target.closest('input'),
+          closestTextarea: target.closest && target.closest('textarea'),
+          closestContentEditable: target.closest && target.closest('[contenteditable="true"]')
+        })
+        // 确保完全阻止事件处理
+        event.stopPropagation()
+        event.stopImmediatePropagation()
+        return
+      }
+      
+      console.log('不是输入框元素，继续处理快捷键')
+      
       if (!canvas) return
       
       const activeObject = canvas.getActiveObject()
