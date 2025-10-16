@@ -1,0 +1,484 @@
+'use client'
+
+import React, { useState, useEffect } from 'react'
+import { ModelService } from '@/services/ai-models'
+
+interface ImageSelectionPanelProps {
+  selectedImage: any
+  canvas: any
+  onAddToChat: (imageObject: any) => void
+  onGenerateFromImage: (imageObject: any, prompt: string, model: string) => void
+  onClearSelection: () => void
+}
+
+const ImageSelectionPanel: React.FC<ImageSelectionPanelProps> = ({
+  selectedImage,
+  canvas,
+  onAddToChat,
+  onGenerateFromImage,
+  onClearSelection
+}) => {
+  const [addButtonPosition, setAddButtonPosition] = useState({ left: 0, top: 0 })
+  const [panelPosition, setPanelPosition] = useState({ left: 0, top: 0 })
+  const [showAddButton, setShowAddButton] = useState(true)
+  const [showTooltip, setShowTooltip] = useState(false)
+  const [canvasScale, setCanvasScale] = useState(1)
+  const [selectedModelType, setSelectedModelType] = useState<'image' | 'video'>('image')
+  const [selectedImageModel, setSelectedImageModel] = useState('seedream-4')
+  const [selectedVideoModel, setSelectedVideoModel] = useState('veo3')
+  const [selectedAspectRatio, setSelectedAspectRatio] = useState('16:9')
+  const [selectedVideoSeconds, setSelectedVideoSeconds] = useState('5')
+  const [showModelDropdown, setShowModelDropdown] = useState(false)
+  const [showAspectDropdown, setShowAspectDropdown] = useState(false)
+  const [showSecondsDropdown, setShowSecondsDropdown] = useState(false)
+  const [customPrompt, setCustomPrompt] = useState('')
+  const [textareaHeight, setTextareaHeight] = useState('32px')
+
+  // 监听输入内容变化，自动调整textarea高度
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    
+    const lineCount = customPrompt.split('\n').length
+    const baseHeight = 32
+    const lineHeight = 20
+    const maxHeight = 80
+    
+    let newHeight = baseHeight + (lineCount - 1) * lineHeight
+    newHeight = Math.min(Math.max(newHeight, baseHeight), maxHeight)
+    
+    setTextareaHeight(`${newHeight}px`)
+  }, [customPrompt])
+
+  // 监听ESC键取消选择
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && selectedImage) {
+        event.preventDefault()
+        event.stopPropagation()
+        onClearSelection()
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown, true)
+    
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown, true)
+    }
+  }, [selectedImage, onClearSelection])
+
+  // 监听画板缩放变化
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    
+    const handleCanvasScaleChange = () => {
+      const scaleElement = document.querySelector('[data-canvas-scale]')
+      const scale = scaleElement ? parseFloat(scaleElement.getAttribute('data-canvas-scale') || '1') : 1
+      setCanvasScale(scale)
+    }
+
+    window.addEventListener('canvasScaleChange', handleCanvasScaleChange)
+    handleCanvasScaleChange()
+    
+    const intervalId = setInterval(handleCanvasScaleChange, 500)
+    
+    return () => {
+      window.removeEventListener('canvasScaleChange', handleCanvasScaleChange)
+      clearInterval(intervalId)
+    }
+  }, [])
+
+  // 获取图片在画布上的位置和尺寸
+  const getImagePosition = () => {
+    if (!selectedImage || !canvas) return { x: 0, y: 0, width: 0, height: 0 }
+    
+    const zoom = canvas.getZoom()
+    const vpt = canvas.viewportTransform || [1, 0, 0, 1, 0, 0]
+    
+    const left = (selectedImage.left || 0) * zoom + vpt[4]
+    const top = (selectedImage.top || 0) * zoom + vpt[5]
+    const width = (selectedImage.width || 0) * selectedImage.scaleX * zoom
+    const height = (selectedImage.height || 0) * selectedImage.scaleY * zoom
+    
+    return {
+      x: left,
+      y: top,
+      width,
+      height
+    }
+  }
+
+  const position = getImagePosition()
+  
+  // 计算"+按钮位置（图片右下角，与框选效果一致）
+  useEffect(() => {
+    if (!selectedImage || !canvas) return
+    
+    const baseButtonSize = 24
+    const buttonSize = baseButtonSize * canvasScale
+    const offset = 4 * canvasScale
+    
+    const buttonLeft = position.x + position.width - buttonSize - offset
+    const buttonTop = position.y + position.height - buttonSize - offset
+    
+    const maxLeft = window.innerWidth - buttonSize - 10
+    const maxTop = window.innerHeight - buttonSize - 10
+    const finalLeft = Math.max(10, Math.min(buttonLeft, maxLeft))
+    const finalTop = Math.max(10, Math.min(buttonTop, maxTop))
+    
+    setAddButtonPosition({ left: finalLeft, top: finalTop })
+    
+    const panelWidth = 250 * canvasScale
+    const panelHeight = 80 * canvasScale
+    
+    let panelLeft = finalLeft + buttonSize - panelWidth
+    let panelTop = finalTop + buttonSize + 10
+    
+    const screenCenterX = window.innerWidth / 2
+    const isButtonOnRightSide = finalLeft > screenCenterX
+    
+    if (isButtonOnRightSide) {
+      panelLeft = finalLeft + buttonSize - panelWidth
+      if (panelLeft < 10) {
+        panelLeft = finalLeft
+      }
+    } else {
+      panelLeft = finalLeft
+      if (panelLeft + panelWidth > window.innerWidth - 10) {
+        panelLeft = finalLeft + buttonSize - panelWidth
+      }
+    }
+    
+    if (panelTop + panelHeight > window.innerHeight - 10) {
+      panelTop = finalTop - panelHeight - 10
+    }
+    
+    const finalPanelLeft = Math.max(10, Math.min(panelLeft, window.innerWidth - panelWidth - 10))
+    const finalPanelTop = Math.max(10, Math.min(panelTop, window.innerHeight - panelHeight - 10))
+    
+    setPanelPosition({ left: finalPanelLeft, top: finalPanelTop })
+  }, [selectedImage, canvas, position, canvasScale])
+
+  if (!selectedImage || !canvas) return null
+  
+  if (position.x + position.width < 0 || position.x > window.innerWidth ||
+      position.y + position.height < 0 || position.y > window.innerHeight) {
+    return null
+  }
+
+  // 处理添加到聊天功能
+  const handleAddToChat = async () => {
+    if (!selectedImage) return
+    
+    try {
+      onAddToChat(selectedImage)
+      
+      const notification = document.createElement('div')
+      notification.innerHTML = `
+        <div style="position: fixed; top: 20px; right: 20px; background: #10b981; color: white; padding: 8px 12px; border-radius: 6px; z-index: 10000; box-shadow: 0 2px 4px rgba(0,0,0,0.1); font-size: 14px;">
+          图片已添加到聊天
+        </div>
+      `
+      document.body.appendChild(notification)
+      
+      setTimeout(() => {
+        if (document.body.contains(notification)) {
+          document.body.removeChild(notification)
+        }
+      }, 2000)
+    } catch (error) {
+      console.error('添加到聊天失败:', error)
+    } finally {
+      setShowAddButton(false)
+      onClearSelection()
+    }
+  }
+
+  return (
+    <>
+      {/* "+"按钮 - 添加到聊天（与框选效果完全一致） */}
+      {showAddButton && (
+        <div 
+          className="fixed z-50"
+          style={{ 
+            left: `${addButtonPosition.left}px`, 
+            top: `${addButtonPosition.top}px`
+          }}
+          onMouseEnter={() => setShowTooltip(true)}
+          onMouseLeave={() => setShowTooltip(false)}
+        >
+          <div 
+            className="flex items-center bg-green-500 hover:bg-green-600 rounded-lg transition-colors shadow-lg"
+            style={{ 
+              padding: `${4 * canvasScale}px`,
+              transform: `scale(${canvasScale})`,
+              transformOrigin: 'center'
+            }}
+          >
+            <button
+              onClick={handleAddToChat}
+              className="text-white rounded flex items-center justify-center font-semibold transition-colors"
+              style={{ 
+                width: `${24 * canvasScale}px`,
+                height: `${24 * canvasScale}px`,
+                fontSize: `${14 * canvasScale}px`
+              }}
+              title="添加到聊天"
+            >
+              +
+            </button>
+          </div>
+          
+          {/* 提示信息 */}
+          {showTooltip && (
+            <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-1 bg-gray-800 text-white text-xs rounded-lg px-2 py-1 whitespace-nowrap">
+              添加到聊天
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 主面板 - 扩展功能（与框选效果完全一致） */}
+      <div 
+        className="fixed bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50"
+        style={{ 
+          left: `${panelPosition.left}px`, 
+          top: `${panelPosition.top}px`,
+          width: 'auto',
+          padding: `${4 * canvasScale}px`,
+          minWidth: `${250 * canvasScale}px`,
+          transform: `scale(${1.25 * canvasScale})`,
+          transformOrigin: 'top left'
+        }}
+      >
+        <div className="flex items-center justify-end space-x-2">
+          {/* 1. 图标左右切换 - 模型类型切换 */}
+          <div className="flex items-center bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
+            <button
+              onClick={() => setSelectedModelType('image')}
+              className={`p-1 rounded-lg transition-colors ${
+                selectedModelType === 'image' 
+                  ? 'bg-white dark:bg-gray-600 shadow-sm text-gray-700 dark:text-gray-300' 
+                  : 'text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
+              }`}
+              title="图片生成"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+            </button>
+            <button
+              onClick={() => setSelectedModelType('video')}
+              className={`p-1 rounded-lg transition-colors ${
+                selectedModelType === 'video' 
+                  ? 'bg-white dark:bg-gray-600 shadow-sm text-gray-700 dark:text-gray-300' 
+                  : 'text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
+              }`}
+              title="视频生成"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+              </svg>
+            </button>
+          </div>
+
+          {/* 2. 模型选择 */}
+          <div className="relative">
+            <div className="flex items-center bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
+              <button
+                onClick={() => setShowAspectDropdown(!showAspectDropdown)}
+                className="flex items-center space-x-1 p-1 text-gray-700 dark:text-gray-300 rounded-lg text-xs hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+              >
+                <span>
+                  {ModelService.getModelInfo(selectedModelType === 'image' ? selectedImageModel : selectedVideoModel)?.name || 
+                   (selectedModelType === 'image' ? selectedImageModel : selectedVideoModel)}
+                </span>
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+            </div>
+            
+            {showAspectDropdown && (
+              <div className="absolute bottom-full left-0 mb-1 w-20 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-600 z-10">
+                <div className="p-1">
+                  {selectedModelType === 'image' ? (
+                    <>
+                      <button
+                        onClick={() => {
+                          setSelectedImageModel('seedream-4')
+                          setShowAspectDropdown(false)
+                        }}
+                        className={`w-full text-left px-2 py-1 text-xs rounded ${
+                          selectedImageModel === 'seedream-4' 
+                            ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300' 
+                            : 'hover:bg-gray-100 dark:hover:bg-gray-700'
+                        }`}
+                      >
+                        SD4
+                      </button>
+                      <button
+                        onClick={() => {
+                          setSelectedImageModel('nano-banana')
+                          setShowAspectDropdown(false)
+                        }}
+                        className={`w-full text-left px-2 py-1 text-xs rounded ${
+                          selectedImageModel === 'nano-banana' 
+                            ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300' 
+                            : 'hover:bg-gray-100 dark:hover:bg-gray-700'
+                        }`}
+                      >
+                        NB
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => {
+                          setSelectedVideoModel('veo3')
+                          setShowAspectDropdown(false)
+                        }}
+                        className={`w-full text-left px-2 py-1 text-xs rounded ${
+                          selectedVideoModel === 'veo3' 
+                            ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300' 
+                            : 'hover:bg-gray-100 dark:hover:bg-gray-700'
+                        }`}
+                      >
+                        Veo3
+                      </button>
+                      <button
+                        onClick={() => {
+                          setSelectedVideoModel('sora2')
+                          setShowAspectDropdown(false)
+                        }}
+                        className={`w-full text-left px-2 py-1 text-xs rounded ${
+                          selectedVideoModel === 'sora2' 
+                            ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300' 
+                            : 'hover:bg-gray-100 dark:hover:bg-gray-700'
+                        }`}
+                      >
+                        Sora2
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* 3. 比例/秒数选择 */}
+          <div className="relative">
+            <div className="flex items-center bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
+              <button
+                onClick={() => setShowSecondsDropdown(!showSecondsDropdown)}
+                className="flex items-center space-x-1 p-1 text-gray-700 dark:text-gray-300 rounded-lg text-xs hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+              >
+                <span>
+                  {selectedModelType === 'image' 
+                    ? selectedAspectRatio
+                    : `${selectedVideoSeconds}s`
+                  }
+                </span>
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+            </div>
+            
+            {showSecondsDropdown && (
+              <div className="absolute bottom-full left-0 mb-1 w-16 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-600 z-10">
+                <div className="p-1">
+                  {selectedModelType === 'image' ? (
+                    <>
+                      {['16:9', '9:16', '4:3', '3:4', '1:1'].map((ratio) => (
+                        <button
+                          key={ratio}
+                          onClick={() => {
+                            setSelectedAspectRatio(ratio)
+                            setShowSecondsDropdown(false)
+                          }}
+                          className={`w-full text-left px-2 py-1 text-xs rounded ${
+                            selectedAspectRatio === ratio 
+                              ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300' 
+                              : 'hover:bg-gray-100 dark:hover:bg-gray-700'
+                          }`}
+                        >
+                          {ratio}
+                        </button>
+                      ))}
+                    </>
+                  ) : (
+                    <>
+                      {['3', '5', '10', '15', '30'].map((seconds) => (
+                        <button
+                          key={seconds}
+                          onClick={() => {
+                            setSelectedVideoSeconds(seconds)
+                            setShowSecondsDropdown(false)
+                          }}
+                          className={`w-full text-left px-2 py-1 text-xs rounded ${
+                            selectedVideoSeconds === seconds 
+                              ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300' 
+                              : 'hover:bg-gray-100 dark:hover:bg-gray-700'
+                          }`}
+                        >
+                          {seconds}s
+                        </button>
+                      ))}
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* 4. 输入框 */}
+          <textarea
+            value={customPrompt}
+            onChange={(e) => setCustomPrompt(e.target.value)}
+            onKeyDown={(e) => {
+              const key = e.key.toLowerCase()
+              if ((e.ctrlKey || e.metaKey) && ['a', 'x', 'v', 'z', 'y'].includes(key)) {
+                return
+              }
+              if (['delete', 'backspace', 'enter', 'escape', 'tab'].includes(key)) {
+                return
+              }
+              if (e.ctrlKey || e.metaKey) {
+                e.preventDefault()
+              }
+            }}
+            placeholder="输入提示词..."
+            className="flex-1 px-2 py-1 border border-gray-300 dark:border-gray-600 rounded text-xs bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:border-blue-500 dark:focus:border-blue-400 resize-none"
+            style={{ minWidth: '120px', height: textareaHeight, minHeight: '32px', maxHeight: '80px' }}
+            rows={1}
+          />
+
+          {/* 5. 生成按钮 */}
+          <div className="flex items-center bg-blue-500 hover:bg-blue-600 rounded-lg p-1 transition-colors shadow-md">
+            <button
+              onClick={() => {
+                if (!selectedImage) return
+                
+                const prompt = customPrompt.trim() 
+                  ? customPrompt
+                  : `基于此图片生成${selectedModelType === 'image' ? '图片' : '视频'}`
+                const model = selectedModelType === 'image' ? selectedImageModel : selectedVideoModel
+                
+                onGenerateFromImage(selectedImage, prompt, model)
+                setCustomPrompt('')
+                onClearSelection()
+              }}
+              className="text-white px-1.5 py-0.5 rounded text-xs font-medium transition-colors whitespace-nowrap"
+            >
+              生成{selectedModelType === 'image' ? '图片' : '视频'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </>
+  )
+}
+
+export default ImageSelectionPanel

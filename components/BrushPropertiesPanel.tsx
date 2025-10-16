@@ -34,27 +34,24 @@ export default function BrushPropertiesPanel({
 
     const checkDrawingMode = () => {
       if (canvas.isDrawingMode && canvas.freeDrawingBrush) {
-        // 检查是否是橡皮擦模式 - 更精确的判断，包括颜色格式转换
+        // 检查是否是橡皮擦模式 - 动态检测当前主题的橡皮擦颜色
         const brushColor = canvas.freeDrawingBrush.color
         
         // 将颜色转换为标准格式进行比较
         const normalizedColor = brushColor.toLowerCase().replace(/\s/g, '')
         
-        // 橡皮擦颜色检测（检测白色和深色主题的深灰色）
-        const isEraser = normalizedColor === '#ffffff' || 
-                        normalizedColor === '#1f2937' ||
-                        normalizedColor === 'rgba(255,255,255,1)' ||
-                        normalizedColor === 'rgba(31,41,55,1)' ||
-                        normalizedColor === 'rgb(255,255,255)' ||
-                        normalizedColor === 'rgb(31,41,55)'
+        // 检测当前主题（通过检查html元素的class）
+        const isDarkMode = document.documentElement.classList.contains('dark')
         
-        console.log('画笔属性面板检查:', {
-          isDrawingMode: canvas.isDrawingMode,
-          originalColor: brushColor,
-          normalizedColor: normalizedColor,
-          isEraser: isEraser
-        })
+        // 橡皮擦颜色检测（根据当前主题动态判断）
+        const eraserColors = isDarkMode 
+          ? ['#1f2937', 'rgba(31,41,55,1)', 'rgb(31,41,55)'] // 深色主题橡皮擦颜色
+          : ['#ffffff', 'rgba(255,255,255,1)', 'rgb(255,255,255)'] // 浅色主题橡皮擦颜色
         
+        const isEraser = eraserColors.some(eraserColor => 
+          normalizedColor === eraserColor.toLowerCase()
+        )
+          
         if (!isEraser) {
           setIsVisible(true)
           
@@ -183,11 +180,11 @@ export default function BrushPropertiesPanel({
     updateBrushProperties()
   }
 
-  // 预设颜色
+  // 预设颜色（禁止使用白色#ffffff，因为白色会被识别为橡皮擦）
   const presetColors = [
     '#000000', '#3b82f6', '#ef4444', '#10b981', '#f59e0b',
     '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16', '#f97316',
-    '#6366f1', '#4b5563', '#9ca3af', '#d1d5db', '#ffffff'
+    '#6366f1', '#4b5563', '#9ca3af', '#d1d5db'
   ]
 
   // 画笔样式预设

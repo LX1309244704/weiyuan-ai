@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>清空聊天记录</title>
+    <meta charset="UTF-8">
+</head>
+<body>
+    <h1>清空聊天记录</h1>
+    <button onclick="clearChatHistory()">清空所有聊天记录</button>
+    <div id="result"></div>
+
+    <script>
+        function clearChatHistory() {
+            const request = indexedDB.deleteDatabase('AIChatDB');
+            
+            request.onsuccess = function() {
+                document.getElementById('result').innerHTML = 
+                    '<p style="color: green;">✓ 聊天记录数据库已成功清空</p>';
+                console.log('聊天记录数据库已清空');
+            };
+            
+            request.onerror = function(event) {
+                document.getElementById('result').innerHTML = 
+                    '<p style="color: red;">✗ 清空数据库失败: ' + event.target.error + '</p>';
+                console.error('清空数据库失败:', event.target.error);
+            };
+            
+            request.onblocked = function() {
+                document.getElementById('result').innerHTML = 
+                    '<p style="color: orange;">⚠ 数据库被其他标签页占用，请关闭其他标签页后重试</p>';
+                console.warn('数据库被其他标签页占用');
+            };
+        }
+        
+        // 页面加载时检查数据库状态
+        window.onload = function() {
+            const checkRequest = indexedDB.open('AIChatDB');
+            checkRequest.onsuccess = function() {
+                const db = checkRequest.result;
+                const transaction = db.transaction(['chat_messages'], 'readonly');
+                const store = transaction.objectStore('chat_messages');
+                const countRequest = store.count();
+                
+                countRequest.onsuccess = function() {
+                    const count = countRequest.result;
+                    document.getElementById('result').innerHTML = 
+                        `<p>当前聊天记录数量: ${count} 条</p>`;
+                    db.close();
+                };
+            };
+            
+            checkRequest.onerror = function() {
+                document.getElementById('result').innerHTML = 
+                    '<p>未找到聊天记录数据库</p>';
+            };
+        };
+    </script>
+</body>
+</html>

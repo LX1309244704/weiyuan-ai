@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { ModelService } from '@/services/ai-models'
 
 interface SelectionData {
   rect: any
@@ -25,7 +26,7 @@ export default function SelectionPanel({ selectedArea, onGenerateImage, onCaptur
   const [showAddButton, setShowAddButton] = useState(false)
   const [showTooltip, setShowTooltip] = useState(false)
   const [selectedModelType, setSelectedModelType] = useState<'image' | 'video'>('image')
-  const [selectedImageModel, setSelectedImageModel] = useState('stable-diffusion')
+  const [selectedImageModel, setSelectedImageModel] = useState('seedream-4')
   const [selectedVideoModel, setSelectedVideoModel] = useState('veo3')
   const [selectedAspectRatio, setSelectedAspectRatio] = useState('16:9')
   const [selectedVideoSeconds, setSelectedVideoSeconds] = useState('5')
@@ -82,7 +83,7 @@ export default function SelectionPanel({ selectedArea, onGenerateImage, onCaptur
       const scaleElement = document.querySelector('[data-canvas-scale]')
       const scale = scaleElement ? parseFloat(scaleElement.getAttribute('data-canvas-scale') || '1') : 1
       setCanvasScale(scale)
-      console.log('画板缩放比例变化:', scale)
+
     }
 
     // 监听自定义事件或轮询检查缩放变化
@@ -100,7 +101,7 @@ export default function SelectionPanel({ selectedArea, onGenerateImage, onCaptur
     }
   }, [])
 
-  console.log('SelectionPanel 渲染，selectedArea:', selectedArea, 'canvasScale:', canvasScale)
+
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -113,7 +114,7 @@ export default function SelectionPanel({ selectedArea, onGenerateImage, onCaptur
 
     const { screenPosition, rect } = selectedArea
     
-    console.log('SelectionPanel: 鼠标屏幕位置:', screenPosition)
+
     
     // 计算主面板位置（吸附在"添加到聊天"按钮下方，智能边界对齐）
     const calculatePanelPosition = () => {
@@ -160,13 +161,7 @@ export default function SelectionPanel({ selectedArea, onGenerateImage, onCaptur
       const finalLeft = Math.max(10, Math.min(panelLeft, window.innerWidth - panelWidth - 10))
       const finalTop = Math.max(10, Math.min(panelTop, window.innerHeight - panelHeight - 10))
       
-      console.log('SelectionPanel: 智能定位面板:', {
-        addButtonPos,
-        isButtonOnRightSide,
-        screenCenterX,
-        panelLeft, panelTop,
-        finalLeft, finalTop
-      })
+
       
       return { left: finalLeft, top: finalTop }
     }
@@ -194,13 +189,7 @@ export default function SelectionPanel({ selectedArea, onGenerateImage, onCaptur
       const finalLeft = Math.max(10, Math.min(buttonLeft, maxLeft))
       const finalTop = Math.max(10, Math.min(buttonTop, maxTop))
       
-      console.log('"+按钮位置计算（基于鼠标坐标和缩放）:', {
-        mouseScreenX, mouseScreenY,
-        canvasScale,
-        buttonSize,
-        buttonLeft, buttonTop,
-        finalLeft, finalTop
-      })
+
       
       return { left: finalLeft, top: finalTop }
 
@@ -342,10 +331,8 @@ export default function SelectionPanel({ selectedArea, onGenerateImage, onCaptur
                 className="flex items-center space-x-1 p-1 text-gray-700 dark:text-gray-300 rounded-lg text-xs hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
               >
                 <span>
-                  {selectedModelType === 'image' 
-                    ? selectedImageModel === 'stable-diffusion' ? 'SD' : 'GPT'
-                    : selectedVideoModel === 'veo3' ? 'Veo3' : 'Sora2'
-                  }
+                  {ModelService.getModelInfo(selectedModelType === 'image' ? selectedImageModel : selectedVideoModel)?.name || 
+                   (selectedModelType === 'image' ? selectedImageModel : selectedVideoModel)}
                 </span>
                 <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -515,18 +502,63 @@ export default function SelectionPanel({ selectedArea, onGenerateImage, onCaptur
             rows={1}
           />
 
-          {/* 5. 生成按钮 */}
-          <div className="flex items-center bg-blue-500 hover:bg-blue-600 rounded-lg p-1 transition-colors shadow-md">
-            <button
-              onClick={async () => {
-                if (!selectedArea) return
-                
-                setIsGenerating(true)
-                // 先截图
-                const imageData = await onCaptureArea()
-                if (imageData) {
-                  // 发送截图到AI创作助手，如果有已有截图就替换
-                  if (onReceiveScreenshot) {
+          {/* 5. 生成按钮组 */}
+          <div className="flex flex-col space-y-1">
+            {/* 生成到画布按钮 */}
+            <div className="flex items-center bg-blue-500 hover:bg-blue-600 rounded-lg p-1 transition-colors shadow-md">
+              <button
+                onClick={async () => {
+                  if (!selectedArea) return
+                  
+                  setIsGenerating(true)
+                  // 先截图
+                  const imageData = await onCaptureArea()
+                  if (imageData) {
+                    // 只生成内容到画布，不发送截图到聊天
+                    const { left, top } = selectedArea.rect
+                    const prompt = customPrompt.trim() 
+                      ? customPrompt
+                      : `基于选择区域生成${selectedModelType === 'image' ? '图片' : '视频'}，位置: (${left.toFixed(0)}, ${top.toFixed(0)})`
+                    const model = selectedModelType === 'image' ? selectedImageModel : selectedVideoModel
+                    
+                    if (selectedModelType === 'image') {
+                      // 获取框选最后坐标作为图片起始位置
+                      const { left, top, width, height } = selectedArea.rect
+                      const endX = left + width
+                      const endY = top + height
+                      
+                      onGenerateImage(prompt, model, { x: endX, y: endY })
+                    } else {
+                      // 这里需要调用视频生成函数
+                      console.log('视频生成:', prompt, model)
+                    }
+                  }
+                  setIsGenerating(false)
+                  // 操作完成后隐藏面板和清除框选
+                  setIsVisible(false)
+                  setShowAddButton(false)
+                  onClearSelection?.()
+                  // 清空输入框
+                  setCustomPrompt('')
+                }}
+                disabled={isGenerating}
+                className="text-white px-1.5 py-0.5 rounded text-xs font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap flex-1"
+              >
+                {isGenerating ? '生成中...' : `生成到画布`}
+              </button>
+            </div>
+            
+            {/* 发送到聊天按钮 */}
+            <div className="flex items-center bg-green-500 hover:bg-green-600 rounded-lg p-1 transition-colors shadow-md">
+              <button
+                onClick={async () => {
+                  if (!selectedArea) return
+                  
+                  setIsGenerating(true)
+                  // 先截图
+                  const imageData = await onCaptureArea()
+                  if (imageData && onReceiveScreenshot) {
+                    // 只发送截图到聊天，不生成内容到画布
                     const { left, top } = selectedArea.rect
                     const modelInfo = selectedModelType === 'image' 
                       ? `图片模型: ${selectedImageModel}, 比例: ${selectedAspectRatio}`
@@ -539,38 +571,20 @@ export default function SelectionPanel({ selectedArea, onGenerateImage, onCaptur
                     
                     onReceiveScreenshot(imageData, finalPrompt)
                   }
-                  // 然后生成内容
-                  const { left, top } = selectedArea.rect
-                  const prompt = customPrompt.trim() 
-                    ? customPrompt
-                    : `基于选择区域生成${selectedModelType === 'image' ? '图片' : '视频'}，位置: (${left.toFixed(0)}, ${top.toFixed(0)})`
-                  const model = selectedModelType === 'image' ? selectedImageModel : selectedVideoModel
-                  
-                  if (selectedModelType === 'image') {
-                    // 获取框选最后坐标作为图片起始位置
-                    const { left, top, width, height } = selectedArea.rect
-                    const endX = left + width
-                    const endY = top + height
-                    
-                    onGenerateImage(prompt, model, { x: endX, y: endY })
-                  } else {
-                    // 这里需要调用视频生成函数
-                    console.log('视频生成:', prompt, model)
-                  }
-                }
-                setIsGenerating(false)
-                // 操作完成后隐藏面板和清除框选
-                setIsVisible(false)
-                setShowAddButton(false)
-                onClearSelection?.()
-                // 清空输入框
-                setCustomPrompt('')
-              }}
-              disabled={isGenerating}
-              className="text-white px-1.5 py-0.5 rounded text-xs font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
-            >
-              {isGenerating ? '生成中...' : `生成${selectedModelType === 'image' ? '图片' : '视频'}`}
-            </button>
+                  setIsGenerating(false)
+                  // 操作完成后隐藏面板和清除框选
+                  setIsVisible(false)
+                  setShowAddButton(false)
+                  onClearSelection?.()
+                  // 清空输入框
+                  setCustomPrompt('')
+                }}
+                disabled={isGenerating}
+                className="text-white px-1.5 py-0.5 rounded text-xs font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap flex-1"
+              >
+                {isGenerating ? '发送中...' : `发送到聊天`}
+              </button>
+            </div>
           </div>
         </div>
       </div>

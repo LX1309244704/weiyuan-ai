@@ -1628,10 +1628,16 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
             hasControls: true
           })
           
-          // 添加到画布
+          // 添加到画布并自动选中
           canvas.add(fabricImg)
           canvas.setActiveObject(fabricImg)
           canvas.requestRenderAll()
+          
+          console.log('图片上传成功，已自动选中图片对象:', {
+            type: fabricImg.type,
+            src: fabricImg._element?.src,
+            position: { left: fabricImg.left, top: fabricImg.top }
+          })
           
           // 保存状态
           saveCanvasState()
@@ -3084,7 +3090,7 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
             {/* 用户头像 */}
             <div className="flex items-center">
               <img 
-                src={userInfo?.avatar || "/default-avatar.png"} 
+                src={userInfo?.avatar || "/default-avatar.svg"} 
                 alt={userInfo?.username || "用户"}
                 className="w-4 h-4 lg:w-6 lg:h-6 rounded-full"
               />

@@ -1,0 +1,1 @@
+{"title":"AI模型请求配置系统","features":["多模型配置管理","类型安全的请求配置","模块化配置结构","模型-API映射"],"tech":{"Web":{"arch":"react","component":null}},"design":"后端配置文件创建，不涉及UI设计","plan":{"分析现有Nano-Banana模型配置结构":"done","为Seedream-4模型创建请求配置文件":"done","为Veo3模型创建请求配置文件":"done","为Sora2模型创建请求配置文件":"done","创建统一的模型配置管理模块":"done","更新模型选择组件以使用新的配置系统":"done","检查并更新其他相关组件":"done"}}

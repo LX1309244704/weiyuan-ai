@@ -1,7 +1,9 @@
 'use client'
 
 import { useState, useRef, useEffect, forwardRef, useImperativeHandle, useCallback } from 'react'
-import { Send, Image, Video, Download, X, MessageSquare, ChevronLeft, Settings, Monitor, Film, Type } from 'lucide-react'
+import { Send, Image, Video, Download, X, MessageSquare, ChevronLeft, Settings, Monitor, Film, Type, Trash2 } from 'lucide-react'
+import { ModelService, type ImageModel, type VideoModel, type TextModel } from '@/services/ai-models'
+import { chatDB } from '@/utils/chatDB'
 
 interface Message {
   id: string
@@ -29,10 +31,10 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
   const [showModelSettings, setShowModelSettings] = useState(false)
   const [showAspectRatio, setShowAspectRatio] = useState(false)
   const [showImageCount, setShowImageCount] = useState(false)
-  const [selectedModel, setSelectedModel] = useState('Nanobanbana')
+  const [selectedModel, setSelectedModel] = useState<ImageModel | VideoModel | TextModel>('seedream-4')
   const [selectedAspectRatio, setSelectedAspectRatio] = useState('16:9')
   const [imageCount, setImageCount] = useState(1)
-  const [activeModelTab, setActiveModelTab] = useState('图像')
+  const [selectedModelType, setSelectedModelType] = useState<'image' | 'video' | 'text'>('image')
   const [panelWidth, setPanelWidth] = useState(320) // 默认宽度320px
   const [isResizing, setIsResizing] = useState(false)
   const resizeStartXRef = useRef(0)
@@ -103,188 +105,64 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
     scrollToBottom()
   }, [messages])
 
-  // 在客户端加载聊天记录 - 确保聊天内容正确初始化
+  // 在客户端加载聊天记录 - 只加载不强制清空
   useEffect(() => {
-    console.log('ChatPanel: 开始初始化聊天内容 - 组件已挂载')
+    console.log('ChatPanel: 开始初始化聊天内容')
     
     if (typeof window === 'undefined') {
       console.log('ChatPanel: 不在客户端环境，跳过初始化')
       return
     }
     
-    try {
-      console.log('ChatPanel: 检查localStorage中的聊天记录')
-      const savedChat = window.localStorage.getItem('chatHistory')
-      console.log('ChatPanel: localStorage中chatHistory的值:', savedChat)
-      
-      if (savedChat) {
-        console.log('ChatPanel: 找到已保存的聊天记录，开始解析')
-        const parsedMessages = JSON.parse(savedChat)
-        console.log('ChatPanel: 解析后的消息数组:', parsedMessages)
-        console.log('ChatPanel: 消息数量:', parsedMessages.length)
-        
-        // 确保消息格式正确
-        const formattedMessages = parsedMessages.map((msg: any) => ({
-          id: msg.id || `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-          type: msg.type || 'ai',
-          content: msg.content || '欢迎使用AI创作助手',
-          timestamp: msg.timestamp ? new Date(msg.timestamp) : new Date(),
-          imageData: msg.imageData || undefined
-        }))
-        
-        console.log('ChatPanel: 格式化后的消息:', formattedMessages)
-        setMessages(formattedMessages)
-        console.log('ChatPanel: 聊天记录初始化完成，消息数量:', formattedMessages.length)
-      } else {
-        console.log('ChatPanel: 没有找到聊天记录，设置默认欢迎消息')
-        // 设置默认欢迎消息
-        const welcomeMessage: Message = {
-          id: 'welcome-message-' + Date.now(),
-          type: 'ai',
-          content: '欢迎使用AI创作助手！我是您的AI助手，可以帮助您进行创意设计和内容生成。',
-          timestamp: new Date()
-        }
-        console.log('ChatPanel: 创建的欢迎消息:', welcomeMessage)
-        setMessages([welcomeMessage])
-        
-        // 保存默认消息到localStorage
-        const chatHistory = [{
-          id: welcomeMessage.id,
-          type: welcomeMessage.type,
-          content: welcomeMessage.content,
-          timestamp: welcomeMessage.timestamp.toISOString(),
-          imageData: welcomeMessage.imageData
-        }]
-        console.log('ChatPanel: 准备保存到localStorage的数据:', chatHistory)
-        window.localStorage.setItem('chatHistory', JSON.stringify(chatHistory))
-        console.log('ChatPanel: 默认欢迎消息已保存到localStorage')
-      }
-    } catch (error) {
-      console.error('ChatPanel: 初始化聊天内容时出错:', error)
-      // 出错时设置默认消息
-      const errorMessage: Message = {
-        id: 'error-message-' + Date.now(),
-        type: 'ai',
-        content: '欢迎使用AI创作助手！',
-        timestamp: new Date()
-      }
-      console.log('ChatPanel: 出错时设置的默认消息:', errorMessage)
-      setMessages([errorMessage])
-    }
-  }, [])
-
-  // 双重保障：检查消息是否为空，如果是空则设置欢迎消息
-  useEffect(() => {
-    if (messages.length === 0 && typeof window !== 'undefined') {
-      console.log('ChatPanel: 双重保障 - 检测到消息为空，设置欢迎消息')
-      const welcomeMessage: Message = {
-        id: 'welcome-message-' + Date.now(),
-        type: 'ai',
-        content: '欢迎使用AI创作助手！我是您的AI助手，可以帮助您进行创意设计和内容生成。',
-        timestamp: new Date()
-      }
-      setMessages([welcomeMessage])
-      
-      // 保存到localStorage
-      const chatHistory = [{
-        id: welcomeMessage.id,
-        type: welcomeMessage.type,
-        content: welcomeMessage.content,
-        timestamp: welcomeMessage.timestamp.toISOString(),
-        imageData: welcomeMessage.imageData
-      }]
-      window.localStorage.setItem('chatHistory', JSON.stringify(chatHistory))
-      console.log('ChatPanel: 双重保障 - 欢迎消息已设置并保存')
-    }
-  }, [messages.length])
-
-  // 强制初始化：在组件挂载后立即设置欢迎消息
-  useEffect(() => {
-    console.log('ChatPanel: 强制初始化 - 组件已挂载')
-    
-    if (typeof window === 'undefined') {
-      console.log('ChatPanel: 强制初始化 - 不在客户端环境，跳过')
+    // 检查indexedDB支持
+    if (!window.indexedDB) {
+      console.error('ChatPanel: 浏览器不支持indexedDB')
       return
     }
     
-    // 延迟执行以确保组件完全渲染
-    const timer = setTimeout(() => {
-      console.log('ChatPanel: 强制初始化 - 开始设置欢迎消息')
-      
-      // 检查localStorage中是否有聊天记录
-      const savedChat = window.localStorage.getItem('chatHistory')
-      console.log('ChatPanel: 强制初始化 - localStorage中chatHistory:', savedChat ? '有记录' : '无记录')
-      
-      if (!savedChat) {
-        console.log('ChatPanel: 强制初始化 - 设置默认欢迎消息')
-        const welcomeMessage: Message = {
-          id: 'welcome-message-' + Date.now(),
-          type: 'ai',
-          content: '欢迎使用AI创作助手！我是您的AI助手，可以帮助您进行创意设计和内容生成。',
-          timestamp: new Date()
+    // 使用标志位防止重复加载
+    let isMounted = true
+    
+    const loadChatHistory = async () => {
+      try {
+        console.log('ChatPanel: 开始加载聊天记录')
+        
+        // 从indexedDB加载聊天记录
+        const dbMessages = await chatDB.getMessages('default')
+        console.log('ChatPanel: 从数据库获取到的消息:', dbMessages)
+        
+        if (isMounted) {
+          const formattedMessages = dbMessages.map(msg => ({
+            id: msg.id,
+            type: msg.type,
+            content: msg.content,
+            timestamp: new Date(msg.timestamp),
+            imageData: msg.imageData
+          }))
+          
+          setMessages(formattedMessages)
+          console.log(`ChatPanel: 聊天记录加载完成，消息数量: ${formattedMessages.length}`)
         }
         
-        // 直接设置消息状态
-        setMessages([welcomeMessage])
-        
-        // 保存到localStorage
-        const chatHistory = [{
-          id: welcomeMessage.id,
-          type: welcomeMessage.type,
-          content: welcomeMessage.content,
-          timestamp: welcomeMessage.timestamp.toISOString(),
-          imageData: welcomeMessage.imageData
-        }]
-        window.localStorage.setItem('chatHistory', JSON.stringify(chatHistory))
-        console.log('ChatPanel: 强制初始化 - 欢迎消息已设置')
-      } else {
-        console.log('ChatPanel: 强制初始化 - 已有聊天记录，无需设置')
-      }
-    }, 100)
-    
-    return () => clearTimeout(timer)
-  }, [])
-
-  // 监听localStorage变化和自定义事件，重新加载聊天记录
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-
-    const reloadChatHistory = () => {
-      try {
-        const savedChat = window.localStorage.getItem('chatHistory')
-        if (savedChat) {
-          const parsedMessages = JSON.parse(savedChat)
-          setMessages(parsedMessages.map((msg: any) => ({
-            ...msg,
-            timestamp: new Date(msg.timestamp || Date.now())
-          })))
-          console.log('检测到聊天记录变化，重新加载聊天记录')
-        } else {
+      } catch (error) {
+        console.error('ChatPanel: 加载聊天记录时出错:', error)
+        // 出错时设置消息为空数组
+        if (isMounted) {
           setMessages([])
         }
-      } catch (error) {
-        console.warn('重新加载聊天记录失败:', error)
       }
     }
 
-    const handleStorageChange = (event: StorageEvent) => {
-      if (event.key === 'chatHistory') {
-        reloadChatHistory()
-      }
-    }
-
-    const handleCustomEvent = () => {
-      reloadChatHistory()
-    }
-
-    window.addEventListener('storage', handleStorageChange)
-    window.addEventListener('chatHistoryUpdated', handleCustomEvent)
+    loadChatHistory()
     
     return () => {
-      window.removeEventListener('storage', handleStorageChange)
-      window.removeEventListener('chatHistoryUpdated', handleCustomEvent)
+      isMounted = false
     }
   }, [])
+
+
+
+
 
   // 点击外部关闭弹出卡片
   useEffect(() => {
@@ -327,34 +205,29 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
     const messageContent = inputText ? `${inputText} ${settingsInfo}` : `我上传了${imageCountText} ${settingsInfo}`
 
     const userMessage: Message = {
-      id: `user-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      id: `user-${Date.now()}-${Math.random().toString(36).substr(2, 9)}-${performance.now()}`,
       type: 'user',
       content: messageContent,
       timestamp: new Date(),
       imageData,
     }
 
-    // 更新消息状态
-    setMessages(prev => {
-      const newMessages = [...prev, userMessage]
-      
-      // 同时保存到localStorage
-      const chatHistory = newMessages.map(msg => ({
-        id: msg.id,
-        type: msg.type,
-        content: msg.content,
-        timestamp: msg.timestamp instanceof Date && !isNaN(msg.timestamp.getTime()) 
-          ? msg.timestamp.toISOString() 
-          : new Date().toISOString(),
-        imageData: msg.imageData
-      }))
-      
-      if (typeof window !== 'undefined') {
-        window.localStorage.setItem('chatHistory', JSON.stringify(chatHistory))
-      }
-      
-      return newMessages
-    })
+    // 直接更新消息状态，不嵌套数据库操作
+    setMessages(prev => [...prev, userMessage])
+    
+    // 异步保存到数据库
+    if (typeof window !== 'undefined') {
+      chatDB.addMessage({
+        type: userMessage.type,
+        content: userMessage.content,
+        timestamp: userMessage.timestamp,
+        imageData: userMessage.imageData
+      }, 'default').then(() => {
+        console.log('用户消息已保存到indexedDB')
+      }).catch(error => {
+        console.error('保存消息到indexedDB失败:', error)
+      })
+    }
     
     setInputText('')
     // 清空contentEditable div的内容
@@ -364,42 +237,170 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
     }
     setIsGenerating(true)
 
-    // 模拟AI响应
-    setTimeout(() => {
-      const aiMessage: Message = {
-        id: `ai-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+    try {
+      // 调用实际的AI模型API
+      const request = {
+        model: selectedModel,
+        prompt: inputText,
+        key: getApiKeyForModel(selectedModel), // 从环境变量获取API密钥
+        images: imageData ? [imageData] : undefined,
+        size: selectedAspectRatio === '16:9' ? '1024x576' : 
+              selectedAspectRatio === '9:16' ? '576x1024' : 
+              selectedAspectRatio === '4:3' ? '1024x768' : 
+              selectedAspectRatio === '3:4' ? '768x1024' : '1024x1024'
+      }
+
+      console.log('发送AI请求:', { model: selectedModel, prompt: inputText })
+
+      // 调用ModelService创建任务
+      const taskId = await ModelService.createTask(request as any)
+      
+      console.log('AI任务创建成功，任务ID:', taskId)
+
+      // 直接开始轮询任务状态，不显示中间状态消息
+      await pollTaskStatus(taskId, request)
+
+    } catch (error) {
+      console.error('AI请求失败:', error)
+      
+      const errorMessage: Message = {
+        id: `ai-error-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         type: 'ai',
-        content: imageData 
-          ? `已收到您${screenshotPreview ? '截图' : '上传'}的图片。使用${selectedModel}模型，${selectedAspectRatio}比例，生成${imageCount}张图片。` 
-          : `根据您的描述，使用${selectedModel}模型，${selectedAspectRatio}比例，生成${imageCount}张图片。`,
+        content: `请求失败: ${error instanceof Error ? error.message : '未知错误'}`,
         timestamp: new Date(),
       }
 
-      // 更新消息状态（包含AI响应）
-      setMessages(prev => {
-        const newMessages = [...prev, aiMessage]
-        
-        // 同时保存到localStorage
-        const chatHistory = newMessages.map(msg => ({
-          id: msg.id,
-          type: msg.type,
-          content: msg.content,
-          timestamp: msg.timestamp instanceof Date && !isNaN(msg.timestamp.getTime()) 
-            ? msg.timestamp.toISOString() 
-            : new Date().toISOString(),
-          imageData: msg.imageData
-        }))
-        
-        console.log('保存AI响应后的聊天记录:', chatHistory)
-        if (typeof window !== 'undefined') {
-          window.localStorage.setItem('chatHistory', JSON.stringify(chatHistory))
-        }
-        
-        return newMessages
-      })
-      
+      setMessages(prev => [...prev, errorMessage])
+    } finally {
       setIsGenerating(false)
-    }, 2000)
+    }
+  }
+
+  // 根据模型获取API密钥
+  const getApiKeyForModel = (model: string): string => {
+    switch (model) {
+      case 'nano-banana':
+        return process.env.NEXT_PUBLIC_NANO_BANANA_API_KEY || ''
+      case 'seedream-4':
+        return process.env.NEXT_PUBLIC_SEEDREAM4_API_KEY || ''
+      case 'veo3':
+        return process.env.NEXT_PUBLIC_VEO3_API_KEY || ''
+      case 'sora2':
+        return process.env.NEXT_PUBLIC_SORA2_API_KEY || ''
+      default:
+        return ''
+    }
+  }
+
+  // 轮询任务状态
+  const pollTaskStatus = async (taskId: string, request: any) => {
+    let attempts = 0
+    const maxAttempts = 30 // 最多尝试30次
+    const pollInterval = 3000 // 3秒轮询一次
+    let lastStatus = '' // 记录上一次的状态
+
+    const poll = async () => {
+      if (attempts >= maxAttempts) {
+        // 只在超时时添加消息
+        if (lastStatus !== 'timeout') {
+          const timeoutMessage: Message = {
+            id: `ai-timeout-${Date.now()}-${Math.random().toString(36).substr(2, 9)}-${performance.now()}`,
+            type: 'ai',
+            content: '任务处理超时，请稍后重试',
+            timestamp: new Date(),
+          }
+          setMessages(prev => [...prev, timeoutMessage])
+          
+          // 异步保存到数据库
+          if (typeof window !== 'undefined') {
+            chatDB.addMessage({
+              type: timeoutMessage.type,
+              content: timeoutMessage.content,
+              timestamp: timeoutMessage.timestamp,
+              imageData: timeoutMessage.imageData
+            }, 'default').then(() => {
+              console.log('AI超时消息已保存到indexedDB')
+            }).catch(error => {
+              console.error('保存AI超时消息到indexedDB失败:', error)
+            })
+          }
+          
+          lastStatus = 'timeout'
+        }
+        return
+      }
+
+      try {
+        const status = await ModelService.getTaskStatus({
+          ...request,
+          taskId
+        })
+
+        // 只在状态发生变化时添加消息
+        if (status.status === '2' && lastStatus !== 'success') { // 成功
+          const successMessage: Message = {
+            id: `ai-success-${Date.now()}-${Math.random().toString(36).substr(2, 9)}-${performance.now()}`,
+            type: 'ai',
+            content: '内容生成完成！',
+            timestamp: new Date(),
+            imageData: (status as any).imageUrl || (status as any).videoUrl
+          }
+          setMessages(prev => [...prev, successMessage])
+          
+          // 异步保存到数据库
+          if (typeof window !== 'undefined') {
+            chatDB.addMessage({
+              type: successMessage.type,
+              content: successMessage.content,
+              timestamp: successMessage.timestamp,
+              imageData: successMessage.imageData
+            }, 'default').then(() => {
+              console.log('AI成功消息已保存到indexedDB')
+            }).catch(error => {
+              console.error('保存AI消息到indexedDB失败:', error)
+            })
+          }
+          
+          lastStatus = 'success'
+        } else if (status.status === '3' && lastStatus !== 'failure') { // 失败
+          const failureMessage: Message = {
+            id: `ai-failure-${Date.now()}-${Math.random().toString(36).substr(2, 9)}-${performance.now()}`,
+            type: 'ai',
+            content: `生成失败: ${status.error || '未知错误'}`,
+            timestamp: new Date(),
+          }
+          setMessages(prev => [...prev, failureMessage])
+          
+          // 异步保存到数据库
+          if (typeof window !== 'undefined') {
+            chatDB.addMessage({
+              type: failureMessage.type,
+              content: failureMessage.content,
+              timestamp: failureMessage.timestamp,
+              imageData: failureMessage.imageData
+            }, 'default').then(() => {
+              console.log('AI错误消息已保存到indexedDB')
+            }).catch(error => {
+              console.error('保存AI错误消息到indexedDB失败:', error)
+            })
+          }
+          
+          lastStatus = 'failure'
+        } else if (status.status === '1') { // 处理中，继续轮询
+          attempts++
+          setTimeout(poll, pollInterval)
+        } else { // 其他状态，继续轮询
+          attempts++
+          setTimeout(poll, pollInterval)
+        }
+      } catch (error) {
+        console.error('轮询任务状态失败:', error)
+        attempts++
+        setTimeout(poll, pollInterval)
+      }
+    }
+
+    await poll()
   }
 
 
@@ -458,15 +459,25 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
   }
 
   // 重置聊天记录
-  const resetChat = () => {
+  const resetChat = async () => {
     setMessages([])
     setInputText('')
     setScreenshotPreview(null)
     setUploadedImagePreviews([])
     if (typeof window !== 'undefined') {
-      window.localStorage.removeItem('chatHistory')
+      try {
+        // 清空indexedDB中的聊天记录
+        await chatDB.clearAll()
+        console.log('AI创作助手内容已重置（indexedDB）')
+        // 不触发事件，避免重复加载
+      } catch (error) {
+        console.error('重置聊天记录失败:', error)
+        // 如果indexedDB操作失败，也尝试清除localStorage
+        window.localStorage.removeItem('chatHistory')
+        console.log('AI创作助手内容已重置（localStorage）')
+        // 不触发事件，避免重复加载
+      }
     }
-    console.log('AI创作助手内容已重置')
   }
 
   // 使用useImperativeHandle暴露方法给父组件
@@ -482,6 +493,14 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
       // 例如，可以将handleReceiveScreenshot暴露给父组件
     }
   }, [onReceiveScreenshot])
+
+  // 监听模型类型变化，自动设置默认模型
+  useEffect(() => {
+    const supportedModels = ModelService.getModelsByType(selectedModelType);
+    if (supportedModels.length > 0 && !supportedModels.includes(selectedModel as any)) {
+      setSelectedModel(supportedModels[0] as ImageModel | VideoModel | TextModel);
+    }
+  }, [selectedModelType, selectedModel])
 
   const handleGenerateImage = async (prompt: string) => {
     setIsGenerating(true)
@@ -584,6 +603,13 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
         </div>
         <div className="flex items-center space-x-1">
           <button
+            onClick={resetChat}
+            className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-red-500 dark:text-red-400"
+            title="清理聊天记录"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+          <button
             onClick={toggleCollapse}
             className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
             title="收缩面板"
@@ -610,30 +636,21 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
               <p className="text-sm" data-message-content="true">{message.content}</p>
               
               {message.imageData && (
-                <div className="mt-2">
+                <div className="mt-2" data-ai-generated={message.type === 'ai' ? 'true' : 'false'}>
                   <img 
                     src={message.imageData} 
-                    alt="截图" 
+                    alt={message.type === 'ai' ? 'AI生成图片' : '截图'} 
                     className="rounded border border-gray-200 dark:border-gray-600 max-w-full"
                   />
-
-                </div>
-              )}
-
-              {message.type === 'ai' && message.imageData && (
-                <div className="mt-2" data-ai-generated="true">
-                  <img 
-                    src={message.imageData} 
-                    alt="AI生成图片" 
-                    className="rounded border border-gray-200 dark:border-gray-600 max-w-full"
-                  />
-                  <button
-                    onClick={() => handleDownload(message.imageData!, 'ai-generated.png')}
-                    className="flex items-center space-x-1 text-xs mt-2 text-blue-600"
-                  >
-                    <Download className="h-3 w-3" />
-                    <span>下载图片</span>
-                  </button>
+                  {message.type === 'ai' && (
+                    <button
+                      onClick={() => handleDownload(message.imageData!, 'ai-generated.png')}
+                      className="flex items-center space-x-1 text-xs mt-2 text-blue-600"
+                    >
+                      <Download className="h-3 w-3" />
+                      <span>下载图片</span>
+                    </button>
+                  )}
                 </div>
               )}
 
@@ -714,195 +731,176 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
         )}
 
         <div className="flex items-center space-x-2">
-          {/* 上传图片按钮 */}
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className="p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg flex items-center space-x-1"
-            title="上传图片"
-          >
-            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-            </svg>
-          </button>
-
-          {/* 模型、比例、张数按钮 */}
-          <div className="flex items-center space-x-1">
-            <div className="relative" ref={modelSettingsRef}>
+          {/* 模型、比例、张数按钮 - 自适应布局 */}
+          <div className="flex flex-wrap items-center gap-1">
+            {/* 上传图片按钮 */}
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="p-2.5 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg flex items-center space-x-1.5"
+              title="上传图片"
+            >
+              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+              </svg>
+            </button>
+            {/* 模型类型切换 - 图标左右切换方式 */}
+            <div className="flex items-center bg-gray-100 dark:bg-gray-700 rounded-lg p-1.5">
               <button
-                onClick={() => setShowModelSettings(!showModelSettings)}
-                className="flex items-center space-x-1 px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-                title="选择模型"
+                onClick={() => setSelectedModelType('image')}
+                className={`p-1.5 rounded-lg transition-colors ${
+                  selectedModelType === 'image' 
+                    ? 'bg-white dark:bg-gray-600 shadow-sm text-gray-700 dark:text-gray-300' 
+                    : 'text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
+                }`}
+                title="图片生成"
               >
-                <Settings className="h-3 w-3" />
-                <span>模型</span>
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
               </button>
-              
-              {/* 模型选择卡片 - Tab切换方式 */}
-              {showModelSettings && (
-                <div className="absolute bottom-full left-0 mb-2 w-56 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-600 z-10">
-                  <div className="p-2">
-                    {/* Tab切换栏 */}
-                    <div className="flex border-b border-gray-200 dark:border-gray-600 mb-2">
-                      {['图像', '视频', '文本'].map((tab) => (
-                        <button
-                          key={tab}
-                          onClick={() => setActiveModelTab(tab)}
-                          className={`flex-1 text-xs py-1 px-2 ${
-                            activeModelTab === tab
-                              ? 'text-primary-600 dark:text-primary-400 border-b-2 border-primary-600 dark:border-primary-400'
-                              : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
-                          }`}
-                        >
-                          {tab}
-                        </button>
-                      ))}
-                    </div>
-                    
-                    {/* Tab内容 */}
-                    <div className="max-h-32 overflow-y-auto">
-                      {activeModelTab === '图像' && (
-                        <div className="space-y-1">
-                          <button
-                            onClick={() => setSelectedModel('Nanobanbana')}
-                            className={`w-full text-left px-2 py-1 text-xs rounded ${
-                              selectedModel === 'Nanobanbana' 
-                                ? 'bg-primary-100 dark:bg-primary-900 text-primary-700 dark:text-primary-300' 
-                                : 'hover:bg-gray-100 dark:hover:bg-gray-700'
-                            }`}
-                          >
-                            Nanobanbana
-                          </button>
-                          <button
-                            onClick={() => setSelectedModel('gpt image')}
-                            className={`w-full text-left px-2 py-1 text-xs rounded ${
-                              selectedModel === 'gpt image' 
-                                ? 'bg-primary-100 dark:bg-primary-900 text-primary-700 dark:text-primary-300' 
-                                : 'hover:bg-gray-100 dark:hover:bg-gray-700'
-                            }`}
-                          >
-                            gpt image
-                          </button>
-                        </div>
-                      )}
-                      
-                      {activeModelTab === '视频' && (
-                        <div className="space-y-1">
-                          <button
-                            onClick={() => setSelectedModel('veo3')}
-                            className={`w-full text-left px-2 py-1 text-xs rounded ${
-                              selectedModel === 'veo3' 
-                                ? 'bg-primary-100 dark:bg-primary-900 text-primary-700 dark:text-primary-300' 
-                                : 'hover:bg-gray-100 dark:hover:bg-gray-700'
-                            }`}
-                          >
-                            veo3
-                          </button>
-                          <button
-                            onClick={() => setSelectedModel('sora2')}
-                            className={`w-full text-left px-2 py-1 text-xs rounded ${
-                              selectedModel === 'sora2' 
-                                ? 'bg-primary-100 dark:bg-primary-900 text-primary-700 dark:text-primary-300' 
-                                : 'hover:bg-gray-100 dark:hover:bg-gray-700'
-                            }`}
-                          >
-                            sora2
-                          </button>
-                        </div>
-                      )}
-                      
-                      {activeModelTab === '文本' && (
-                        <div className="space-y-1">
-                          <button
-                            onClick={() => setSelectedModel('gpt5')}
-                            className={`w-full text-left px-2 py-1 text-xs rounded ${
-                              selectedModel === 'gpt5' 
-                                ? 'bg-primary-100 dark:bg-primary-900 text-primary-700 dark:text-primary-300' 
-                                : 'hover:bg-gray-100 dark:hover:bg-gray-700'
-                            }`}
-                          >
-                            gpt5
-                          </button>
-                          <button
-                            onClick={() => setSelectedModel('deepseek')}
-                            className={`w-full text-left px-2 py-1 text-xs rounded ${
-                              selectedModel === 'deepseek' 
-                                ? 'bg-primary-100 dark:bg-primary-900 text-primary-700 dark:text-primary-300' 
-                                : 'hover:bg-gray-100 dark:hover:bg-gray-700'
-                            }`}
-                          >
-                            deepseek
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
+              <button
+                onClick={() => setSelectedModelType('video')}
+                className={`p-1.5 rounded-lg transition-colors ${
+                  selectedModelType === 'video' 
+                    ? 'bg-white dark:bg-gray-600 shadow-sm text-gray-700 dark:text-gray-300' 
+                    : 'text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
+                }`}
+                title="视频生成"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                </svg>
+              </button>
+              <button
+                onClick={() => setSelectedModelType('text')}
+                className={`p-1.5 rounded-lg transition-colors ${
+                  selectedModelType === 'text' 
+                    ? 'bg-white dark:bg-gray-600 shadow-sm text-gray-700 dark:text-gray-300' 
+                    : 'text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
+                }`}
+                title="文本生成"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+              </button>
             </div>
 
-            <div className="relative" ref={aspectRatioRef}>
-              <button
-                onClick={() => setShowAspectRatio(!showAspectRatio)}
-                className="flex items-center space-x-1 px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-                title="选择图片比例"
-              >
-                <Monitor className="h-3 w-3" />
-                <span>比例</span>
-              </button>
+            {/* 模型选择 - 下拉菜单方式 */}
+            <div className="relative" ref={modelSettingsRef}>
+              <div className="flex items-center bg-gray-100 dark:bg-gray-700 rounded-lg p-1.5">
+                <button
+                  onClick={() => setShowModelSettings(!showModelSettings)}
+                  className="flex items-center space-x-1.5 p-1.5 text-gray-700 dark:text-gray-300 rounded-lg text-sm hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                >
+                  <span className="whitespace-nowrap">
+                    {ModelService.getModelInfo(selectedModel)?.name || selectedModel}
+                  </span>
+                  <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+              </div>
               
-              {/* 图片比例选择卡片 */}
-              {showAspectRatio && (
-                <div className="absolute bottom-full left-0 mb-2 w-32 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-600 z-10">
-                  <div className="p-2">
-                    <div className="space-y-1">
-                      {['16:9', '9:16', '4:3', '3:4', '2:1', '1:2', '1:1'].map((ratio) => (
+              {showModelSettings && (
+                <div className="absolute bottom-full left-0 mb-1.5 w-32 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-600 z-10">
+                  <div className="p-1.5">
+                    {ModelService.getModelsByType(selectedModelType).map((model) => {
+                      const modelInfo = ModelService.getModelInfo(model);
+                      return (
                         <button
-                          key={ratio}
-                          onClick={() => setSelectedAspectRatio(ratio)}
-                          className={`w-full text-left px-2 py-1 text-xs rounded ${
-                            selectedAspectRatio === ratio 
-                              ? 'bg-primary-100 dark:bg-primary-900 text-primary-700 dark:text-primary-300' 
+                          key={model}
+                          onClick={() => {
+                            setSelectedModel(model as ImageModel | VideoModel | TextModel)
+                            setShowModelSettings(false)
+                          }}
+                          className={`w-full text-left px-2 py-1 text-xs rounded truncate ${
+                            selectedModel === model 
+                              ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300' 
                               : 'hover:bg-gray-100 dark:hover:bg-gray-700'
                           }`}
+                          title={modelInfo?.description}
                         >
-                          {ratio}
+                          {modelInfo?.name || model}
                         </button>
-                      ))}
-                    </div>
+                      )
+                    })}
                   </div>
                 </div>
               )}
             </div>
 
-            <div className="relative" ref={imageCountRef}>
-              <button
-                onClick={() => setShowImageCount(!showImageCount)}
-                className="flex items-center space-x-1 px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-                title="设置生成张数"
-              >
-                <Type className="h-3 w-3" />
-                <span>张数</span>
-              </button>
+            {/* 比例选择 - 下拉菜单方式 */}
+            <div className="relative" ref={aspectRatioRef}>
+              <div className="flex items-center bg-gray-100 dark:bg-gray-700 rounded-lg p-1.5">
+                <button
+                  onClick={() => setShowAspectRatio(!showAspectRatio)}
+                  className="flex items-center space-x-1.5 p-1.5 text-gray-700 dark:text-gray-300 rounded-lg text-sm hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                >
+                  <span className="whitespace-nowrap">{selectedAspectRatio}</span>
+                  <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+              </div>
               
-              {/* 生成张数设置卡片 */}
+              {showAspectRatio && (
+                <div className="absolute bottom-full left-0 mb-1.5 w-20 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-600 z-10">
+                  <div className="p-1.5">
+                    {['16:9', '9:16', '4:3', '3:4', '1:1'].map((ratio) => (
+                      <button
+                        key={ratio}
+                        onClick={() => {
+                          setSelectedAspectRatio(ratio)
+                          setShowAspectRatio(false)
+                        }}
+                        className={`w-full text-left px-2.5 py-1.5 text-sm rounded truncate ${
+                          selectedAspectRatio === ratio 
+                            ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300' 
+                            : 'hover:bg-gray-100 dark:hover:bg-gray-700'
+                        }`}
+                      >
+                        {ratio}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* 张数选择 - 下拉菜单方式 */}
+            <div className="relative" ref={imageCountRef}>
+              <div className="flex items-center bg-gray-100 dark:bg-gray-700 rounded-lg p-1.5">
+                <button
+                  onClick={() => setShowImageCount(!showImageCount)}
+                  className="flex items-center space-x-1.5 p-1.5 text-gray-700 dark:text-gray-300 rounded-lg text-sm hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                >
+                  <span className="whitespace-nowrap">{imageCount}张</span>
+                  <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+              </div>
+              
               {showImageCount && (
-                <div className="absolute bottom-full left-0 mb-2 w-24 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-600 z-10">
-                  <div className="p-3">
-                    <div className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      张数: {imageCount}
-                    </div>
-                    <input
-                      type="range"
-                      min="1"
-                      max="10"
-                      value={imageCount}
-                      onChange={(e) => setImageCount(parseInt(e.target.value))}
-                      className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer"
-                    />
-                    <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mt-1">
-                      <span>1</span>
-                      <span>10</span>
-                    </div>
+                <div className="absolute bottom-full left-0 mb-1.5 w-20 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-600 z-10">
+                  <div className="p-1.5">
+                    {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((count) => (
+                      <button
+                        key={count}
+                        onClick={() => {
+                          setImageCount(count)
+                          setShowImageCount(false)
+                        }}
+                        className={`w-full text-left px-2.5 py-1.5 text-sm rounded truncate ${
+                          imageCount === count 
+                            ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300' 
+                            : 'hover:bg-gray-100 dark:hover:bg-gray-700'
+                        }`}
+                      >
+                        {count}张
+                      </button>
+                    ))}
                   </div>
                 </div>
               )}

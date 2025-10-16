@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
  // 动态导入 fabric 于客户端（避免 SSR 环境下 undefined）
 import CanvasToolbar from '../../components/CanvasToolbar'
 import SelectionPanel from '../../components/SelectionPanel'
+import ImageSelectionPanel from '../../components/ImageSelectionPanel'
 import ChatPanel from '../../components/ChatPanel'
 import ShapePropertiesPanel from '../../components/ShapePropertiesPanel'
 import BrushPropertiesPanel from '../../components/BrushPropertiesPanel'
@@ -20,6 +21,7 @@ export default function CanvasPage() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const [fabricCanvas, setFabricCanvas] = useState<any | null>(null)
   const [selectedArea, setSelectedArea] = useState<SelectionData | null>(null)
+  const [selectedImage, setSelectedImage] = useState<any>(null)
   const chatPanelRef = useRef<{ handleReceiveScreenshot: (imageData: string, prompt: string) => void } | null>(null)
   const fabricNSRef = useRef<any>(null)
   const { theme } = useUserStore()
@@ -316,6 +318,101 @@ export default function CanvasPage() {
     })
   }, [])
 
+  // 监听画布对象选中事件（图片选中）
+  useEffect(() => {
+    if (!fabricCanvas) return
+
+    const handleSelectionCreated = (options: any) => {
+      const selectedObject = options.target
+      if (selectedObject) {
+        console.log('对象被选中 - 详细信息:', {
+          type: selectedObject.type,
+          isImage: selectedObject.type === 'image',
+          isImageObject: selectedObject._element?.tagName === 'IMG',
+          src: selectedObject._element?.src,
+          _originalElement: selectedObject._originalElement?.tagName,
+          objectKeys: Object.keys(selectedObject).filter(key => !key.startsWith('_')),
+          object: selectedObject
+        })
+        
+        // 更准确的图片对象检测
+        const isImageObject = 
+          selectedObject.type === 'image' || 
+          (selectedObject._element && selectedObject._element.tagName === 'IMG') ||
+          (selectedObject.src && typeof selectedObject.src === 'string') ||
+          (selectedObject._originalElement && selectedObject._originalElement.tagName === 'IMG') ||
+          (selectedObject.toDataURL && typeof selectedObject.toDataURL === 'function')
+        
+        if (isImageObject) {
+          console.log('✅ 检测到图片对象，显示操作按钮')
+          setSelectedImage(selectedObject)
+        } else {
+          console.log('❌ 不是图片对象，清除选中状态')
+          // 如果是其他对象，清除图片选中状态
+          setSelectedImage(null)
+        }
+      }
+    }
+
+    const handleSelectionCleared = () => {
+      console.log('选中被清除')
+      setSelectedImage(null)
+    }
+
+    const handleMouseDown = (options: any) => {
+      // 点击画布空白区域时清除选中
+      if (!options.target) {
+        console.log('点击画布空白区域，清除图片选中')
+        setSelectedImage(null)
+      } else {
+        console.log('点击对象:', {
+          type: options.target.type,
+          isImage: options.target.type === 'image'
+        })
+      }
+    }
+
+    // 添加对象添加事件监听，确保新上传的图片也能被检测到
+    const handleObjectAdded = (options: any) => {
+      const addedObject = options.target
+      if (addedObject && (addedObject.type === 'image' || 
+          (addedObject._element && addedObject._element.tagName === 'IMG'))) {
+        console.log('图片对象被添加到画布:', addedObject)
+      }
+    }
+
+    // 添加鼠标点击事件，确保点击图片时能正确选中
+    const handleMouseUp = (options: any) => {
+      if (options.target) {
+        console.log('鼠标抬起，选中对象:', {
+          type: options.target.type,
+          isImage: options.target.type === 'image'
+        })
+        
+        // 如果是图片对象，确保选中状态正确
+        if (options.target.type === 'image') {
+          setTimeout(() => {
+            setSelectedImage(options.target)
+          }, 100)
+        }
+      }
+    }
+
+    fabricCanvas.on('selection:created', handleSelectionCreated)
+    fabricCanvas.on('selection:cleared', handleSelectionCleared)
+    fabricCanvas.on('mouse:down', handleMouseDown)
+    fabricCanvas.on('mouse:up', handleMouseUp)
+    fabricCanvas.on('object:added', handleObjectAdded)
+
+    return () => {
+      fabricCanvas.off('selection:created', handleSelectionCreated)
+      fabricCanvas.off('selection:cleared', handleSelectionCleared)
+      fabricCanvas.off('mouse:down', handleMouseDown)
+      fabricCanvas.off('mouse:up', handleMouseUp)
+      fabricCanvas.off('object:added', handleObjectAdded)
+    }
+  }, [fabricCanvas])
+
   // AI 生成占位逻辑（与 ChatPanel 的模拟一致）
   const handleGenerateImage = async (prompt: string, model: string, position: { x: number; y: number }) => {
     // 这里可对接真实后端/模型；先由 ChatPanel 自身模拟
@@ -415,6 +512,81 @@ export default function CanvasPage() {
     // 如果有框选矩形在画布上，也移除它
     if (fabricCanvas && selectedArea?.rect) {
       fabricCanvas.remove(selectedArea.rect)
+    }
+  }
+
+  // 处理图片添加到聊天
+  const handleAddImageToChat = async (imageObject: any) => {
+    try {
+      // 将图片对象转换为DataURL
+      const imageData = imageObject.toDataURL({
+        format: 'png',
+        quality: 0.8
+      })
+      
+      // 发送到聊天面板
+      console.log('图片已添加到聊天:', imageData)
+      chatPanelRef.current?.handleReceiveScreenshot(imageData, '上传的图片')
+      
+      // 显示添加成功提示
+      const notification = document.createElement('div')
+      notification.innerHTML = `
+        <div style="position: fixed; top: 20px; right: 20px; background: #10b981; color: white; padding: 8px 12px; border-radius: 6px; z-index: 10000; box-shadow: 0 2px 4px rgba(0,0,0,0.1); font-size: 14px;">
+          图片已添加到聊天
+        </div>
+      `
+      document.body.appendChild(notification)
+      
+      setTimeout(() => {
+        if (document.body.contains(notification)) {
+          document.body.removeChild(notification)
+        }
+      }, 2000)
+      
+      // 清除选中状态
+      setSelectedImage(null)
+      
+    } catch (error) {
+      console.error('添加到聊天失败:', error)
+    }
+  }
+
+  // 处理基于图片生成内容
+  const handleGenerateFromImage = async (imageObject: any, prompt: string, model: string) => {
+    try {
+      // 将图片对象转换为DataURL
+      const imageData = imageObject.toDataURL({
+        format: 'png',
+        quality: 0.8
+      })
+      
+      // 发送到AI生成功能
+      console.log('基于图片生成内容:', prompt, model, imageData)
+      
+      // 这里可以调用AI生成功能
+      // 暂时先添加到聊天面板
+      chatPanelRef.current?.handleReceiveScreenshot(imageData, prompt)
+      
+      // 显示生成提示
+      const notification = document.createElement('div')
+      notification.innerHTML = `
+        <div style="position: fixed; top: 20px; right: 20px; background: #3b82f6; color: white; padding: 8px 12px; border-radius: 6px; z-index: 10000; box-shadow: 0 2px 4px rgba(0,0,0,0.1); font-size: 14px;">
+          已发送到生图模块
+        </div>
+      `
+      document.body.appendChild(notification)
+      
+      setTimeout(() => {
+        if (document.body.contains(notification)) {
+          document.body.removeChild(notification)
+        }
+      }, 2000)
+      
+      // 清除选中状态
+      setSelectedImage(null)
+      
+    } catch (error) {
+      console.error('生成内容失败:', error)
     }
   }
 
@@ -639,6 +811,15 @@ export default function CanvasPage() {
         ref={chatPanelRef as any}
         onCaptureArea={handleCaptureArea}
         onReceiveScreenshot={handleReceiveScreenshot}
+      />
+
+      {/* 图片选中面板 */}
+      <ImageSelectionPanel
+        selectedImage={selectedImage}
+        canvas={fabricCanvas}
+        onAddToChat={handleAddImageToChat}
+        onGenerateFromImage={handleGenerateFromImage}
+        onClearSelection={() => setSelectedImage(null)}
       />
 
       {/* 右键菜单 */}
