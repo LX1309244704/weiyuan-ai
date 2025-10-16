@@ -53,6 +53,26 @@ export default function SelectionPanel({ selectedArea, onGenerateImage, onCaptur
     setTextareaHeight(`${newHeight}px`)
   }, [customPrompt])
 
+  // 监听ESC键取消框选
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && selectedArea) {
+        event.preventDefault()
+        event.stopPropagation()
+        onClearSelection?.()
+      }
+    }
+
+    // 添加键盘事件监听
+    document.addEventListener('keydown', handleKeyDown, true)
+    
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown, true)
+    }
+  }, [selectedArea, onClearSelection])
+
   // 监听画板缩放变化
   useEffect(() => {
     if (typeof window === 'undefined') return
