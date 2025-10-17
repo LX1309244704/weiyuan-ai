@@ -347,29 +347,29 @@ export default function SelectionPanel({ selectedArea, onGenerateImage, onCaptur
                     <>
                       <button
                         onClick={() => {
-                          setSelectedImageModel('stable-diffusion')
+                          setSelectedImageModel('nano-banana')
                           setShowAspectDropdown(false)
                         }}
                         className={`w-full text-left px-2 py-1 text-xs rounded ${
-                          selectedImageModel === 'stable-diffusion' 
+                          selectedImageModel === 'nano-banana' 
                             ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300' 
                             : 'hover:bg-gray-100 dark:hover:bg-gray-700'
                         }`}
                       >
-                        SD
+                        Nano-Banana
                       </button>
                       <button
                         onClick={() => {
-                          setSelectedImageModel('gpt-image')
+                          setSelectedImageModel('seedream-4')
                           setShowAspectDropdown(false)
                         }}
                         className={`w-full text-left px-2 py-1 text-xs rounded ${
-                          selectedImageModel === 'gpt-image' 
+                          selectedImageModel === 'seedream-4' 
                             ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300' 
                             : 'hover:bg-gray-100 dark:hover:bg-gray-700'
                         }`}
                       >
-                        GPT
+                        Seedream-4
                       </button>
                     </>
                   ) : (
@@ -548,43 +548,7 @@ export default function SelectionPanel({ selectedArea, onGenerateImage, onCaptur
               </button>
             </div>
             
-            {/* 发送到聊天按钮 */}
-            <div className="flex items-center bg-green-500 hover:bg-green-600 rounded-lg p-1 transition-colors shadow-md">
-              <button
-                onClick={async () => {
-                  if (!selectedArea) return
-                  
-                  setIsGenerating(true)
-                  // 先截图
-                  const imageData = await onCaptureArea()
-                  if (imageData && onReceiveScreenshot) {
-                    // 只发送截图到聊天，不生成内容到画布
-                    const { left, top } = selectedArea.rect
-                    const modelInfo = selectedModelType === 'image' 
-                      ? `图片模型: ${selectedImageModel}, 比例: ${selectedAspectRatio}`
-                      : `视频模型: ${selectedVideoModel}, 时长: ${selectedVideoSeconds}秒`
-                    
-                    // 使用自定义提示词或默认提示词
-                    const finalPrompt = customPrompt.trim() 
-                      ? customPrompt
-                      : `基于选择区域生成${selectedModelType === 'image' ? '图片' : '视频'}，位置: (${left.toFixed(0)}, ${top.toFixed(0)}), ${modelInfo}`
-                    
-                    onReceiveScreenshot(imageData, finalPrompt)
-                  }
-                  setIsGenerating(false)
-                  // 操作完成后隐藏面板和清除框选
-                  setIsVisible(false)
-                  setShowAddButton(false)
-                  onClearSelection?.()
-                  // 清空输入框
-                  setCustomPrompt('')
-                }}
-                disabled={isGenerating}
-                className="text-white px-1.5 py-0.5 rounded text-xs font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap flex-1"
-              >
-                {isGenerating ? '发送中...' : `发送到聊天`}
-              </button>
-            </div>
+
           </div>
         </div>
       </div>

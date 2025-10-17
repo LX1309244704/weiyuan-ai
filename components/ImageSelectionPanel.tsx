@@ -7,7 +7,7 @@ interface ImageSelectionPanelProps {
   selectedImage: any
   canvas: any
   onAddToChat: (imageObject: any) => void
-  onGenerateFromImage: (imageObject: any, prompt: string, model: string) => void
+  onGenerateFromImage: (imageObject: any, prompt: string, model: string, aspectRatio: string) => void
   onClearSelection: () => void
 }
 
@@ -68,26 +68,108 @@ const ImageSelectionPanel: React.FC<ImageSelectionPanelProps> = ({
     }
   }, [selectedImage, onClearSelection])
 
-  // 监听画板缩放变化
+  // 监听画板缩放和图片移动变化，实时更新按钮位置 - 优化版本，减少闪动
   useEffect(() => {
-    if (typeof window === 'undefined') return
+    if (typeof window === 'undefined' || !selectedImage || !canvas) return
     
-    const handleCanvasScaleChange = () => {
-      const scaleElement = document.querySelector('[data-canvas-scale]')
-      const scale = scaleElement ? parseFloat(scaleElement.getAttribute('data-canvas-scale') || '1') : 1
-      setCanvasScale(scale)
+    let animationFrameId: number
+    let lastUpdateTime = 0
+    const updateInterval = 200 // 进一步降低更新频率到5fps，减少闪动
+    let isUpdating = false
+    
+    const updateButtonPosition = () => {
+      const now = Date.now()
+      if (now - lastUpdateTime < updateInterval || isUpdating) {
+        animationFrameId = requestAnimationFrame(updateButtonPosition)
+        return
+      }
+      
+      isUpdating = true
+      lastUpdateTime = now
+      
+      try {
+        // 更新画板缩放
+        const scaleElement = document.querySelector('[data-canvas-scale]')
+        const scale = scaleElement ? parseFloat(scaleElement.getAttribute('data-canvas-scale') || '1') : 1
+        
+        // 只有当缩放比例变化时才更新状态
+        if (Math.abs(scale - canvasScale) > 0.01) {
+          setCanvasScale(scale)
+        }
+        
+        // 计算按钮位置
+        const position = getImagePosition()
+        const baseButtonSize = 24
+        const buttonSize = baseButtonSize * scale
+        const offset = 4 * scale
+        
+        const buttonLeft = position.x + position.width - buttonSize - offset
+        const buttonTop = position.y + position.height - buttonSize - offset
+        
+        const maxLeft = window.innerWidth - buttonSize - 10
+        const maxTop = window.innerHeight - buttonSize - 10
+        const finalLeft = Math.max(10, Math.min(buttonLeft, maxLeft))
+        const finalTop = Math.max(10, Math.min(buttonTop, maxTop))
+        
+        // 只有当位置变化较大时才更新状态
+        const positionChanged = 
+          Math.abs(finalLeft - addButtonPosition.left) > 1 || 
+          Math.abs(finalTop - addButtonPosition.top) > 1
+        
+        if (positionChanged) {
+          setAddButtonPosition({ left: finalLeft, top: finalTop })
+        }
+      } catch (error) {
+        console.error('更新按钮位置时出错:', error)
+      } finally {
+        isUpdating = false
+        animationFrameId = requestAnimationFrame(updateButtonPosition)
+      }
     }
-
-    window.addEventListener('canvasScaleChange', handleCanvasScaleChange)
-    handleCanvasScaleChange()
     
-    const intervalId = setInterval(handleCanvasScaleChange, 500)
+    // 使用防抖的事件监听器
+    let debounceTimer: NodeJS.Timeout
+    
+    const debouncedUpdate = () => {
+      clearTimeout(debounceTimer)
+      debounceTimer = setTimeout(() => {
+        updateButtonPosition()
+      }, 50)
+    }
+    
+    // 监听画板缩放变化
+    const handleCanvasScaleChange = () => {
+      debouncedUpdate()
+    }
+    
+    window.addEventListener('canvasScaleChange', handleCanvasScaleChange)
+    
+    // 监听图片移动和缩放事件
+    const handleObjectMoving = () => {
+      debouncedUpdate()
+    }
+    
+    const handleObjectScaling = () => {
+      debouncedUpdate()
+    }
+    
+    // 添加事件监听器
+    canvas.on('object:moving', handleObjectMoving)
+    canvas.on('object:scaling', handleObjectScaling)
+    canvas.on('object:rotating', handleObjectMoving)
+    
+    // 开始动画循环
+    animationFrameId = requestAnimationFrame(updateButtonPosition)
     
     return () => {
       window.removeEventListener('canvasScaleChange', handleCanvasScaleChange)
-      clearInterval(intervalId)
+      canvas.off('object:moving', handleObjectMoving)
+      canvas.off('object:scaling', handleObjectScaling)
+      canvas.off('object:rotating', handleObjectMoving)
+      clearTimeout(debounceTimer)
+      cancelAnimationFrame(animationFrameId)
     }
-  }, [])
+  }, [selectedImage, canvas, canvasScale, addButtonPosition])
 
   // 获取图片在画布上的位置和尺寸
   const getImagePosition = () => {
@@ -109,61 +191,52 @@ const ImageSelectionPanel: React.FC<ImageSelectionPanelProps> = ({
     }
   }
 
-  const position = getImagePosition()
-  
-  // 计算"+按钮位置（图片右下角，与框选效果一致）
+  // 面板位置计算（基于按钮位置）
   useEffect(() => {
     if (!selectedImage || !canvas) return
     
-    const baseButtonSize = 24
-    const buttonSize = baseButtonSize * canvasScale
-    const offset = 4 * canvasScale
-    
-    const buttonLeft = position.x + position.width - buttonSize - offset
-    const buttonTop = position.y + position.height - buttonSize - offset
-    
-    const maxLeft = window.innerWidth - buttonSize - 10
-    const maxTop = window.innerHeight - buttonSize - 10
-    const finalLeft = Math.max(10, Math.min(buttonLeft, maxLeft))
-    const finalTop = Math.max(10, Math.min(buttonTop, maxTop))
-    
-    setAddButtonPosition({ left: finalLeft, top: finalTop })
-    
     const panelWidth = 250 * canvasScale
     const panelHeight = 80 * canvasScale
+    const buttonSize = 24 * canvasScale
     
-    let panelLeft = finalLeft + buttonSize - panelWidth
-    let panelTop = finalTop + buttonSize + 10
+    let panelLeft = addButtonPosition.left + buttonSize - panelWidth
+    let panelTop = addButtonPosition.top + buttonSize + 10
     
     const screenCenterX = window.innerWidth / 2
-    const isButtonOnRightSide = finalLeft > screenCenterX
+    const isButtonOnRightSide = addButtonPosition.left > screenCenterX
     
     if (isButtonOnRightSide) {
-      panelLeft = finalLeft + buttonSize - panelWidth
+      panelLeft = addButtonPosition.left + buttonSize - panelWidth
       if (panelLeft < 10) {
-        panelLeft = finalLeft
+        panelLeft = addButtonPosition.left
       }
     } else {
-      panelLeft = finalLeft
+      panelLeft = addButtonPosition.left
       if (panelLeft + panelWidth > window.innerWidth - 10) {
-        panelLeft = finalLeft + buttonSize - panelWidth
+        panelLeft = addButtonPosition.left + buttonSize - panelWidth
       }
     }
     
+    // 检查面板是否超出屏幕底部
     if (panelTop + panelHeight > window.innerHeight - 10) {
-      panelTop = finalTop - panelHeight - 10
+      panelTop = addButtonPosition.top - panelHeight - 10
     }
     
-    const finalPanelLeft = Math.max(10, Math.min(panelLeft, window.innerWidth - panelWidth - 10))
-    const finalPanelTop = Math.max(10, Math.min(panelTop, window.innerHeight - panelHeight - 10))
+    // 确保面板不会超出屏幕顶部
+    if (panelTop < 10) {
+      panelTop = addButtonPosition.top + buttonSize + 10
+    }
     
-    setPanelPosition({ left: finalPanelLeft, top: finalPanelTop })
-  }, [selectedImage, canvas, position, canvasScale])
+    setPanelPosition({ left: panelLeft, top: panelTop })
+  }, [addButtonPosition, canvasScale])
 
   if (!selectedImage || !canvas) return null
   
-  if (position.x + position.width < 0 || position.x > window.innerWidth ||
-      position.y + position.height < 0 || position.y > window.innerHeight) {
+  // 在渲染时重新计算position
+  const currentPosition = getImagePosition()
+  
+  if (currentPosition.x + currentPosition.width < 0 || currentPosition.x > window.innerWidth ||
+      currentPosition.y + currentPosition.height < 0 || currentPosition.y > window.innerHeight) {
     return null
   }
 
@@ -190,7 +263,8 @@ const ImageSelectionPanel: React.FC<ImageSelectionPanelProps> = ({
     } catch (error) {
       console.error('添加到聊天失败:', error)
     } finally {
-      setShowAddButton(false)
+      // 不隐藏按钮，让用户可以继续操作
+      // setShowAddButton(false)
       onClearSelection()
     }
   }
@@ -316,7 +390,7 @@ const ImageSelectionPanel: React.FC<ImageSelectionPanelProps> = ({
                             : 'hover:bg-gray-100 dark:hover:bg-gray-700'
                         }`}
                       >
-                        SD4
+                        Seedream-4
                       </button>
                       <button
                         onClick={() => {
@@ -329,7 +403,7 @@ const ImageSelectionPanel: React.FC<ImageSelectionPanelProps> = ({
                             : 'hover:bg-gray-100 dark:hover:bg-gray-700'
                         }`}
                       >
-                        NB
+                        Nano-Banana
                       </button>
                     </>
                   ) : (
@@ -465,8 +539,9 @@ const ImageSelectionPanel: React.FC<ImageSelectionPanelProps> = ({
                   ? customPrompt
                   : `基于此图片生成${selectedModelType === 'image' ? '图片' : '视频'}`
                 const model = selectedModelType === 'image' ? selectedImageModel : selectedVideoModel
+                const aspectRatio = selectedModelType === 'image' ? selectedAspectRatio : '16:9'
                 
-                onGenerateFromImage(selectedImage, prompt, model)
+                onGenerateFromImage(selectedImage, prompt, model, aspectRatio)
                 setCustomPrompt('')
                 onClearSelection()
               }}

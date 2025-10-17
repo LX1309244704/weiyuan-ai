@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, forwardRef, useImperativeHandle, useCallback } from 'react'
-import { Send, Image, Video, Download, X, MessageSquare, ChevronLeft, Settings, Monitor, Film, Type, Trash2 } from 'lucide-react'
+import { Send, Image as ImageIcon, Video, Download, X, MessageSquare, ChevronLeft, Settings, Monitor, Film, Type, Trash2 } from 'lucide-react'
 import { ModelService, type ImageModel, type VideoModel, type TextModel } from '@/services/ai-models'
 import { chatDB } from '@/utils/chatDB'
 
@@ -480,11 +480,75 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
     }
   }
 
+  // 记录生图任务到聊天记录
+  const logGenerateImageTask = (prompt: string, model: string, aspectRatio: string, imageData?: string) => {
+    const settingsInfo = `[模型: ${model}, 比例: ${aspectRatio}]`
+    const messageContent = prompt ? `${prompt} ${settingsInfo}` : `生成图片 ${settingsInfo}`
+
+    // 确保图片数据格式正确（添加data:image/png;base64,前缀）
+    const formattedImageData = imageData ? `data:image/png;base64,${imageData}` : undefined
+
+    const userMessage: Message = {
+      id: `generate-image-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      type: 'user',
+      content: messageContent,
+      timestamp: new Date(),
+      imageData: formattedImageData,
+    }
+
+    // 直接更新消息状态，不嵌套数据库操作
+    setMessages(prev => [...prev, userMessage])
+    
+    // 异步保存到数据库
+    if (typeof window !== 'undefined') {
+      chatDB.addMessage({
+        type: userMessage.type,
+        content: userMessage.content,
+        timestamp: userMessage.timestamp,
+        imageData: userMessage.imageData
+      }, 'default').then(() => {
+        console.log('生图任务已记录到聊天记录')
+      }).catch(error => {
+        console.error('保存生图任务到聊天记录失败:', error)
+      })
+    }
+  }
+
+  // 记录生图结果到聊天记录
+  const logGenerateImageResult = (imageUrl: string, prompt: string) => {
+    const aiMessage: Message = {
+      id: `ai-result-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      type: 'ai',
+      content: `已根据提示词"${prompt}"生成图片`,
+      timestamp: new Date(),
+      imageData: imageUrl,
+    }
+
+    // 直接更新消息状态，不嵌套数据库操作
+    setMessages(prev => [...prev, aiMessage])
+    
+    // 异步保存到数据库
+    if (typeof window !== 'undefined') {
+      chatDB.addMessage({
+        type: aiMessage.type,
+        content: aiMessage.content,
+        timestamp: aiMessage.timestamp,
+        imageData: aiMessage.imageData
+      }, 'default').then(() => {
+        console.log('生图结果已记录到聊天记录')
+      }).catch(error => {
+        console.error('保存生图结果到聊天记录失败:', error)
+      })
+    }
+  }
+
   // 使用useImperativeHandle暴露方法给父组件
   useImperativeHandle(ref, () => ({
     handleReceiveScreenshot,
-    resetChat
-  }), [handleReceiveScreenshot, resetChat])
+    resetChat,
+    logGenerateImageTask,
+    logGenerateImageResult
+  }), [handleReceiveScreenshot, resetChat, logGenerateImageTask, logGenerateImageResult])
 
   // 使用useEffect监听onReceiveScreenshot的变化
   useEffect(() => {
@@ -543,6 +607,80 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
     link.download = filename
     link.href = imageData
     link.click()
+  }
+
+  // 将图片添加到画板
+  const handleAddToCanvas = (imageData: string) => {
+    // 检查全局画布对象是否存在
+    if (typeof window !== 'undefined' && (window as any).fabricCanvas) {
+      const fabricCanvas = (window as any).fabricCanvas
+      
+      // 创建图片元素
+      const img = new Image()
+      img.crossOrigin = 'anonymous'
+      
+      img.onload = () => {
+        try {
+          // 检查fabric对象是否存在
+          const fabric = (window as any).fabric
+          if (!fabric) {
+            throw new Error('Fabric.js未正确加载')
+          }
+          
+          // 创建Fabric图片对象
+          const fabricImg = new fabric.Image(img, {
+            left: 100,
+            top: 100,
+            selectable: true,
+            hasControls: true,
+            cornerStyle: 'circle',
+            transparentCorners: false,
+            cornerColor: '#3b82f6',
+            cornerSize: 12,
+            rotatingPointOffset: 40
+          })
+          
+          // 设置合适的缩放比例
+          const maxSize = 400
+          const scale = Math.min(maxSize / img.width, maxSize / img.height, 1)
+          fabricImg.scale(scale)
+          
+          // 添加到画布
+          fabricCanvas.add(fabricImg)
+          fabricCanvas.setActiveObject(fabricImg)
+          fabricCanvas.renderAll()
+          
+          console.log('图片已添加到画板')
+          
+          // 显示添加成功提示
+          const notification = document.createElement('div')
+          notification.innerHTML = `
+            <div style="position: fixed; top: 20px; right: 20px; background: #10b981; color: white; padding: 8px 12px; border-radius: 6px; z-index: 10000; box-shadow: 0 2px 4px rgba(0,0,0,0.1); font-size: 14px;">
+              图片已成功添加到画板
+            </div>
+          `
+          document.body.appendChild(notification)
+          setTimeout(() => {
+            if (document.body.contains(notification)) {
+              document.body.removeChild(notification)
+            }
+          }, 3000)
+          
+        } catch (error) {
+          console.error('添加图片到画板失败:', error)
+          alert('添加图片到画板失败，请检查画板是否正常')
+        }
+      }
+      
+      img.onerror = (error) => {
+        console.error('图片加载失败:', error)
+        alert('图片加载失败，无法添加到画板')
+      }
+      
+      img.src = imageData
+    } else {
+      alert('画板未初始化，请先打开画板')
+    }
   }
 
   // 如果面板被关闭，显示展开按钮
@@ -643,13 +781,24 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
                     className="rounded border border-gray-200 dark:border-gray-600 max-w-full"
                   />
                   {message.type === 'ai' && (
-                    <button
-                      onClick={() => handleDownload(message.imageData!, 'ai-generated.png')}
-                      className="flex items-center space-x-1 text-xs mt-2 text-blue-600"
-                    >
-                      <Download className="h-3 w-3" />
-                      <span>下载图片</span>
-                    </button>
+                    <div className="flex space-x-2 mt-2">
+                      <button
+                        onClick={() => handleDownload(message.imageData!, 'ai-generated.png')}
+                        className="flex items-center space-x-1 text-xs text-blue-600 hover:text-blue-800"
+                      >
+                        <Download className="h-3 w-3" />
+                        <span>下载图片</span>
+                      </button>
+                      <button
+                        onClick={() => handleAddToCanvas(message.imageData!)}
+                        className="flex items-center space-x-1 text-xs text-green-600 hover:text-green-800"
+                      >
+                        <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                        </svg>
+                        <span>添加到画板</span>
+                      </button>
+                    </div>
                   )}
                 </div>
               )}

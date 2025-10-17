@@ -10,6 +10,7 @@ import ShapePropertiesPanel from '../../components/ShapePropertiesPanel'
 import BrushPropertiesPanel from '../../components/BrushPropertiesPanel'
 import TextPropertiesPanel from '../../components/TextPropertiesPanel'
 import { useUserStore } from '@/stores/userStore'
+import { ModelService } from '@/services/ai-models'
 
 type SelectionData = {
   rect: any
@@ -318,9 +319,11 @@ export default function CanvasPage() {
     })
   }, [])
 
-  // 监听画布对象选中事件（图片选中）
+  // 监听画布对象选中事件（图片选中）- 优化版本，避免多个面板同时显示
   useEffect(() => {
     if (!fabricCanvas) return
+
+    let currentSelectedImage: any = null
 
     const handleSelectionCreated = (options: any) => {
       const selectedObject = options.target
@@ -345,10 +348,16 @@ export default function CanvasPage() {
         
         if (isImageObject) {
           console.log('✅ 检测到图片对象，显示操作按钮')
+          // 清除之前的选中状态
+          if (currentSelectedImage && currentSelectedImage !== selectedObject) {
+            fabricCanvas.discardActiveObject()
+          }
+          currentSelectedImage = selectedObject
           setSelectedImage(selectedObject)
         } else {
           console.log('❌ 不是图片对象，清除选中状态')
           // 如果是其他对象，清除图片选中状态
+          currentSelectedImage = null
           setSelectedImage(null)
         }
       }
@@ -356,6 +365,7 @@ export default function CanvasPage() {
 
     const handleSelectionCleared = () => {
       console.log('选中被清除')
+      currentSelectedImage = null
       setSelectedImage(null)
     }
 
@@ -363,6 +373,7 @@ export default function CanvasPage() {
       // 点击画布空白区域时清除选中
       if (!options.target) {
         console.log('点击画布空白区域，清除图片选中')
+        currentSelectedImage = null
         setSelectedImage(null)
       } else {
         console.log('点击对象:', {
@@ -391,9 +402,12 @@ export default function CanvasPage() {
         
         // 如果是图片对象，确保选中状态正确
         if (options.target.type === 'image') {
-          setTimeout(() => {
-            setSelectedImage(options.target)
-          }, 100)
+          // 如果已经选中了其他图片，先清除选中
+          if (currentSelectedImage && currentSelectedImage !== options.target) {
+            fabricCanvas.discardActiveObject()
+          }
+          currentSelectedImage = options.target
+          setSelectedImage(options.target)
         }
       }
     }
@@ -551,43 +565,392 @@ export default function CanvasPage() {
     }
   }
 
-  // 处理基于图片生成内容
-  const handleGenerateFromImage = async (imageObject: any, prompt: string, model: string) => {
+  // 处理基于图片生成内容 - 直接调用生图接口并加载到画布
+  const handleGenerateFromImage = async (imageObject: any, prompt: string, model: string, aspectRatio: string) => {
+    let loadingImage: any = null
+    
     try {
-      // 将图片对象转换为DataURL
-      const imageData = imageObject.toDataURL({
-        format: 'png',
-        quality: 0.8
-      })
+      if (!fabricCanvas || !selectedImage) return
       
-      // 发送到AI生成功能
-      console.log('基于图片生成内容:', prompt, model, imageData)
-      
-      // 这里可以调用AI生成功能
-      // 暂时先添加到聊天面板
-      chatPanelRef.current?.handleReceiveScreenshot(imageData, prompt)
-      
-      // 显示生成提示
+      // 显示生成中提示
       const notification = document.createElement('div')
       notification.innerHTML = `
         <div style="position: fixed; top: 20px; right: 20px; background: #3b82f6; color: white; padding: 8px 12px; border-radius: 6px; z-index: 10000; box-shadow: 0 2px 4px rgba(0,0,0,0.1); font-size: 14px;">
-          已发送到生图模块
+          正在生成图片...
         </div>
       `
       document.body.appendChild(notification)
       
-      setTimeout(() => {
-        if (document.body.contains(notification)) {
-          document.body.removeChild(notification)
+      // 获取选中图片的位置信息
+      const selectedPosition = {
+        left: selectedImage.left || 0,
+        top: selectedImage.top || 0,
+        width: (selectedImage.width || 0) * (selectedImage.scaleX || 1),
+        height: (selectedImage.height || 0) * (selectedImage.scaleY || 1)
+      }
+      
+      // 计算新图片的位置（放在选中图片的右侧）
+      const newImagePosition = {
+        x: selectedPosition.left + selectedPosition.width + 20, // 右侧20px间距
+        y: selectedPosition.top
+      }
+      
+      console.log('开始生成图片:', { prompt, model, selectedPosition, newImagePosition })
+      
+      // 先添加加载中的占位图片
+      loadingImage = await addLoadingPlaceholder(newImagePosition)
+      
+      // 将选中的图片转换为Base64格式
+      const selectedImageData = await convertImageToBase64(selectedImage)
+      
+      // 调用ModelService创建图片生成任务，传入选中的图片
+      const request = {
+        model: model as any,
+        prompt: prompt,
+        key: getApiKeyForModel(model),
+        size: getSizeByAspectRatio(aspectRatio), // 使用用户选择的比例
+        aspectRatio: aspectRatio, // 使用用户选择的比例
+        images: selectedImageData ? [selectedImageData] : undefined // 传入选中的图片
+      }
+      
+      // 记录生图任务到聊天记录
+      if (chatPanelRef.current && (chatPanelRef.current as any).logGenerateImageTask) {
+        (chatPanelRef.current as any).logGenerateImageTask(prompt, model, aspectRatio, selectedImageData)
+      }
+      
+      const taskId = await ModelService.createTask(request)
+      console.log('图片生成任务创建成功，任务ID:', taskId)
+      
+      // 轮询任务状态
+      const result = await ModelService.getTaskStatus({
+        ...request,
+        taskId
+      })
+      
+      // 移除生成中提示
+      if (document.body.contains(notification)) {
+        document.body.removeChild(notification)
+      }
+      
+      // 检查是否为图片生成结果
+      if (result.status === '2' && 'imageUrl' in result && result.imageUrl) {
+        // 生成成功，替换加载中的占位图片为实际图片
+        await replaceLoadingWithActualImage(loadingImage, result.imageUrl)
+        
+        // 记录生图结果到聊天记录
+        if (chatPanelRef.current && (chatPanelRef.current as any).logGenerateImageResult) {
+          (chatPanelRef.current as any).logGenerateImageResult(result.imageUrl, prompt)
         }
-      }, 2000)
+        
+        // 显示成功提示
+        const successNotification = document.createElement('div')
+        successNotification.innerHTML = `
+          <div style="position: fixed; top: 20px; right: 20px; background: #10b981; color: white; padding: 8px 12px; border-radius: 6px; z-index: 10000; box-shadow: 0 2px 4px rgba(0,0,0,0.1); font-size: 14px;">
+            图片生成成功！
+          </div>
+        `
+        document.body.appendChild(successNotification)
+        
+        setTimeout(() => {
+          if (document.body.contains(successNotification)) {
+            document.body.removeChild(successNotification)
+          }
+        }, 2000)
+        
+      } else {
+        // 生成失败，移除加载中的占位图片
+        if (loadingImage && fabricCanvas) {
+          fabricCanvas.remove(loadingImage)
+          fabricCanvas.renderAll()
+        }
+        
+        // 显示失败提示
+        const errorNotification = document.createElement('div')
+        errorNotification.innerHTML = `
+          <div style="position: fixed; top: 20px; right: 20px; background: #ef4444; color: white; padding: 8px 12px; border-radius: 6px; z-index: 10000; box-shadow: 0 2px 4px rgba(0,0,0,0.1); font-size: 14px;">
+            图片生成失败: ${result.error || '未知错误'}
+          </div>
+        `
+        document.body.appendChild(errorNotification)
+        
+        setTimeout(() => {
+          if (document.body.contains(errorNotification)) {
+            document.body.removeChild(errorNotification)
+          }
+        }, 3000)
+      }
       
       // 清除选中状态
       setSelectedImage(null)
       
     } catch (error) {
-      console.error('生成内容失败:', error)
+      console.error('生成图片失败:', error)
+      
+      // 移除所有可能的生成中提示
+      const notifications = document.querySelectorAll('div[style*="正在生成图片"], div[style*="background: #3b82f6"]')
+      notifications.forEach(notification => {
+        if (notification && notification.parentNode) {
+          notification.parentNode.removeChild(notification)
+        }
+      })
+      
+      // 移除加载中的占位图片
+      if (loadingImage && fabricCanvas) {
+        fabricCanvas.remove(loadingImage)
+        fabricCanvas.renderAll()
+        console.log('已移除生成中的预加载图片')
+      }
+      
+      // 显示错误提示
+      const errorNotification = document.createElement('div')
+      errorNotification.innerHTML = `
+        <div style="position: fixed; top: 20px; right: 20px; background: #ef4444; color: white; padding: 8px 12px; border-radius: 6px; z-index: 10000; box-shadow: 0 2px 4px rgba(0,0,0,0.1); font-size: 14px;">
+          生成失败: ${error instanceof Error ? error.message : '未知错误'}
+        </div>
+      `
+      document.body.appendChild(errorNotification)
+      
+      setTimeout(() => {
+        if (document.body.contains(errorNotification)) {
+          document.body.removeChild(errorNotification)
+        }
+      }, 3000)
     }
+  }
+  
+  // 将生成的图片添加到画布
+  const addGeneratedImageToCanvas = async (imageUrl: string, position: { x: number; y: number }) => {
+    return new Promise((resolve, reject) => {
+      if (!fabricCanvas) {
+        reject(new Error('画布未初始化'))
+        return
+      }
+      
+      // 创建图片元素
+      const img = new Image()
+      img.crossOrigin = 'anonymous'
+      
+      img.onload = () => {
+        try {
+          // 创建Fabric图片对象
+          const fabricImg = new (window as any).fabric.Image(img, {
+            left: position.x,
+            top: position.y,
+            selectable: true,
+            hasControls: true,
+            cornerStyle: 'circle',
+            transparentCorners: false,
+            cornerColor: '#3b82f6',
+            cornerSize: 12,
+            rotatingPointOffset: 40
+          })
+          
+          // 设置合适的缩放比例
+          const maxSize = 400
+          const scale = Math.min(maxSize / img.width, maxSize / img.height, 1)
+          fabricImg.scale(scale)
+          
+          // 添加到画布
+          fabricCanvas.add(fabricImg)
+          fabricCanvas.setActiveObject(fabricImg)
+          fabricCanvas.renderAll()
+          
+          console.log('生成的图片已添加到画布，位置:', position)
+          resolve(fabricImg)
+          
+        } catch (error) {
+          console.error('添加图片到画布失败:', error)
+          reject(error)
+        }
+      }
+      
+      img.onerror = (error) => {
+        console.error('图片加载失败:', error)
+        reject(new Error('图片加载失败'))
+      }
+      
+      img.src = imageUrl
+    })
+  }
+  
+  // 根据模型获取API密钥
+  const getApiKeyForModel = (model: string): string => {
+    switch (model) {
+      case 'nano-banana':
+        return process.env.NEXT_PUBLIC_NANO_BANANA_API_KEY || ''
+      case 'seedream-4':
+        return process.env.NEXT_PUBLIC_SEEDREAM_API_KEY || ''
+      default:
+        return ''
+    }
+  }
+  
+  // 根据宽高比获取对应的尺寸
+  const getSizeByAspectRatio = (aspectRatio: string): string => {
+    const ratioMap: Record<string, string> = {
+      '1:1': '1024x1024',
+      '16:9': '1024x576',
+      '9:16': '576x1024',
+      '4:3': '1024x768',
+      '3:4': '768x1024'
+    }
+    
+    return ratioMap[aspectRatio] || '1024x1024'
+  }
+  
+  // 将图片对象转换为Base64格式
+  const convertImageToBase64 = async (imageObject: any): Promise<string | null> => {
+    return new Promise((resolve) => {
+      try {
+        // 使用Fabric.js的toDataURL方法将图片转换为Base64
+        const dataURL = imageObject.toDataURL({
+          format: 'png',
+          quality: 0.8
+        })
+        
+        // 提取Base64数据部分（去掉data:image/png;base64,前缀）
+        const base64Data = dataURL.split(',')[1]
+        resolve(base64Data)
+      } catch (error) {
+        console.error('图片转换Base64失败:', error)
+        resolve(null)
+      }
+    })
+  }
+  
+  // 添加加载中的占位图片
+  const addLoadingPlaceholder = async (position: { x: number; y: number }): Promise<any> => {
+    return new Promise((resolve, reject) => {
+      if (!fabricCanvas) {
+        reject(new Error('画布未初始化'))
+        return
+      }
+      
+      // 创建一个简单的SVG加载动画
+      const svgContent = `
+        <svg width="200" height="200" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="50" cy="50" r="40" stroke="#3b82f6" stroke-width="8" fill="none" opacity="0.3"/>
+          <circle cx="50" cy="50" r="40" stroke="#3b82f6" stroke-width="8" fill="none" stroke-linecap="round">
+            <animateTransform attributeName="transform" type="rotate" from="0 50 50" to="360 50 50" dur="1s" repeatCount="indefinite"/>
+            <animate attributeName="stroke-dasharray" values="0,251.2;125.6,125.6;251.2,0" dur="1s" repeatCount="indefinite"/>
+            <animate attributeName="stroke-dashoffset" values="0;0;125.6" dur="1s" repeatCount="indefinite"/>
+          </circle>
+          <text x="50" y="55" text-anchor="middle" fill="#3b82f6" font-family="Arial" font-size="12">生成中...</text>
+        </svg>
+      `
+      
+      // 将SVG转换为DataURL
+      const svgDataURL = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgContent)))
+      
+      // 创建图片元素
+      const img = new Image()
+      img.crossOrigin = 'anonymous'
+      
+      img.onload = () => {
+        try {
+          // 创建Fabric图片对象
+          const fabricImg = new (window as any).fabric.Image(img, {
+            left: position.x,
+            top: position.y,
+            selectable: false, // 加载中图片不可选中
+            hasControls: false,
+            lockMovementX: true,
+            lockMovementY: true,
+            lockRotation: true,
+            lockScalingX: true,
+            lockScalingY: true,
+            opacity: 0.8
+          })
+          
+          // 设置合适的尺寸
+          const size = 150
+          const scale = size / Math.max(img.width, img.height)
+          fabricImg.scale(scale)
+          
+          // 添加到画布
+          fabricCanvas.add(fabricImg)
+          fabricCanvas.renderAll()
+          
+          console.log('加载中占位图片已添加到画布，位置:', position)
+          resolve(fabricImg)
+          
+        } catch (error) {
+          console.error('添加加载中占位图片失败:', error)
+          reject(error)
+        }
+      }
+      
+      img.onerror = (error) => {
+        console.error('加载中占位图片加载失败:', error)
+        reject(new Error('加载中占位图片加载失败'))
+      }
+      
+      img.src = svgDataURL
+    })
+  }
+  
+  // 替换加载中占位图片为实际生成的图片
+  const replaceLoadingWithActualImage = async (loadingImage: any, actualImageUrl: string): Promise<any> => {
+    return new Promise((resolve, reject) => {
+      if (!fabricCanvas || !loadingImage) {
+        reject(new Error('画布或加载中图片未初始化'))
+        return
+      }
+      
+      // 获取加载中图片的位置和尺寸
+      const position = {
+        x: loadingImage.left || 0,
+        y: loadingImage.top || 0
+      }
+      
+      // 移除加载中图片
+      fabricCanvas.remove(loadingImage)
+      
+      // 创建实际图片元素
+      const img = new Image()
+      img.crossOrigin = 'anonymous'
+      
+      img.onload = () => {
+        try {
+          // 创建Fabric图片对象
+          const fabricImg = new (window as any).fabric.Image(img, {
+            left: position.x,
+            top: position.y,
+            selectable: true,
+            hasControls: true,
+            cornerStyle: 'circle',
+            transparentCorners: false,
+            cornerColor: '#3b82f6',
+            cornerSize: 12,
+            rotatingPointOffset: 40
+          })
+          
+          // 设置合适的缩放比例
+          const maxSize = 400
+          const scale = Math.min(maxSize / img.width, maxSize / img.height, 1)
+          fabricImg.scale(scale)
+          
+          // 添加到画布
+          fabricCanvas.add(fabricImg)
+          fabricCanvas.setActiveObject(fabricImg)
+          fabricCanvas.renderAll()
+          
+          console.log('实际图片已替换加载中占位图片，位置:', position)
+          resolve(fabricImg)
+          
+        } catch (error) {
+          console.error('替换为实际图片失败:', error)
+          reject(error)
+        }
+      }
+      
+      img.onerror = (error) => {
+        console.error('实际图片加载失败:', error)
+        reject(new Error('实际图片加载失败'))
+      }
+      
+      img.src = actualImageUrl
+    })
   }
 
   // 右键菜单处理
