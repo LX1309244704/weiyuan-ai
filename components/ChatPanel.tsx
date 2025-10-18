@@ -485,10 +485,14 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
     const settingsInfo = `[模型: ${model}, 比例: ${aspectRatio}]`
     const messageContent = prompt ? `${prompt} ${settingsInfo}` : `生成图片 ${settingsInfo}`
 
-    // 确保图片数据格式正确（添加data:image/png;base64,前缀）
+    // 确保图片数据格式正确（仅对纯base64数据添加前缀）
     let formattedImageData = imageData
-    if (imageData && !imageData.startsWith('data:')) {
+    if (imageData && !imageData.startsWith('data:') && imageData.length > 100) {
+      // 如果是纯base64数据（长度较长），添加前缀
       formattedImageData = `data:image/png;base64,${imageData}`
+    } else if (imageData && imageData.startsWith('data:')) {
+      // 如果已经是data URL格式，直接使用
+      formattedImageData = imageData
     }
 
     const userMessage: Message = {

@@ -290,6 +290,12 @@ export default function SelectionPanel({ selectedArea, onGenerateImage, onCaptur
         throw new Error('截图失败')
       }
       
+      console.log('SelectionPanel截图数据调试:', {
+        screenshotDataLength: screenshotData.length,
+        screenshotDataPrefix: screenshotData.substring(0, 50),
+        hasDataPrefix: screenshotData.startsWith('data:')
+      })
+      
       // 获取框选区域的位置信息
       const { left, top, width, height } = selectedArea.rect
       
@@ -307,9 +313,27 @@ export default function SelectionPanel({ selectedArea, onGenerateImage, onCaptur
       const model = selectedModelType === 'image' ? selectedImageModel : selectedVideoModel
       
       if (selectedModelType === 'image') {
-        // 记录生图任务到聊天记录
-        if (typeof window !== 'undefined' && (window as any).chatPanelRef) {
-          (window as any).chatPanelRef.logGenerateImageTask?.(prompt, model, selectedAspectRatio, screenshotData)
+        // 记录生图任务到聊天记录 - 添加重试机制
+        const logToChatPanel = () => {
+          if (typeof window !== 'undefined' && (window as any).chatPanelRef) {
+            const chatPanel = (window as any).chatPanelRef
+            if (chatPanel.logGenerateImageTask) {
+              console.log('调用ChatPanel记录生图任务:', { prompt, model, selectedAspectRatio })
+              chatPanel.logGenerateImageTask(prompt, model, selectedAspectRatio, screenshotData)
+              return true
+            }
+          }
+          return false
+        }
+        
+        // 尝试调用，如果失败则延迟重试
+        if (!logToChatPanel()) {
+          console.log('ChatPanel ref未找到，延迟重试...')
+          setTimeout(() => {
+            if (!logToChatPanel()) {
+              console.error('无法调用ChatPanel记录生图任务')
+            }
+          }, 100)
         }
         
         // 调用图片生成接口，传入截图数据、模型和比例
@@ -328,6 +352,12 @@ export default function SelectionPanel({ selectedArea, onGenerateImage, onCaptur
       
     } catch (error) {
       console.error('生成图片失败:', error)
+      // 出现错误时，不调用onGenerateImage，避免显示默认的生成中预览图
+      // 直接隐藏面板和清除框选
+      setIsVisible(false)
+      setShowAddButton(false)
+      onClearSelection?.()
+      setCustomPrompt('')
     } finally {
       setIsGenerating(false)
     }

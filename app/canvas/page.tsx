@@ -613,10 +613,7 @@ export default function CanvasPage() {
       `
       document.body.appendChild(notification)
       
-      // 先添加加载中的占位图片
-      const loadingImage = await addLoadingPlaceholder(position)
-      
-      // 调用ModelService创建图片生成任务
+      // 先准备请求参数，确保参数正确后再添加占位图片
       const request: any = {
         model: model as any,
         prompt: prompt,
@@ -632,13 +629,15 @@ export default function CanvasPage() {
       
       console.log('发送到ModelService.createTask的请求参数:', request)
       
-      // 记录生图任务到聊天记录
-      if (chatPanelRef.current && (chatPanelRef.current as any).logGenerateImageTask) {
-        (chatPanelRef.current as any).logGenerateImageTask(prompt, model, aspectRatio || '1:1', null)
-      }
+      // 注意：SelectionPanel已经调用了logGenerateImageTask，这里不再重复调用
+      // 避免聊天记录中出现重复消息
       
+      // 先创建任务，确保没有错误后再添加占位图片
       const taskId = await ModelService.createTask(request)
       console.log('图片生成任务创建成功，任务ID:', taskId)
+      
+      // 只有在任务创建成功后才添加加载中的占位图片
+      const loadingImage = await addLoadingPlaceholder(position)
       
       // 轮询任务状态
       const result = await ModelService.getTaskStatus({
