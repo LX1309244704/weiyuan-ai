@@ -111,7 +111,17 @@ export class ModelService {
     
     try {
       if (config.type === 'image') {
-        return await config.createAsyncImage(request as any);
+        // 为图片模型构建正确的参数对象，确保aspectRatio正确传递
+        const imageRequest = request as ImageRequestDvo;
+        const toImageDvo = {
+          prompt: imageRequest.prompt,
+          key: imageRequest.key,
+          taskId: imageRequest.taskId,
+          images: imageRequest.images,
+          size: imageRequest.size,
+          aspectRatio: imageRequest.aspectRatio // 确保aspectRatio参数传递
+        };
+        return await config.createAsyncImage(toImageDvo as any);
       } else if (config.type === 'video') {
         return await config.createVideo(request as any);
       } else {

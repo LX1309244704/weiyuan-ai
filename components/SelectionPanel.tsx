@@ -11,7 +11,7 @@ interface SelectionData {
 
 interface SelectionPanelProps {
   selectedArea: SelectionData | null
-  onGenerateImage: (prompt: string, model: string, position: { x: number; y: number }) => void
+  onGenerateImage: (prompt: string, model: string, position: { x: number; y: number }, screenshotData?: string, aspectRatio?: string) => void
   onGenerateVideo: (prompt: string, model: string) => void
   onCaptureArea: () => Promise<string | null>
   onReceiveScreenshot?: (imageData: string, prompt: string) => void
@@ -277,6 +277,62 @@ export default function SelectionPanel({ selectedArea, onGenerateImage, onCaptur
     }
   }
 
+  // 直接调用生成图片接口
+  const handleGenerateImage = async () => {
+    if (!selectedArea) return
+    
+    setIsGenerating(true)
+    
+    try {
+      // 先截图框选区域
+      const screenshotData = await onCaptureArea()
+      if (!screenshotData) {
+        throw new Error('截图失败')
+      }
+      
+      // 获取框选区域的位置信息
+      const { left, top, width, height } = selectedArea.rect
+      
+      // 计算新图片的位置（放在框选区域的右侧）
+      const newImagePosition = {
+        x: left + width + 20, // 右侧20px间距
+        y: top
+      }
+      
+      // 准备提示词
+      const prompt = customPrompt.trim() 
+        ? customPrompt
+        : `基于框选区域生成${selectedModelType === 'image' ? '图片' : '视频'}，位置: (${left.toFixed(0)}, ${top.toFixed(0)})`
+      
+      const model = selectedModelType === 'image' ? selectedImageModel : selectedVideoModel
+      
+      if (selectedModelType === 'image') {
+        // 记录生图任务到聊天记录
+        if (typeof window !== 'undefined' && (window as any).chatPanelRef) {
+          (window as any).chatPanelRef.logGenerateImageTask?.(prompt, model, selectedAspectRatio, screenshotData)
+        }
+        
+        // 调用图片生成接口，传入截图数据、模型和比例
+        onGenerateImage(prompt, model, newImagePosition, screenshotData, selectedAspectRatio)
+      } else {
+        // 这里需要调用视频生成函数
+        console.log('视频生成:', prompt, model)
+      }
+      
+      // 操作完成后隐藏面板和清除框选
+      setIsVisible(false)
+      setShowAddButton(false)
+      onClearSelection?.()
+      // 清空输入框
+      setCustomPrompt('')
+      
+    } catch (error) {
+      console.error('生成图片失败:', error)
+    } finally {
+      setIsGenerating(false)
+    }
+  }
+
   return (
     <>
       {/* 主面板 - 扩展功能（从右到左布局，跟随缩放） */}
@@ -504,47 +560,14 @@ export default function SelectionPanel({ selectedArea, onGenerateImage, onCaptur
 
           {/* 5. 生成按钮组 */}
           <div className="flex flex-col space-y-1">
-            {/* 生成到画布按钮 */}
+            {/* 生成图片按钮 - 直接调用生成图片接口 */}
             <div className="flex items-center bg-blue-500 hover:bg-blue-600 rounded-lg p-1 transition-colors shadow-md">
               <button
-                onClick={async () => {
-                  if (!selectedArea) return
-                  
-                  setIsGenerating(true)
-                  // 先截图
-                  const imageData = await onCaptureArea()
-                  if (imageData) {
-                    // 只生成内容到画布，不发送截图到聊天
-                    const { left, top } = selectedArea.rect
-                    const prompt = customPrompt.trim() 
-                      ? customPrompt
-                      : `基于选择区域生成${selectedModelType === 'image' ? '图片' : '视频'}，位置: (${left.toFixed(0)}, ${top.toFixed(0)})`
-                    const model = selectedModelType === 'image' ? selectedImageModel : selectedVideoModel
-                    
-                    if (selectedModelType === 'image') {
-                      // 获取框选最后坐标作为图片起始位置
-                      const { left, top, width, height } = selectedArea.rect
-                      const endX = left + width
-                      const endY = top + height
-                      
-                      onGenerateImage(prompt, model, { x: endX, y: endY })
-                    } else {
-                      // 这里需要调用视频生成函数
-                      console.log('视频生成:', prompt, model)
-                    }
-                  }
-                  setIsGenerating(false)
-                  // 操作完成后隐藏面板和清除框选
-                  setIsVisible(false)
-                  setShowAddButton(false)
-                  onClearSelection?.()
-                  // 清空输入框
-                  setCustomPrompt('')
-                }}
+                onClick={handleGenerateImage}
                 disabled={isGenerating}
-                className="text-white px-1.5 py-0.5 rounded text-xs font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap flex-1"
+                className="text-white px-1.5 py-0.5 rounded text-xs font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
               >
-                {isGenerating ? '生成中...' : `生成到画布`}
+                {isGenerating ? '生成中...' : '生成图片'}
               </button>
             </div>
             

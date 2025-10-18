@@ -23,6 +23,7 @@ const ImageSelectionPanel: React.FC<ImageSelectionPanelProps> = ({
   const [showAddButton, setShowAddButton] = useState(true)
   const [showTooltip, setShowTooltip] = useState(false)
   const [canvasScale, setCanvasScale] = useState(1)
+  const [isMultipleSelection, setIsMultipleSelection] = useState(false)
   const [selectedModelType, setSelectedModelType] = useState<'image' | 'video'>('image')
   const [selectedImageModel, setSelectedImageModel] = useState('seedream-4')
   const [selectedVideoModel, setSelectedVideoModel] = useState('veo3')
@@ -68,31 +69,102 @@ const ImageSelectionPanel: React.FC<ImageSelectionPanelProps> = ({
     }
   }, [selectedImage, onClearSelection])
 
-  // 监听画板缩放和图片移动变化，实时更新按钮位置 - 优化版本，减少闪动
+  // 检测是否为多选状态 - 修复版本
+  useEffect(() => {
+    if (!canvas || !selectedImage) return
+    
+    const checkMultipleSelection = () => {
+      try {
+        const activeObjects = canvas.getActiveObjects()
+        const isMultiple = activeObjects && activeObjects.length > 1
+        
+        console.log('多选检测:', {
+          activeObjectsCount: activeObjects ? activeObjects.length : 0,
+          isMultiple: isMultiple,
+          selectedImage: !!selectedImage
+        })
+        
+        // 如果是多选，立即隐藏按钮并设置多选状态
+        if (isMultiple) {
+          setIsMultipleSelection(true)
+          setShowAddButton(false)
+          console.log('检测到多选，隐藏按钮')
+        } else {
+          setIsMultipleSelection(false)
+          setShowAddButton(true)
+          console.log('单选状态，显示按钮')
+        }
+      } catch (error) {
+        console.error('检测多选状态失败:', error)
+      }
+    }
+    
+    // 初始检测
+    checkMultipleSelection()
+    
+    // 监听选中变化 - 直接调用，不使用防抖
+    const handleSelectionCreated = () => {
+      console.log('selection:created 事件触发')
+      checkMultipleSelection()
+    }
+    
+    const handleSelectionCleared = () => {
+      console.log('selection:cleared 事件触发')
+      checkMultipleSelection()
+    }
+    
+    const handleSelectionUpdated = () => {
+      console.log('selection:updated 事件触发')
+      checkMultipleSelection()
+    }
+    
+    // 监听对象移动和缩放
+    const handleObjectMoving = () => {
+      console.log('object:moving 事件触发')
+      checkMultipleSelection()
+    }
+    
+    const handleObjectScaling = () => {
+      console.log('object:scaling 事件触发')
+      checkMultipleSelection()
+    }
+    
+    canvas.on('selection:created', handleSelectionCreated)
+    canvas.on('selection:cleared', handleSelectionCleared)
+    canvas.on('selection:updated', handleSelectionUpdated)
+    canvas.on('object:moving', handleObjectMoving)
+    canvas.on('object:scaling', handleObjectScaling)
+    
+    return () => {
+      canvas.off('selection:created', handleSelectionCreated)
+      canvas.off('selection:cleared', handleSelectionCleared)
+      canvas.off('selection:updated', handleSelectionUpdated)
+      canvas.off('object:moving', handleObjectMoving)
+      canvas.off('object:scaling', handleObjectScaling)
+    }
+  }, [canvas, selectedImage])
+
+  // 监听画板缩放和图片移动变化，实时更新按钮位置 - 最终简化版本
   useEffect(() => {
     if (typeof window === 'undefined' || !selectedImage || !canvas) return
     
-    let animationFrameId: number
-    let lastUpdateTime = 0
-    const updateInterval = 200 // 进一步降低更新频率到5fps，减少闪动
-    let isUpdating = false
+    let updateTimeout: NodeJS.Timeout
     
     const updateButtonPosition = () => {
-      const now = Date.now()
-      if (now - lastUpdateTime < updateInterval || isUpdating) {
-        animationFrameId = requestAnimationFrame(updateButtonPosition)
-        return
-      }
-      
-      isUpdating = true
-      lastUpdateTime = now
-      
       try {
+        // 检测多选状态 - 如果多选，立即隐藏按钮并返回
+        const activeObjects = canvas.getActiveObjects()
+        const isMultiple = activeObjects && activeObjects.length > 1
+        
+        if (isMultiple) {
+          setShowAddButton(false)
+          return
+        }
+        
         // 更新画板缩放
         const scaleElement = document.querySelector('[data-canvas-scale]')
         const scale = scaleElement ? parseFloat(scaleElement.getAttribute('data-canvas-scale') || '1') : 1
         
-        // 只有当缩放比例变化时才更新状态
         if (Math.abs(scale - canvasScale) > 0.01) {
           setCanvasScale(scale)
         }
@@ -113,28 +185,21 @@ const ImageSelectionPanel: React.FC<ImageSelectionPanelProps> = ({
         
         // 只有当位置变化较大时才更新状态
         const positionChanged = 
-          Math.abs(finalLeft - addButtonPosition.left) > 1 || 
-          Math.abs(finalTop - addButtonPosition.top) > 1
+          Math.abs(finalLeft - addButtonPosition.left) > 10 || 
+          Math.abs(finalTop - addButtonPosition.top) > 10
         
         if (positionChanged) {
           setAddButtonPosition({ left: finalLeft, top: finalTop })
         }
       } catch (error) {
         console.error('更新按钮位置时出错:', error)
-      } finally {
-        isUpdating = false
-        animationFrameId = requestAnimationFrame(updateButtonPosition)
       }
     }
     
     // 使用防抖的事件监听器
-    let debounceTimer: NodeJS.Timeout
-    
     const debouncedUpdate = () => {
-      clearTimeout(debounceTimer)
-      debounceTimer = setTimeout(() => {
-        updateButtonPosition()
-      }, 50)
+      clearTimeout(updateTimeout)
+      updateTimeout = setTimeout(updateButtonPosition, 300) // 更长的防抖时间
     }
     
     // 监听画板缩放变化
@@ -158,16 +223,15 @@ const ImageSelectionPanel: React.FC<ImageSelectionPanelProps> = ({
     canvas.on('object:scaling', handleObjectScaling)
     canvas.on('object:rotating', handleObjectMoving)
     
-    // 开始动画循环
-    animationFrameId = requestAnimationFrame(updateButtonPosition)
+    // 初始更新
+    updateButtonPosition()
     
     return () => {
       window.removeEventListener('canvasScaleChange', handleCanvasScaleChange)
       canvas.off('object:moving', handleObjectMoving)
       canvas.off('object:scaling', handleObjectScaling)
       canvas.off('object:rotating', handleObjectMoving)
-      clearTimeout(debounceTimer)
-      cancelAnimationFrame(animationFrameId)
+      clearTimeout(updateTimeout)
     }
   }, [selectedImage, canvas, canvasScale, addButtonPosition])
 
@@ -230,7 +294,7 @@ const ImageSelectionPanel: React.FC<ImageSelectionPanelProps> = ({
     setPanelPosition({ left: panelLeft, top: panelTop })
   }, [addButtonPosition, canvasScale])
 
-  if (!selectedImage || !canvas) return null
+  if (!selectedImage || !canvas || isMultipleSelection) return null
   
   // 在渲染时重新计算position
   const currentPosition = getImagePosition()

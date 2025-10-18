@@ -486,7 +486,10 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
     const messageContent = prompt ? `${prompt} ${settingsInfo}` : `生成图片 ${settingsInfo}`
 
     // 确保图片数据格式正确（添加data:image/png;base64,前缀）
-    const formattedImageData = imageData ? `data:image/png;base64,${imageData}` : undefined
+    let formattedImageData = imageData
+    if (imageData && !imageData.startsWith('data:')) {
+      formattedImageData = `data:image/png;base64,${imageData}`
+    }
 
     const userMessage: Message = {
       id: `generate-image-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
@@ -609,75 +612,33 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
     link.click()
   }
 
-  // 将图片添加到画板
+  // 将图片添加到画板 - 切换到箭头工具模式
   const handleAddToCanvas = (imageData: string) => {
     // 检查全局画布对象是否存在
     if (typeof window !== 'undefined' && (window as any).fabricCanvas) {
-      const fabricCanvas = (window as any).fabricCanvas
       
-      // 创建图片元素
-      const img = new Image()
-      img.crossOrigin = 'anonymous'
+      // 触发自定义事件，通知画板切换到箭头工具并传递图片数据
+      const event = new CustomEvent('canvas:switchToArrowTool', {
+        detail: { imageData }
+      })
+      window.dispatchEvent(event)
       
-      img.onload = () => {
-        try {
-          // 检查fabric对象是否存在
-          const fabric = (window as any).fabric
-          if (!fabric) {
-            throw new Error('Fabric.js未正确加载')
-          }
-          
-          // 创建Fabric图片对象
-          const fabricImg = new fabric.Image(img, {
-            left: 100,
-            top: 100,
-            selectable: true,
-            hasControls: true,
-            cornerStyle: 'circle',
-            transparentCorners: false,
-            cornerColor: '#3b82f6',
-            cornerSize: 12,
-            rotatingPointOffset: 40
-          })
-          
-          // 设置合适的缩放比例
-          const maxSize = 400
-          const scale = Math.min(maxSize / img.width, maxSize / img.height, 1)
-          fabricImg.scale(scale)
-          
-          // 添加到画布
-          fabricCanvas.add(fabricImg)
-          fabricCanvas.setActiveObject(fabricImg)
-          fabricCanvas.renderAll()
-          
-          console.log('图片已添加到画板')
-          
-          // 显示添加成功提示
-          const notification = document.createElement('div')
-          notification.innerHTML = `
-            <div style="position: fixed; top: 20px; right: 20px; background: #10b981; color: white; padding: 8px 12px; border-radius: 6px; z-index: 10000; box-shadow: 0 2px 4px rgba(0,0,0,0.1); font-size: 14px;">
-              图片已成功添加到画板
-            </div>
-          `
-          document.body.appendChild(notification)
-          setTimeout(() => {
-            if (document.body.contains(notification)) {
-              document.body.removeChild(notification)
-            }
-          }, 3000)
-          
-        } catch (error) {
-          console.error('添加图片到画板失败:', error)
-          alert('添加图片到画板失败，请检查画板是否正常')
+      console.log('已发送切换到箭头工具事件，准备添加图片到画板')
+      
+      // 显示提示信息
+      const notification = document.createElement('div')
+      notification.innerHTML = `
+        <div style="position: fixed; top: 20px; right: 20px; background: #3b82f6; color: white; padding: 8px 12px; border-radius: 6px; z-index: 10000; box-shadow: 0 2px 4px rgba(0,0,0,0.1); font-size: 14px;">
+          已切换到选择工具，请在画板上点击放置图片
+        </div>
+      `
+      document.body.appendChild(notification)
+      setTimeout(() => {
+        if (document.body.contains(notification)) {
+          document.body.removeChild(notification)
         }
-      }
+      }, 3000)
       
-      img.onerror = (error) => {
-        console.error('图片加载失败:', error)
-        alert('图片加载失败，无法添加到画板')
-      }
-      
-      img.src = imageData
     } else {
       alert('画板未初始化，请先打开画板')
     }

@@ -1068,6 +1068,39 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
     }
   }, [canvas, activeTool])
 
+  // 监听工具栏状态更新事件
+  useEffect(() => {
+    const handleUpdateToolbarState = (event: CustomEvent) => {
+      console.log('接收到工具栏状态更新事件:', event.detail)
+      
+      if (event.detail.activeTool) {
+        // 更新活动工具状态
+        setActiveTool(event.detail.activeTool)
+        
+        // 根据工具类型设置画布状态
+        switch (event.detail.activeTool) {
+          case 'arrow':
+            if (canvas) {
+              canvas.isDrawingMode = false
+              canvas.selection = true
+              canvas.defaultCursor = 'crosshair'
+              canvas.hoverCursor = 'pointer'
+              console.log('工具栏状态已更新为箭头工具')
+            }
+            break
+          // 可以根据需要添加其他工具的状态设置
+        }
+      }
+    }
+
+    // 添加事件监听器
+    window.addEventListener('canvas:updateToolbarState', handleUpdateToolbarState as EventListener)
+
+    return () => {
+      window.removeEventListener('canvas:updateToolbarState', handleUpdateToolbarState as EventListener)
+    }
+  }, [canvas])
+
   // 监听画板缩放事件
   useEffect(() => {
     if (!canvas) return

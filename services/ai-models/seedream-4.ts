@@ -32,10 +32,15 @@ export const seedream4Config = {
     // 使用环境变量中的API密钥
     const apiKey = process.env.NEXT_PUBLIC_SEEDREAM_API_KEY || toImageDvo.key;
     
+    // 根据宽高比获取对应的尺寸（比例参数通过size对应）
+    const size = toImageDvo.aspectRatio 
+      ? this.getSizeByAspectRatio(toImageDvo.aspectRatio)
+      : (toImageDvo.size || this.defaultSize);
+    
     const requestBody = {
       model: "seedream-4",
       prompt: toImageDvo.prompt,
-      size: toImageDvo.size || this.defaultSize,
+      size: size, // 比例参数通过size对应
       num_images: 1,
       guidance_scale: 7.5,
       steps: 50,

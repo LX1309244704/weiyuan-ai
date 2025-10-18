@@ -40,10 +40,15 @@ export const nanoBananaConfig = {
     // 使用环境变量中的API密钥
     const apiKey = process.env.NEXT_PUBLIC_NANO_BANANA_API_KEY || toImageDvo.key;
     
+    // 根据宽高比获取对应的尺寸，优先使用aspectRatio
+    const size = toImageDvo.aspectRatio 
+      ? this.getSizeByAspectRatio(toImageDvo.aspectRatio)
+      : toImageDvo.size || "1024x1024";
+    
     // 构建请求体
     const map = {
       model: "nano-banana",
-      size: toImageDvo.size || "1024x1024",
+      size: size,
       prompt: toImageDvo.prompt,
       image_urls: toImageDvo.images || []
     };
