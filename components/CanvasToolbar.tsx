@@ -3085,16 +3085,6 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
           </button>
         </Tooltip>
 
-        {/* 主题切换按钮 */}
-        <Tooltip content={`切换到${theme === 'light' ? '深色' : '浅色'}主题`} position="bottom">
-          <button
-            onClick={handleToggleTheme}
-            className="p-1 lg:p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"
-          >
-            {theme === 'light' ? <Moon className="h-4 w-4 lg:h-5 lg:w-5" /> : <Sun className="h-4 w-4 lg:h-5 lg:w-5" />}
-          </button>
-        </Tooltip>
-
         {/* 国际化按钮 */}
         <Tooltip content={`切换到${language === 'zh' ? 'English' : '中文'}`} position="bottom">
           <button
@@ -3105,31 +3095,39 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
           </button>
         </Tooltip>
 
-        {/* 用户信息胶囊 */}
-        <Tooltip content={userInfo ? `${userInfo.username} - 剩余${userInfo.points}点` : "用户信息"} position="bottom">
-          <div className="flex items-center space-x-1 lg:space-x-2 bg-gray-100 dark:bg-gray-800 rounded-full px-2 lg:px-3 py-1 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors cursor-pointer">
-            {/* 消耗点数 */}
-            <div className="flex items-center space-x-1">
-              <svg className="w-3 h-3 lg:w-4 lg:h-4 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
-                <path d="M10 2a8 8 0 100 16 8 8 0 000-16zm0 14a6 6 0 110-12 6 6 0 010 12zm-1-9a1 1 0 112 0v4a1 1 0 11-2 0V7zm1 8a1 1 0 100-2 1 1 0 000 2z"/>
-              </svg>
-              <span className="text-xs lg:text-sm font-medium text-gray-700 dark:text-gray-300">{userInfo?.points || 0}</span>
-              <span className="text-xs text-gray-500 dark:text-gray-400">点</span>
-            </div>
-            
-            {/* 分隔线 */}
-            <div className="h-3 lg:h-4 w-px bg-gray-300 dark:bg-gray-600"></div>
-            
-            {/* 用户头像 */}
-            <div className="flex items-center">
-              <img 
-                src={userInfo?.avatar || "/default-avatar.svg"} 
-                alt={userInfo?.username || "用户"}
-                className="w-4 h-4 lg:w-6 lg:h-6 rounded-full"
-              />
-            </div>
-          </div>
+        {/* 主题切换按钮 */}
+        <Tooltip content={`切换到${theme === 'light' ? '深色' : '浅色'}主题`} position="bottom">
+          <button
+            onClick={handleToggleTheme}
+            className="p-1 lg:p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"
+          >
+            {theme === 'light' ? <Moon className="h-4 w-4 lg:h-5 lg:w-5" /> : <Sun className="h-4 w-4 lg:h-5 lg:w-5" />}
+          </button>
         </Tooltip>
+
+        {/* 用户信息胶囊 */}
+        <div className="flex items-center space-x-1 lg:space-x-2 bg-gray-100 dark:bg-gray-800 rounded-full px-2 lg:px-3 py-1 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors cursor-pointer">
+          {/* 消耗点数 */}
+          <div className="flex items-center space-x-1">
+            <svg className="w-3 h-3 lg:w-4 lg:h-4 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
+              <path d="M10 2a8 8 0 100 16 8 8 0 000-16zm0 14a6 6 0 110-12 6 6 0 010 12zm-1-9a1 1 0 112 0v4a1 1 0 11-2 0V7zm1 8a1 1 0 100-2 1 1 0 000 2z"/>
+            </svg>
+            <span className="text-xs lg:text-sm font-medium text-gray-700 dark:text-gray-300">{userInfo?.points || 0}</span>
+            <span className="text-xs text-gray-500 dark:text-gray-400">点</span>
+          </div>
+          
+          {/* 分隔线 */}
+          <div className="h-3 lg:h-4 w-px bg-gray-300 dark:bg-gray-600"></div>
+          
+          {/* 用户头像 */}
+          <div className="flex items-center">
+            <img 
+              src={userInfo?.avatar || "/default-avatar.svg"} 
+              alt={userInfo?.username || "用户"}
+              className="w-4 h-4 lg:w-6 lg:h-6 rounded-full"
+            />
+          </div>
+        </div>
       </div>
     </div>
   )

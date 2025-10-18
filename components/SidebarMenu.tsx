@@ -31,7 +31,7 @@ export default function SidebarMenu({ activeMenu, onMenuClick, showInvitation = 
   }
 
   return (
-    <div className="w-20 flex-shrink-0">
+    <div className="w-25 flex-shrink-0">
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-2 sticky top-24">
         {menuItems.map((item) => (
           <button

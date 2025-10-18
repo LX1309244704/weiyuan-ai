@@ -653,7 +653,7 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
     return (
       <button
         onClick={() => setIsOpen(true)}
-        className="absolute right-4 top-16 bg-primary-600 text-white p-3 rounded-lg shadow-lg hover:bg-primary-700 transition-colors z-30"
+        className="absolute right-4 top-[5.25rem] bg-primary-600 text-white p-3 rounded-lg shadow-lg hover:bg-primary-700 transition-colors z-30"
         title="展开AI创作助手"
       >
         <MessageSquare className="h-5 w-5" />
@@ -664,7 +664,7 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
   // 如果面板被收缩，显示收缩状态
   if (isCollapsed) {
     return (
-      <div className="absolute right-4 top-16 bg-white rounded-lg shadow-lg z-30">
+      <div className="absolute right-4 top-[5.25rem] bg-white rounded-lg shadow-lg z-30">
         <div className="flex items-center justify-between p-3">
           <div className="flex items-center space-x-2">
             <MessageSquare className="h-5 w-5 text-primary-600" />
@@ -684,7 +684,7 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
 
   return (
     <div 
-      className={`absolute right-4 top-16 bottom-4 bg-white dark:bg-gray-800 rounded-lg shadow-lg flex flex-col z-30 border border-gray-200 dark:border-gray-600 transition-all duration-200 ${
+      className={`absolute right-4 top-[5.25rem] bottom-4 bg-white dark:bg-gray-800 rounded-lg shadow-lg flex flex-col z-30 border border-gray-200 dark:border-gray-600 transition-all duration-200 ${
         isResizing ? 'cursor-col-resize select-none' : ''
       }`}
       style={{ width: `${panelWidth}px` }}
@@ -1043,7 +1043,7 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
               }
             }}
             placeholder="输入提示词或描述..."
-            className="flex-1 input-field text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-400 min-h-[38px] resize-none"
+            className="flex-1 input-field text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-400 min-h-[38px] resize-none px-3 py-2 leading-normal"
             rows={1}
           />
           <button

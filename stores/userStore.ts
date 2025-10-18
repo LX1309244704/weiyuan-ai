@@ -8,6 +8,7 @@ interface UserInfo {
   avatar: string
   points: number
   createdAt: string
+  bio?: string
 }
 
 interface UserState {

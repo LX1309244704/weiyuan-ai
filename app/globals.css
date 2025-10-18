@@ -2,11 +2,96 @@
 @tailwind components;
 @tailwind utilities;
 
-/* 自定义组件样式 */
-.btn-primary {
-  @apply bg-blue-600 text-white px-3 py-2 rounded-lg hover:bg-blue-700 transition-colors;
+/* 简洁现代的主题样式 */
+.dark {
+  /* 背景色 */
+  --bg-primary: #0f172a;
+  --bg-secondary: #1e293b;
+  
+  /* 文字色 */
+  --text-primary: #f1f5f9;
+  --text-secondary: #cbd5e1;
+  
+  /* 边框色 */
+  --border-primary: #334155;
 }
 
-.input-field {
-  @apply w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white;
+/* 深色主题下的通用样式 */
+.dark body {
+  background-color: #0f172a;
+  color: #f1f5f9;
+}
+
+.dark main {
+  background-color: #0f172a;
+}
+
+/* 导航栏样式 */
+.dark nav {
+  background-color: rgba(15, 23, 42, 0.8);
+  border-color: #1e293b;
+}
+
+/* 文字颜色 */
+.dark .text-gray-900 {
+  color: #f1f5f9;
+}
+
+.dark .text-gray-800 {
+  color: #e2e8f0;
+}
+
+.dark .text-gray-700 {
+  color: #cbd5e1;
+}
+
+.dark .text-gray-600 {
+  color: #94a3b8;
+}
+
+.dark .text-gray-500 {
+  color: #64748b;
+}
+
+/* 背景颜色 */
+.dark .bg-white {
+  background-color: #1e293b;
+}
+
+.dark .bg-gray-50 {
+  background-color: #1e293b;
+}
+
+.dark .bg-gray-100 {
+  background-color: #334155;
+}
+
+/* 边框颜色 */
+.dark .border-gray-100 {
+  border-color: #334155;
+}
+
+.dark .border-gray-200 {
+  border-color: #334155;
+}
+
+.dark .border-gray-300 {
+  border-color: #475569;
+}
+
+/* 平滑的主题切换过渡 */
+* {
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+/* 简洁的卡片阴影 */
+.card-shadow {
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+}
+
+/* 响应式改进 */
+@media (max-width: 768px) {
+  .card-shadow {
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  }
 }
