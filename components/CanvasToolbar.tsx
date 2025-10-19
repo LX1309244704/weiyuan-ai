@@ -44,6 +44,7 @@ import {
 import { useUserStore } from '../stores/userStore'
 import { useRouter } from 'next/navigation'
 import SaveProjectModal from './SaveProjectModal'
+import UserSettingsModal from './UserSettingsModal'
 import { historyDB, type HistoryRecord } from '../utils/historyDB'
 
 interface CanvasToolbarProps {
@@ -71,6 +72,7 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
   const [showSaveModal, setShowSaveModal] = useState(false)
   const [showLayerPanel, setShowLayerPanel] = useState(false)
   const [showHistoryPanel, setShowHistoryPanel] = useState(false)
+  const [showApiSettingsModal, setShowApiSettingsModal] = useState(false)
   const [historyRecords, setHistoryRecords] = useState<HistoryRecord[]>([])
 
 
@@ -117,6 +119,11 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
       canvas.discardActiveObject()
       canvas.requestRenderAll()
     }
+  }
+
+  // 打开API密钥设置
+  const handleOpenApiSettings = () => {
+    setShowApiSettingsModal(true)
   }
 
   // 全选画布上的所有对象
@@ -3106,8 +3113,10 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
         </Tooltip>
 
         {/* 用户信息胶囊 */}
-        <Tooltip content={userInfo ? `${userInfo.username} - 剩余${userInfo.points}点` : "用户信息"} position="bottom">
-          <div className="flex items-center space-x-1 lg:space-x-2 bg-gray-100 dark:bg-gray-800 rounded-full px-2 lg:px-3 py-1 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors cursor-pointer">
+          <div 
+            className="flex items-center space-x-1 lg:space-x-2 bg-gray-100 dark:bg-gray-800 rounded-full px-2 lg:px-3 py-1 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors cursor-pointer"
+            onClick={handleOpenApiSettings}
+          >
             {/* 消耗点数 */}
             <div className="flex items-center space-x-1">
               <svg className="w-3 h-3 lg:w-4 lg:h-4 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
@@ -3129,8 +3138,13 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
               />
             </div>
           </div>
-        </Tooltip>
       </div>
+
+      {/* API密钥设置模态框 */}
+      <UserSettingsModal 
+        isOpen={showApiSettingsModal}
+        onClose={() => setShowApiSettingsModal(false)}
+      />
     </div>
   )
 }

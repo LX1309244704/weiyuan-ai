@@ -582,7 +582,7 @@ export default function SelectionPanel({ selectedArea, onGenerateImage, onCaptur
                 e.preventDefault()
               }
             }}
-            placeholder="输入提示词..."
+placeholder=""
             className="flex-1 px-2 py-1 border border-gray-300 dark:border-gray-600 rounded text-xs bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:border-blue-500 dark:focus:border-blue-400 resize-none"
             style={{ minWidth: '120px', height: textareaHeight, minHeight: '32px', maxHeight: '80px' }}
             rows={1}

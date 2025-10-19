@@ -9,19 +9,13 @@ interface UserSettingsModalProps {
 }
 
 interface ApiConfig {
-  nanoBananaApiKey: string
-  seedream4ApiKey: string
-  veo3ApiKey: string
-  sora2ApiKey: string
+  apiKey: string
   apiBaseUrl: string
 }
 
 export default function UserSettingsModal({ isOpen, onClose }: UserSettingsModalProps) {
   const [apiConfig, setApiConfig] = useState<ApiConfig>({
-    nanoBananaApiKey: '',
-    seedream4ApiKey: '',
-    veo3ApiKey: '',
-    sora2ApiKey: '',
+    apiKey: '',
     apiBaseUrl: 'https://api.jmyps.com/v1'
   })
 
@@ -42,10 +36,7 @@ export default function UserSettingsModal({ isOpen, onClose }: UserSettingsModal
       if (response.ok) {
         const data = await response.json()
         const config: ApiConfig = {
-          nanoBananaApiKey: data.nanoBananaApiKey || '',
-          seedream4ApiKey: data.seedream4ApiKey || '',
-          veo3ApiKey: data.veo3ApiKey || '',
-          sora2ApiKey: data.sora2ApiKey || '',
+          apiKey: data.apiKey || '',
           apiBaseUrl: data.apiBaseUrl || 'https://api.jmyps.com/v1'
         }
         setApiConfig(config)
@@ -54,10 +45,7 @@ export default function UserSettingsModal({ isOpen, onClose }: UserSettingsModal
       console.error('加载配置失败:', error)
       // 使用默认配置
       const config: ApiConfig = {
-        nanoBananaApiKey: '',
-        seedream4ApiKey: '',
-        veo3ApiKey: '',
-        sora2ApiKey: '',
+        apiKey: '',
         apiBaseUrl: 'https://api.jmyps.com/v1'
       }
       setApiConfig(config)
@@ -73,17 +61,8 @@ export default function UserSettingsModal({ isOpen, onClose }: UserSettingsModal
       const envContent = `# AI模型API配置
 # 请妥善保管您的API密钥
 
-# Nano Banana API密钥
-NEXT_PUBLIC_NANO_BANANA_API_KEY=${apiConfig.nanoBananaApiKey}
-
-# Seedream-4 API密钥
-NEXT_PUBLIC_SEEDREAM4_API_KEY=${apiConfig.seedream4ApiKey}
-
-# Veo3 API密钥
-NEXT_PUBLIC_VEO3_API_KEY=${apiConfig.veo3ApiKey}
-
-# Sora2 API密钥
-NEXT_PUBLIC_SORA2_API_KEY=${apiConfig.sora2ApiKey}
+# API密钥
+NEXT_PUBLIC_API_KEY=${apiConfig.apiKey}
 
 # API基础地址
 NEXT_PUBLIC_API_BASE_URL=${apiConfig.apiBaseUrl}
@@ -160,57 +139,15 @@ NEXT_PUBLIC_API_BASE_URL=${apiConfig.apiBaseUrl}
             />
           </div>
 
-          {/* Nano Banana API密钥 */}
+          {/* API密钥 */}
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Nano Banana API密钥
+              API密钥
             </label>
             <input
               type="password"
-              value={apiConfig.nanoBananaApiKey}
-              onChange={(e) => handleInputChange('nanoBananaApiKey', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-              placeholder="输入您的API密钥"
-            />
-          </div>
-
-          {/* Seedream-4 API密钥 */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Seedream-4 API密钥
-            </label>
-            <input
-              type="password"
-              value={apiConfig.seedream4ApiKey}
-              onChange={(e) => handleInputChange('seedream4ApiKey', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-              placeholder="输入您的API密钥"
-            />
-          </div>
-
-          {/* Veo3 API密钥 */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Veo3 API密钥
-            </label>
-            <input
-              type="password"
-              value={apiConfig.veo3ApiKey}
-              onChange={(e) => handleInputChange('veo3ApiKey', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-              placeholder="输入您的API密钥"
-            />
-          </div>
-
-          {/* Sora2 API密钥 */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Sora2 API密钥
-            </label>
-            <input
-              type="password"
-              value={apiConfig.sora2ApiKey}
-              onChange={(e) => handleInputChange('sora2ApiKey', e.target.value)}
+              value={apiConfig.apiKey}
+              onChange={(e) => handleInputChange('apiKey', e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
               placeholder="输入您的API密钥"
             />

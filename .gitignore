@@ -23,7 +23,7 @@ yarn-debug.log*
 yarn-error.log*
 
 # Local env files
-.env*.local
+# .env*.local - 已移除，允许提交 .env.local 文件
 
 # Vercel
 .vercel

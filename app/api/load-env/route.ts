@@ -18,10 +18,7 @@ export async function GET(request: NextRequest) {
     // 检查文件是否存在
     if (!existsSync(envPath)) {
       return NextResponse.json({
-        nanoBananaApiKey: '',
-        seedream4ApiKey: '',
-        veo3ApiKey: '',
-        sora2ApiKey: '',
+        apiKey: '',
         apiBaseUrl: 'https://api.jmyps.com/v1'
       })
     }
@@ -31,10 +28,7 @@ export async function GET(request: NextRequest) {
     
     // 解析环境变量
     const config = {
-      nanoBananaApiKey: '',
-      seedream4ApiKey: '',
-      veo3ApiKey: '',
-      sora2ApiKey: '',
+      apiKey: '',
       apiBaseUrl: 'https://api.jmyps.com/v1'
     }
 
@@ -51,17 +45,8 @@ export async function GET(request: NextRequest) {
         const cleanValue = value.trim()
         
         switch (cleanKey) {
-          case 'NEXT_PUBLIC_NANO_BANANA_API_KEY':
-            config.nanoBananaApiKey = cleanValue
-            break
-          case 'NEXT_PUBLIC_SEEDREAM4_API_KEY':
-            config.seedream4ApiKey = cleanValue
-            break
-          case 'NEXT_PUBLIC_VEO3_API_KEY':
-            config.veo3ApiKey = cleanValue
-            break
-          case 'NEXT_PUBLIC_SORA2_API_KEY':
-            config.sora2ApiKey = cleanValue
+          case 'NEXT_PUBLIC_API_KEY':
+            config.apiKey = cleanValue
             break
           case 'NEXT_PUBLIC_API_BASE_URL':
             config.apiBaseUrl = cleanValue
