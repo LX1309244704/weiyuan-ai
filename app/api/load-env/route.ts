@@ -58,7 +58,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(config)
 
   } catch (error) {
-    console.error('读取.env.local文件失败:', error)
     return NextResponse.json(
       { error: '读取配置失败' },
       { status: 500 }

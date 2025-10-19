@@ -32,18 +32,15 @@ class ChatDB {
       const request = indexedDB.open(this.dbName, this.dbVersion);
 
       request.onerror = () => {
-        console.error('IndexedDB打开失败:', request.error);
         reject(request.error);
       };
       
       request.onsuccess = () => {
         this.db = request.result;
-        console.log('IndexedDB初始化成功');
         resolve();
       };
 
       request.onupgradeneeded = (event) => {
-        console.log('IndexedDB升级/创建数据库');
         const db = (event.target as IDBOpenDBRequest).result;
         
         // 创建聊天消息存储
@@ -57,7 +54,7 @@ class ChatDB {
           messageStore.createIndex('timestamp', 'timestamp', { unique: false });
           messageStore.createIndex('sessionId', 'sessionId', { unique: false });
           messageStore.createIndex('type', 'type', { unique: false });
-          console.log('聊天消息存储创建成功');
+
         }
         
         // 创建聊天会话存储
@@ -69,12 +66,11 @@ class ChatDB {
           
           // 创建索引用于按时间排序
           sessionStore.createIndex('updatedAt', 'updatedAt', { unique: false });
-          console.log('聊天会话存储创建成功');
+
         }
       };
       
       request.onblocked = () => {
-        console.warn('IndexedDB被其他标签页占用');
       };
     });
   }

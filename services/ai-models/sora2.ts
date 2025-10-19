@@ -55,10 +55,8 @@ export const sora2Config = {
     
     try {
       const response = await axios.post(`${this.baseUrl}/videos/generations`, requestBody, { headers });
-      console.log('Sora2 返回的数据：', response.data);
       return response.data.id || response.data.task_id;
     } catch (error) {
-      console.error('Sora2 请求失败：', error);
       throw error;
     }
   },
@@ -82,7 +80,6 @@ export const sora2Config = {
     
     try {
       const response = await axios.get(`${this.baseUrl}/videos/tasks/${toVideoDvo.taskId}`, { headers });
-      console.log('Sora2 查询返回数据：', response.data);
       
       const result = response.data;
       
@@ -108,7 +105,6 @@ export const sora2Config = {
       
       return humanDto;
     } catch (error) {
-      console.error('Sora2 查询任务失败：', error);
       throw error;
     }
   },

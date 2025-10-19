@@ -268,7 +268,6 @@ export default function SelectionPanel({ selectedArea, onGenerateImage, onCaptur
         }, 2000)
       }
     } catch (error) {
-      console.error('添加到聊天失败:', error)
     } finally {
       setIsGenerating(false)
       // 操作完成后隐藏按钮和清除框选
@@ -290,11 +289,7 @@ export default function SelectionPanel({ selectedArea, onGenerateImage, onCaptur
         throw new Error('截图失败')
       }
       
-      console.log('SelectionPanel截图数据调试:', {
-        screenshotDataLength: screenshotData.length,
-        screenshotDataPrefix: screenshotData.substring(0, 50),
-        hasDataPrefix: screenshotData.startsWith('data:')
-      })
+
       
       // 获取框选区域的位置信息
       const { left, top, width, height } = selectedArea.rect
@@ -318,7 +313,6 @@ export default function SelectionPanel({ selectedArea, onGenerateImage, onCaptur
           if (typeof window !== 'undefined' && (window as any).chatPanelRef) {
             const chatPanel = (window as any).chatPanelRef
             if (chatPanel.logGenerateImageTask) {
-              console.log('调用ChatPanel记录生图任务:', { prompt, model, selectedAspectRatio })
               chatPanel.logGenerateImageTask(prompt, model, selectedAspectRatio, screenshotData)
               return true
             }
@@ -328,10 +322,8 @@ export default function SelectionPanel({ selectedArea, onGenerateImage, onCaptur
         
         // 尝试调用，如果失败则延迟重试
         if (!logToChatPanel()) {
-          console.log('ChatPanel ref未找到，延迟重试...')
           setTimeout(() => {
             if (!logToChatPanel()) {
-              console.error('无法调用ChatPanel记录生图任务')
             }
           }, 100)
         }
@@ -340,7 +332,7 @@ export default function SelectionPanel({ selectedArea, onGenerateImage, onCaptur
         onGenerateImage(prompt, model, newImagePosition, screenshotData, selectedAspectRatio)
       } else {
         // 这里需要调用视频生成函数
-        console.log('视频生成:', prompt, model)
+
       }
       
       // 操作完成后隐藏面板和清除框选
@@ -351,7 +343,6 @@ export default function SelectionPanel({ selectedArea, onGenerateImage, onCaptur
       setCustomPrompt('')
       
     } catch (error) {
-      console.error('生成图片失败:', error)
       // 出现错误时，不调用onGenerateImage，避免显示默认的生成中预览图
       // 直接隐藏面板和清除框选
       setIsVisible(false)

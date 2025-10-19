@@ -42,7 +42,6 @@ export default function UserSettingsModal({ isOpen, onClose }: UserSettingsModal
         setApiConfig(config)
       }
     } catch (error) {
-      console.error('加载配置失败:', error)
       // 使用默认配置
       const config: ApiConfig = {
         apiKey: '',

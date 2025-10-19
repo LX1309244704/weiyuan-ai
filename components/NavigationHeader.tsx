@@ -70,12 +70,10 @@ export default function NavigationHeader({ title, icon: Icon, iconColor = 'text-
   }
 
   const handleUserMenuToggle = () => {
-    console.log('用户信息胶囊被点击，当前状态:', showUserMenu)
     setShowUserMenu(!showUserMenu)
   }
 
   const handleLogout = () => {
-    console.log('退出登录')
     setShowUserMenu(false)
     logout() // 清除认证状态
     useUserStore.getState().clearUserInfo() // 清除用户信息

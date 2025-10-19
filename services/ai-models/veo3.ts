@@ -51,10 +51,8 @@ export const veo3Config = {
     
     try {
       const response = await axios.post(`${this.baseUrl}/videos/generations`, requestBody, { headers });
-      console.log('Veo3 返回的数据：', response.data);
       return response.data.id || response.data.task_id;
     } catch (error) {
-      console.error('Veo3 请求失败：', error);
       throw error;
     }
   },
@@ -80,7 +78,6 @@ export const veo3Config = {
     
     try {
       const response = await axios.get(`${this.baseUrl}/videos/tasks/${toVideoDvo.taskId}`, { headers });
-      console.log('Veo3 查询返回数据：', response.data);
       
       const result = response.data;
       
@@ -106,7 +103,6 @@ export const veo3Config = {
       
       return humanDto;
     } catch (error) {
-      console.error('Veo3 查询任务失败：', error);
       throw error;
     }
   },

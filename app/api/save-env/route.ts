@@ -33,7 +33,6 @@ export async function POST(request: NextRequest) {
     )
 
   } catch (error) {
-    console.error('保存.env.local文件失败:', error)
     return NextResponse.json(
       { error: '保存失败，请检查文件权限' },
       { status: 500 }

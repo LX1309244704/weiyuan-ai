@@ -78,24 +78,15 @@ const ImageSelectionPanel: React.FC<ImageSelectionPanelProps> = ({
         const activeObjects = canvas.getActiveObjects()
         const isMultiple = activeObjects && activeObjects.length > 1
         
-        console.log('多选检测:', {
-          activeObjectsCount: activeObjects ? activeObjects.length : 0,
-          isMultiple: isMultiple,
-          selectedImage: !!selectedImage
-        })
-        
         // 如果是多选，立即隐藏按钮并设置多选状态
         if (isMultiple) {
           setIsMultipleSelection(true)
           setShowAddButton(false)
-          console.log('检测到多选，隐藏按钮')
         } else {
           setIsMultipleSelection(false)
           setShowAddButton(true)
-          console.log('单选状态，显示按钮')
         }
       } catch (error) {
-        console.error('检测多选状态失败:', error)
       }
     }
     
@@ -104,28 +95,23 @@ const ImageSelectionPanel: React.FC<ImageSelectionPanelProps> = ({
     
     // 监听选中变化 - 直接调用，不使用防抖
     const handleSelectionCreated = () => {
-      console.log('selection:created 事件触发')
       checkMultipleSelection()
     }
     
     const handleSelectionCleared = () => {
-      console.log('selection:cleared 事件触发')
       checkMultipleSelection()
     }
     
     const handleSelectionUpdated = () => {
-      console.log('selection:updated 事件触发')
       checkMultipleSelection()
     }
     
     // 监听对象移动和缩放
     const handleObjectMoving = () => {
-      console.log('object:moving 事件触发')
       checkMultipleSelection()
     }
     
     const handleObjectScaling = () => {
-      console.log('object:scaling 事件触发')
       checkMultipleSelection()
     }
     
@@ -192,7 +178,6 @@ const ImageSelectionPanel: React.FC<ImageSelectionPanelProps> = ({
           setAddButtonPosition({ left: finalLeft, top: finalTop })
         }
       } catch (error) {
-        console.error('更新按钮位置时出错:', error)
       }
     }
     
@@ -325,7 +310,6 @@ const ImageSelectionPanel: React.FC<ImageSelectionPanelProps> = ({
         }
       }, 2000)
     } catch (error) {
-      console.error('添加到聊天失败:', error)
     } finally {
       // 不隐藏按钮，让用户可以继续操作
       // setShowAddButton(false)

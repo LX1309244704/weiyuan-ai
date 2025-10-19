@@ -57,10 +57,8 @@ export const seedream4Config = {
     
     try {
       const response = await axios.post(`${this.baseUrl}/images/generations`, requestBody, { headers });
-      console.log('Seedream-4 返回的数据：', response.data);
       return response.data.id || response.data.task_id;
     } catch (error) {
-      console.error('Seedream-4 请求失败：', error);
       throw error;
     }
   },
@@ -88,15 +86,11 @@ export const seedream4Config = {
       // 循环查询直到任务完成或失败
       while (true) {
         const response = await axios.get(`${this.baseUrl}/images/tasks/${toImageDvo.taskId}`, { headers });
-        console.log('Seedream-4 查询返回数据：', response.data);
-        
         const result = response.data;
         
         if (result.code === 'success') {
           const taskData = result.data;
           const status = taskData.status;
-          
-          console.log('任务状态:', status);
           
           if (status === 'SUCCESS') {
             // 任务成功完成
@@ -119,7 +113,6 @@ export const seedream4Config = {
             return humanDto;
           } else if (status === 'NOT_START' || status === 'IN_PROGRESS') {
             // 任务未开始或处理中，等待1秒后继续查询
-            console.log('任务状态为', status, '，等待1秒后继续查询...');
             await new Promise(resolve => setTimeout(resolve, 1000));
             continue;
           } else {
@@ -130,14 +123,12 @@ export const seedream4Config = {
           }
         } else {
           // API调用失败
-          console.error('API调用失败:', result.message);
           humanDto.status = '3';
           humanDto.error = result.message || 'API调用失败';
           return humanDto;
         }
       }
     } catch (error) {
-      console.error('Seedream-4 查询任务失败：', error);
       throw error;
     }
   },

@@ -66,10 +66,8 @@ export const nanoBananaConfig = {
     try {
       // 发送POST请求
       const response = await axios.post(urlWithParams, map, { headers });
-      console.log('Nano-Banana 返回的数据：', response.data);
       return response.data.task_id.toString();
     } catch (error) {
-      console.error('Nano-Banana 请求失败：', error);
       throw error;
     }
   },
@@ -94,14 +92,11 @@ export const nanoBananaConfig = {
         { headers }
       );
       
-      console.log('Nano-Banana 查询返回数据：', response.data);
       const result = response.data;
       
       if (result.code === 'success') {
         const taskData = result.data;
         const status = taskData.status;
-        
-        console.log('任务状态:', status);
         
         if (status === 'SUCCESS') {
           // 任务成功完成
@@ -128,12 +123,10 @@ export const nanoBananaConfig = {
         }
       } else {
         // API调用失败
-        console.error('API调用失败:', result.message);
         humanDto.status = ApiConst.STRING_THREE;
         return humanDto;
       }
     } catch (error) {
-      console.error('Nano-Banana 查询任务失败：', error);
       throw error;
     }
   },

@@ -57,7 +57,6 @@ export default function NavigationBar({ title, icon: Icon, activeMenu }: Navigat
   }
 
   const handleLogout = () => {
-    console.log('退出登录')
     setShowUserMenu(false)
     logout() // 清除认证状态
     useUserStore.getState().clearUserInfo() // 清除用户信息
@@ -65,7 +64,6 @@ export default function NavigationBar({ title, icon: Icon, activeMenu }: Navigat
   }
 
   const handleHelpCenter = () => {
-    console.log('打开帮助中心')
     // 这里可以添加帮助中心跳转逻辑
   }
 

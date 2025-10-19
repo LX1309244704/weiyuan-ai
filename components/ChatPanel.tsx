@@ -107,16 +107,12 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
 
   // 在客户端加载聊天记录 - 只加载不强制清空
   useEffect(() => {
-    console.log('ChatPanel: 开始初始化聊天内容')
-    
     if (typeof window === 'undefined') {
-      console.log('ChatPanel: 不在客户端环境，跳过初始化')
       return
     }
     
     // 检查indexedDB支持
     if (!window.indexedDB) {
-      console.error('ChatPanel: 浏览器不支持indexedDB')
       return
     }
     
@@ -125,11 +121,8 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
     
     const loadChatHistory = async () => {
       try {
-        console.log('ChatPanel: 开始加载聊天记录')
-        
         // 从indexedDB加载聊天记录
         const dbMessages = await chatDB.getMessages('default')
-        console.log('ChatPanel: 从数据库获取到的消息:', dbMessages)
         
         if (isMounted) {
           const formattedMessages = dbMessages.map(msg => ({
@@ -141,11 +134,9 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
           }))
           
           setMessages(formattedMessages)
-          console.log(`ChatPanel: 聊天记录加载完成，消息数量: ${formattedMessages.length}`)
         }
         
       } catch (error) {
-        console.error('ChatPanel: 加载聊天记录时出错:', error)
         // 出错时设置消息为空数组
         if (isMounted) {
           setMessages([])
@@ -222,10 +213,7 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
         content: userMessage.content,
         timestamp: userMessage.timestamp,
         imageData: userMessage.imageData
-      }, 'default').then(() => {
-        console.log('用户消息已保存到indexedDB')
-      }).catch(error => {
-        console.error('保存消息到indexedDB失败:', error)
+      }, 'default').catch(error => {
       })
     }
     
@@ -250,19 +238,13 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
               selectedAspectRatio === '3:4' ? '768x1024' : '1024x1024'
       }
 
-      console.log('发送AI请求:', { model: selectedModel, prompt: inputText })
-
       // 调用ModelService创建任务
       const taskId = await ModelService.createTask(request as any)
-      
-      console.log('AI任务创建成功，任务ID:', taskId)
 
       // 直接开始轮询任务状态，不显示中间状态消息
       await pollTaskStatus(taskId, request)
 
     } catch (error) {
-      console.error('AI请求失败:', error)
-      
       const errorMessage: Message = {
         id: `ai-error-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         type: 'ai',
@@ -318,10 +300,7 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
               content: timeoutMessage.content,
               timestamp: timeoutMessage.timestamp,
               imageData: timeoutMessage.imageData
-            }, 'default').then(() => {
-              console.log('AI超时消息已保存到indexedDB')
-            }).catch(error => {
-              console.error('保存AI超时消息到indexedDB失败:', error)
+            }, 'default').catch(error => {
             })
           }
           
@@ -354,10 +333,7 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
               content: successMessage.content,
               timestamp: successMessage.timestamp,
               imageData: successMessage.imageData
-            }, 'default').then(() => {
-              console.log('AI成功消息已保存到indexedDB')
-            }).catch(error => {
-              console.error('保存AI消息到indexedDB失败:', error)
+            }, 'default').catch(error => {
             })
           }
           
@@ -378,10 +354,7 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
               content: failureMessage.content,
               timestamp: failureMessage.timestamp,
               imageData: failureMessage.imageData
-            }, 'default').then(() => {
-              console.log('AI错误消息已保存到indexedDB')
-            }).catch(error => {
-              console.error('保存AI错误消息到indexedDB失败:', error)
+            }, 'default').catch(error => {
             })
           }
           
@@ -394,7 +367,6 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
           setTimeout(poll, pollInterval)
         }
       } catch (error) {
-        console.error('轮询任务状态失败:', error)
         attempts++
         setTimeout(poll, pollInterval)
       }
@@ -444,7 +416,6 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
 
   // 接收截图并显示在输入区域左侧 - 如果有已有截图就替换
   const handleReceiveScreenshot = (imageData: string, prompt: string) => {
-    console.log('接收到截图，替换输入区域左侧的截图:', { imageData: imageData.substring(0, 50) + '...', prompt })
     // 替换上传图片预览列表中的截图（如果有截图就替换，没有就添加）
     setUploadedImagePreviews(prev => {
       // 如果已经有截图，替换第一个截图；如果没有，添加新截图
@@ -468,13 +439,10 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
       try {
         // 清空indexedDB中的聊天记录
         await chatDB.clearAll()
-        console.log('AI创作助手内容已重置（indexedDB）')
         // 不触发事件，避免重复加载
       } catch (error) {
-        console.error('重置聊天记录失败:', error)
         // 如果indexedDB操作失败，也尝试清除localStorage
         window.localStorage.removeItem('chatHistory')
-        console.log('AI创作助手内容已重置（localStorage）')
         // 不触发事件，避免重复加载
       }
     }
@@ -513,10 +481,7 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
         content: userMessage.content,
         timestamp: userMessage.timestamp,
         imageData: userMessage.imageData
-      }, 'default').then(() => {
-        console.log('生图任务已记录到聊天记录')
-      }).catch(error => {
-        console.error('保存生图任务到聊天记录失败:', error)
+      }, 'default').catch(error => {
       })
     }
   }
@@ -541,10 +506,7 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
         content: aiMessage.content,
         timestamp: aiMessage.timestamp,
         imageData: aiMessage.imageData
-      }, 'default').then(() => {
-        console.log('生图结果已记录到聊天记录')
-      }).catch(error => {
-        console.error('保存生图结果到聊天记录失败:', error)
+      }, 'default').catch(error => {
       })
     }
   }
@@ -627,7 +589,7 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
       })
       window.dispatchEvent(event)
       
-      console.log('已发送切换到箭头工具事件，准备添加图片到画板')
+
       
       // 显示提示信息
       const notification = document.createElement('div')

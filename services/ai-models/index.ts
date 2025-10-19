@@ -128,7 +128,6 @@ export class ModelService {
         throw new Error(`不支持的模型类型`);
       }
     } catch (error) {
-      console.error(`创建 ${model} 任务失败:`, error);
       throw error;
     }
   }
@@ -184,7 +183,6 @@ export class ModelService {
         return this.normalizeVideoResponse(result);
       }
     } catch (error) {
-      console.error(`查询 ${model} 任务状态失败:`, error);
       throw error;
     }
   }

@@ -105,7 +105,7 @@ export default function CanvasPage() {
         }
         window.addEventListener('resize', handleResize)
       } catch (err) {
-        console.error('Failed to initialize fabric:', err)
+        // Failed to initialize fabric
       }
     })()
 
@@ -186,12 +186,7 @@ export default function CanvasPage() {
       const newWidth = Math.abs(width)
       const newHeight = Math.abs(height)
 
-      console.log('框选矩形更新:', {
-        startX, startY,
-        currentX, currentY,
-        width, height,
-        newLeft, newTop, newWidth, newHeight
-      })
+
 
       selectionRect.set({
         width: newWidth,
@@ -241,22 +236,7 @@ export default function CanvasPage() {
     const originalZoom = fabricCanvas.getZoom()
     const originalVpt = [...(fabricCanvas.viewportTransform || [1, 0, 0, 1, 0, 0])]
     
-    console.log('截图调试信息:', {
-      rectProperties: {
-        left: rect.left,
-        top: rect.top,
-        width: rect.width,
-        height: rect.height,
-        scaleX: rect.scaleX,
-        scaleY: rect.scaleY
-      },
-      originalZoom: originalZoom,
-      originalVpt: originalVpt,
-      canvasSize: {
-        width: fabricCanvas.getWidth(),
-        height: fabricCanvas.getHeight()
-      }
-    })
+
 
     // 关键修复：临时重置缩放为1:1进行截图
     try {
@@ -271,13 +251,7 @@ export default function CanvasPage() {
       const width = rect.width ?? 0
       const height = rect.height ?? 0
 
-      console.log('截图参数 - 重置缩放后的坐标:', {
-        left, top, width, height,
-        originalLeft: rect.left,
-        originalTop: rect.top,
-        originalWidth: rect.width,
-        originalHeight: rect.height
-      })
+
 
       if (width <= 2 || height <= 2) return null
 
@@ -303,25 +277,14 @@ export default function CanvasPage() {
 
   // 供 SelectionPanel 将截图传给 ChatPanel 的桥接
   const handleReceiveScreenshot = (imageData: string, prompt: string) => {
-    console.log('CanvasPage: 接收到截图，准备传递给ChatPanel', { 
-      imageDataLength: imageData?.length,
-      prompt: prompt,
-      chatPanelRefExists: !!chatPanelRef.current
-    })
     chatPanelRef.current?.handleReceiveScreenshot(imageData, prompt)
   }
 
   // 检查ChatPanel组件是否正常加载，并将ref暴露给全局window对象
   useEffect(() => {
-    console.log('CanvasPage: ChatPanel组件初始化检查', {
-      chatPanelRef: chatPanelRef.current,
-      componentMounted: true
-    })
-    
     // 将ChatPanel的ref暴露给全局window对象，便于SelectionPanel调用
     if (chatPanelRef.current) {
       (window as any).chatPanelRef = chatPanelRef.current
-      console.log('ChatPanel ref已暴露给全局window对象')
     }
   }, [chatPanelRef.current])
 
@@ -338,16 +301,8 @@ export default function CanvasPage() {
         const activeObjects = fabricCanvas.getActiveObjects()
         const isMultipleSelection = activeObjects && activeObjects.length > 1
         
-        console.log('对象被选中 - 详细信息:', {
-          type: selectedObject.type,
-          isImage: selectedObject.type === 'image',
-          isMultipleSelection: isMultipleSelection,
-          selectedCount: activeObjects ? activeObjects.length : 0
-        })
-        
         // 如果是多选，清除图片选中状态
         if (isMultipleSelection) {
-          console.log('检测到多选，隐藏图片操作按钮')
           currentSelectedImage = null
           setSelectedImage(null)
           return
@@ -362,11 +317,9 @@ export default function CanvasPage() {
           (selectedObject.toDataURL && typeof selectedObject.toDataURL === 'function')
         
         if (isImageObject) {
-          console.log('✅ 检测到图片对象，显示操作按钮')
           currentSelectedImage = selectedObject
           setSelectedImage(selectedObject)
         } else {
-          console.log('❌ 不是图片对象，清除选中状态')
           currentSelectedImage = null
           setSelectedImage(null)
         }
@@ -374,7 +327,6 @@ export default function CanvasPage() {
     }
 
     const handleSelectionCleared = () => {
-      console.log('选中被清除')
       currentSelectedImage = null
       setSelectedImage(null)
     }
@@ -385,7 +337,6 @@ export default function CanvasPage() {
       const isMultipleSelection = activeObjects && activeObjects.length > 1
       
       if (isMultipleSelection) {
-        console.log('多选状态更新，隐藏图片操作按钮')
         currentSelectedImage = null
         setSelectedImage(null)
       } else {
@@ -400,7 +351,6 @@ export default function CanvasPage() {
             (selectedObject.toDataURL && typeof selectedObject.toDataURL === 'function')
           
           if (isImageObject) {
-            console.log('✅ selection:updated 检测到图片对象')
             currentSelectedImage = selectedObject
             setSelectedImage(selectedObject)
           }
@@ -411,7 +361,6 @@ export default function CanvasPage() {
     const handleMouseDown = (options: any) => {
       // 点击画布空白区域时清除选中
       if (!options.target) {
-        console.log('点击画布空白区域，清除图片选中')
         currentSelectedImage = null
         setSelectedImage(null)
       }
@@ -420,20 +369,12 @@ export default function CanvasPage() {
     // 添加对象添加事件监听，确保新上传的图片也能被检测到
     const handleObjectAdded = (options: any) => {
       const addedObject = options.target
-      if (addedObject && (addedObject.type === 'image' || 
-          (addedObject._element && addedObject._element.tagName === 'IMG'))) {
-        console.log('图片对象被添加到画布:', addedObject)
-      }
+      // 图片对象被添加到画布
     }
 
     // 添加鼠标点击事件，确保点击图片时能正确选中
     const handleMouseUp = (options: any) => {
       if (options.target) {
-        console.log('鼠标抬起，选中对象:', {
-          type: options.target.type,
-          isImage: options.target.type === 'image'
-        })
-        
         // 如果是图片对象，确保选中状态正确
         if (options.target.type === 'image') {
           // 延迟一小段时间确保选中状态已经更新
@@ -442,7 +383,6 @@ export default function CanvasPage() {
             const isMultipleSelection = activeObjects && activeObjects.length > 1
             
             if (!isMultipleSelection) {
-              console.log('✅ 鼠标点击检测到图片对象')
               currentSelectedImage = options.target
               setSelectedImage(options.target)
             }
@@ -471,13 +411,10 @@ export default function CanvasPage() {
   // 监听切换到箭头工具的自定义事件
   useEffect(() => {
     const handleSwitchToArrowTool = (event: CustomEvent) => {
-      console.log('接收到切换到箭头工具事件:', event.detail)
-      
       // 切换到箭头（选择）工具 - 通过设置画布状态
       if (fabricCanvas) {
         fabricCanvas.isDrawingMode = false
         fabricCanvas.selection = true
-        console.log('已切换到选择工具模式')
         
         // 更新CanvasToolbar的UI状态 - 通过设置全局状态
         if (typeof window !== 'undefined') {
@@ -569,15 +506,13 @@ export default function CanvasPage() {
               fabricCanvas.setActiveObject(fabricImg)
               fabricCanvas.renderAll()
               
-              console.log('图片已添加到画板指定位置')
-              
             } catch (error) {
-              console.error('添加图片到画板失败:', error)
+              // 添加图片到画板失败
             }
           }
           
           img.onerror = (error) => {
-            console.error('图片加载失败:', error)
+            // 图片加载失败
           }
           
           img.src = imageData
@@ -599,7 +534,6 @@ export default function CanvasPage() {
 
   // AI 生成占位逻辑（与 ChatPanel 的模拟一致）
   const handleGenerateImage = async (prompt: string, model: string, position: { x: number; y: number }, screenshotData?: string, aspectRatio?: string) => {
-    console.log('请求生成图片:', { prompt, model, position, screenshotData: screenshotData ? '有截图数据' : '无截图数据', aspectRatio })
     
     try {
       if (!fabricCanvas) return
@@ -627,14 +561,11 @@ export default function CanvasPage() {
         request.images = [screenshotData] // 正确的方式：通过images数组传递
       }
       
-      console.log('发送到ModelService.createTask的请求参数:', request)
-      
       // 注意：SelectionPanel已经调用了logGenerateImageTask，这里不再重复调用
       // 避免聊天记录中出现重复消息
       
       // 先创建任务，确保没有错误后再添加占位图片
       const taskId = await ModelService.createTask(request)
-      console.log('图片生成任务创建成功，任务ID:', taskId)
       
       // 只有在任务创建成功后才添加加载中的占位图片
       const loadingImage = await addLoadingPlaceholder(position)
@@ -699,7 +630,6 @@ export default function CanvasPage() {
       }
       
     } catch (error) {
-      console.error('生成图片失败:', error)
       
       // 移除所有可能的生成中提示
       const notifications = document.querySelectorAll('div[style*="正在生成图片"], div[style*="background: #3b82f6"]')
@@ -726,7 +656,6 @@ export default function CanvasPage() {
     }
   }
   const handleGenerateVideo = async (prompt: string) => {
-    console.log('请求生成视频:', prompt)
   }
 
   // 清除框选状态
@@ -748,7 +677,6 @@ export default function CanvasPage() {
       })
       
       // 发送到聊天面板
-      console.log('图片已添加到聊天:', imageData)
       chatPanelRef.current?.handleReceiveScreenshot(imageData, '上传的图片')
       
       // 显示添加成功提示
@@ -770,7 +698,7 @@ export default function CanvasPage() {
       setSelectedImage(null)
       
     } catch (error) {
-      console.error('添加到聊天失败:', error)
+      // 添加到聊天失败
     }
   }
 
@@ -804,7 +732,7 @@ export default function CanvasPage() {
         y: selectedPosition.top
       }
       
-      console.log('开始生成图片:', { prompt, model, selectedPosition, newImagePosition })
+
       
       // 先添加加载中的占位图片
       loadingImage = await addLoadingPlaceholder(newImagePosition)
@@ -828,7 +756,6 @@ export default function CanvasPage() {
       }
       
       const taskId = await ModelService.createTask(request)
-      console.log('图片生成任务创建成功，任务ID:', taskId)
       
       // 轮询任务状态
       const result = await ModelService.getTaskStatus({
@@ -893,7 +820,6 @@ export default function CanvasPage() {
       setSelectedImage(null)
       
     } catch (error) {
-      console.error('生成图片失败:', error)
       
       // 移除所有可能的生成中提示
       const notifications = document.querySelectorAll('div[style*="正在生成图片"], div[style*="background: #3b82f6"]')
@@ -907,7 +833,6 @@ export default function CanvasPage() {
       if (loadingImage && fabricCanvas) {
         fabricCanvas.remove(loadingImage)
         fabricCanvas.renderAll()
-        console.log('已移除生成中的预加载图片')
       }
       
       // 显示错误提示
@@ -964,17 +889,14 @@ export default function CanvasPage() {
           fabricCanvas.setActiveObject(fabricImg)
           fabricCanvas.renderAll()
           
-          console.log('生成的图片已添加到画布，位置:', position)
           resolve(fabricImg)
           
         } catch (error) {
-          console.error('添加图片到画布失败:', error)
           reject(error)
         }
       }
       
       img.onerror = (error) => {
-        console.error('图片加载失败:', error)
         reject(new Error('图片加载失败'))
       }
       
@@ -1021,7 +943,6 @@ export default function CanvasPage() {
         const base64Data = dataURL.split(',')[1]
         resolve(base64Data)
       } catch (error) {
-        console.error('图片转换Base64失败:', error)
         resolve(null)
       }
     })
@@ -1080,17 +1001,14 @@ export default function CanvasPage() {
           fabricCanvas.add(fabricImg)
           fabricCanvas.renderAll()
           
-          console.log('加载中占位图片已添加到画布，位置:', position)
           resolve(fabricImg)
           
         } catch (error) {
-          console.error('添加加载中占位图片失败:', error)
           reject(error)
         }
       }
       
       img.onerror = (error) => {
-        console.error('加载中占位图片加载失败:', error)
         reject(new Error('加载中占位图片加载失败'))
       }
       
@@ -1144,17 +1062,14 @@ export default function CanvasPage() {
           fabricCanvas.setActiveObject(fabricImg)
           fabricCanvas.renderAll()
           
-          console.log('实际图片已替换加载中占位图片，位置:', position)
           resolve(fabricImg)
           
         } catch (error) {
-          console.error('替换为实际图片失败:', error)
           reject(error)
         }
       }
       
       img.onerror = (error) => {
-        console.error('实际图片加载失败:', error)
         reject(new Error('实际图片加载失败'))
       }
       
@@ -1189,17 +1104,12 @@ export default function CanvasPage() {
     const activeObject = fabricCanvas.getActiveObject()
     if (!activeObject) return
     
-    console.log('手动层级管理 - 操作:', operation, '活动对象:', activeObject)
-    
     const objects = fabricCanvas.getObjects()
     const currentIndex = objects.indexOf(activeObject)
     
     if (currentIndex === -1) {
-      console.log('手动层级管理 - 对象不在画布中')
       return
     }
-    
-    console.log('手动层级管理 - 当前索引:', currentIndex, '对象总数:', objects.length)
     
     // 移除当前对象
     fabricCanvas.remove(activeObject)
@@ -1209,7 +1119,6 @@ export default function CanvasPage() {
       case 'bringToFront':
         // 置顶：直接添加到画布（默认添加到顶部）
         fabricCanvas.add(activeObject)
-        console.log('手动层级管理 - 置顶完成')
         break
       case 'sendToBack':
         // 置底：先移除所有对象，然后按顺序重新添加
@@ -1223,7 +1132,6 @@ export default function CanvasPage() {
             fabricCanvas.add(obj)
           }
         })
-        console.log('手动层级管理 - 置底完成')
         break
       case 'bringForward':
         // 上移一层：与后一个对象交换位置
@@ -1232,9 +1140,8 @@ export default function CanvasPage() {
           fabricCanvas.remove(nextObject)
           fabricCanvas.add(activeObject)
           fabricCanvas.add(nextObject)
-          console.log('手动层级管理 - 上移一层完成')
         } else {
-          console.log('手动层级管理 - 已经在最顶层，无法上移')
+          // 已经在最顶层，无法上移
         }
         break
       case 'sendBackward':
@@ -1244,9 +1151,8 @@ export default function CanvasPage() {
           fabricCanvas.remove(prevObject)
           fabricCanvas.add(activeObject)
           fabricCanvas.add(prevObject)
-          console.log('手动层级管理 - 下移一层完成')
         } else {
-          console.log('手动层级管理 - 已经在最底层，无法下移')
+          // 已经在最底层，无法下移
         }
         break
     }
@@ -1255,7 +1161,6 @@ export default function CanvasPage() {
     fabricCanvas.setActiveObject(activeObject)
     // 重新渲染画布
     fabricCanvas.renderAll()
-    console.log('手动层级管理 - 操作完成')
   }
 
   const handleBringToFront = () => {
@@ -1272,7 +1177,6 @@ export default function CanvasPage() {
         fabricCanvas.renderAll()
         handleCloseContextMenu()
       } catch (error) {
-        console.error('置顶操作失败:', error)
         manualLayerManagement('bringToFront')
       }
     }
@@ -1291,7 +1195,6 @@ export default function CanvasPage() {
         fabricCanvas.renderAll()
         handleCloseContextMenu()
       } catch (error) {
-        console.error('置底操作失败:', error)
         manualLayerManagement('sendToBack')
       }
     }
@@ -1310,7 +1213,6 @@ export default function CanvasPage() {
         fabricCanvas.renderAll()
         handleCloseContextMenu()
       } catch (error) {
-        console.error('上移一层操作失败:', error)
         manualLayerManagement('bringForward')
       }
     }
@@ -1329,7 +1231,6 @@ export default function CanvasPage() {
         fabricCanvas.renderAll()
         handleCloseContextMenu()
       } catch (error) {
-        console.error('下移一层操作失败:', error)
         manualLayerManagement('sendBackward')
       }
     }
