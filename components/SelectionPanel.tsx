@@ -26,12 +26,13 @@ export default function SelectionPanel({ selectedArea, onGenerateImage, onCaptur
   const [showAddButton, setShowAddButton] = useState(false)
   const [showTooltip, setShowTooltip] = useState(false)
   const [selectedModelType, setSelectedModelType] = useState<'image' | 'video'>('image')
-  const [selectedImageModel, setSelectedImageModel] = useState('seedream-4')
+  const [selectedImageModel, setSelectedImageModel] = useState('nano-banana')
   const [selectedVideoModel, setSelectedVideoModel] = useState('veo3')
   const [selectedAspectRatio, setSelectedAspectRatio] = useState('16:9')
-  const [selectedVideoSeconds, setSelectedVideoSeconds] = useState('5')
+  const [selectedVideoSeconds, setSelectedVideoSeconds] = useState('8')
   const [showModelDropdown, setShowModelDropdown] = useState(false)
   const [showAspectDropdown, setShowAspectDropdown] = useState(false)
+  const [showRatioDropdown, setShowRatioDropdown] = useState(false)
   const [showSecondsDropdown, setShowSecondsDropdown] = useState(false)
   const [customPrompt, setCustomPrompt] = useState('')
   const [textareaHeight, setTextareaHeight] = useState('32px')
@@ -100,6 +101,15 @@ export default function SelectionPanel({ selectedArea, onGenerateImage, onCaptur
       clearInterval(intervalId)
     }
   }, [])
+
+  // 监听视频模型变化，重置时长设置
+  useEffect(() => {
+    if (selectedVideoModel === 'sora2') {
+      setSelectedVideoSeconds('10');
+    } else if (selectedVideoModel === 'veo3.1') {
+      setSelectedVideoSeconds('8');
+    }
+  }, [selectedVideoModel])
 
 
 
@@ -307,32 +317,45 @@ export default function SelectionPanel({ selectedArea, onGenerateImage, onCaptur
       
       const model = selectedModelType === 'image' ? selectedImageModel : selectedVideoModel
       
+      // 记录生成任务到聊天记录 - 在调用生成接口之前
       if (selectedModelType === 'image') {
-        // 记录生图任务到聊天记录 - 添加重试机制
-        const logToChatPanel = () => {
-          if (typeof window !== 'undefined' && (window as any).chatPanelRef) {
-            const chatPanel = (window as any).chatPanelRef
-            if (chatPanel.logGenerateImageTask) {
-              chatPanel.logGenerateImageTask(prompt, model, selectedAspectRatio, screenshotData)
-              return true
-            }
+        // 记录图片生成任务
+        if (typeof window !== 'undefined' && (window as any).chatPanelRef) {
+          const chatPanel = (window as any).chatPanelRef
+          if (chatPanel.logGenerateImageTask) {
+            chatPanel.logGenerateImageTask(prompt, model, selectedAspectRatio, screenshotData)
           }
-          return false
         }
-        
-        // 尝试调用，如果失败则延迟重试
-        if (!logToChatPanel()) {
-          setTimeout(() => {
-            if (!logToChatPanel()) {
-            }
-          }, 100)
+      } else {
+        // 记录视频生成任务
+        if (typeof window !== 'undefined' && (window as any).chatPanelRef) {
+          const chatPanel = (window as any).chatPanelRef
+          if (chatPanel.logGenerateVideoTask) {
+            chatPanel.logGenerateVideoTask(prompt, model, selectedVideoModel === 'sora2' ? '10s' : '8s', selectedAspectRatio, screenshotData)
+          }
         }
-        
+      }
+      
+      if (selectedModelType === 'image') {
         // 调用图片生成接口，传入截图数据、模型和比例
         onGenerateImage(prompt, model, newImagePosition, screenshotData, selectedAspectRatio)
       } else {
-        // 这里需要调用视频生成函数
-
+        // 调用视频生成函数 - 直接调用画布页面的视频生成功能
+        if (typeof window !== 'undefined' && (window as any).fabricCanvas) {
+          // 计算视频生成位置（在选中区域右侧）
+          const videoPosition = {
+            x: selectedArea.rect.left + selectedArea.rect.width + 20,
+            y: selectedArea.rect.top
+          }
+          
+          // 如果有截图数据，传递给视频生成
+          const images = screenshotData ? [screenshotData] : []
+          
+          // 调用画布页面的视频生成函数，传递正确的aspectRatio参数
+          if (typeof window !== 'undefined' && (window as any).handleGenerateVideo) {
+            (window as any).handleGenerateVideo(prompt, model, videoPosition, screenshotData, selectedAspectRatio)
+          }
+        }
       }
       
       // 操作完成后隐藏面板和清除框选
@@ -453,21 +476,35 @@ export default function SelectionPanel({ selectedArea, onGenerateImage, onCaptur
                     <>
                       <button
                         onClick={() => {
-                          setSelectedVideoModel('veo3')
+                          setSelectedVideoModel('veo3.1')
                           setShowAspectDropdown(false)
+                          // 同步到ChatPanel
+                          if (typeof window !== 'undefined' && (window as any).chatPanelRef) {
+                            const chatPanel = (window as any).chatPanelRef
+                            if (chatPanel.setSelectedModel) {
+                              chatPanel.setSelectedModel('veo3.1')
+                            }
+                          }
                         }}
                         className={`w-full text-left px-2 py-1 text-xs rounded ${
-                          selectedVideoModel === 'veo3' 
+                          selectedVideoModel === 'veo3.1' 
                             ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300' 
                             : 'hover:bg-gray-100 dark:hover:bg-gray-700'
                         }`}
                       >
-                        Veo3
+                        Veo3.1
                       </button>
                       <button
                         onClick={() => {
                           setSelectedVideoModel('sora2')
                           setShowAspectDropdown(false)
+                          // 同步到ChatPanel
+                          if (typeof window !== 'undefined' && (window as any).chatPanelRef) {
+                            const chatPanel = (window as any).chatPanelRef
+                            if (chatPanel.setSelectedModel) {
+                              chatPanel.setSelectedModel('sora2')
+                            }
+                          }
                         }}
                         className={`w-full text-left px-2 py-1 text-xs rounded ${
                           selectedVideoModel === 'sora2' 
@@ -484,71 +521,87 @@ export default function SelectionPanel({ selectedArea, onGenerateImage, onCaptur
             )}
           </div>
 
-          {/* 3. 比例/秒数选择 */}
-          <div className="relative">
-            <div className="flex items-center bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
-              <button
-                onClick={() => setShowSecondsDropdown(!showSecondsDropdown)}
-                className="flex items-center space-x-1 p-1 text-gray-700 dark:text-gray-300 rounded-lg text-xs hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-              >
-                <span>
-                  {selectedModelType === 'image' 
-                    ? selectedAspectRatio
-                    : `${selectedVideoSeconds}s`
-                  }
-                </span>
-                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-              </button>
-            </div>
-            
-            {showSecondsDropdown && (
-              <div className="absolute bottom-full left-0 mb-1 w-16 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-600 z-10">
-                <div className="p-1">
-                  {selectedModelType === 'image' ? (
-                    <>
-                      {['16:9', '9:16', '4:3', '3:4', '1:1'].map((ratio) => (
-                        <button
-                          key={ratio}
-                          onClick={() => {
-                            setSelectedAspectRatio(ratio)
-                            setShowSecondsDropdown(false)
-                          }}
-                          className={`w-full text-left px-2 py-1 text-xs rounded ${
-                            selectedAspectRatio === ratio 
-                              ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300' 
-                              : 'hover:bg-gray-100 dark:hover:bg-gray-700'
-                          }`}
-                        >
-                          {ratio}
-                        </button>
-                      ))}
-                    </>
-                  ) : (
-                    <>
-                      {['3', '5', '10', '15', '30'].map((seconds) => (
-                        <button
-                          key={seconds}
-                          onClick={() => {
-                            setSelectedVideoSeconds(seconds)
-                            setShowSecondsDropdown(false)
-                          }}
-                          className={`w-full text-left px-2 py-1 text-xs rounded ${
-                            selectedVideoSeconds === seconds 
-                              ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300' 
-                              : 'hover:bg-gray-100 dark:hover:bg-gray-700'
-                          }`}
-                        >
-                          {seconds}s
-                        </button>
-                      ))}
-                    </>
-                  )}
-                </div>
+          {/* 3. 比例选择 - 对图片模型和Sora2视频模型显示 */}
+          {(selectedModelType === 'image' || (selectedModelType === 'video' && selectedVideoModel === 'sora2')) && (
+            <div className="relative">
+              <div className="flex items-center bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
+                <button
+                  onClick={() => setShowRatioDropdown(!showRatioDropdown)}
+                  className="flex items-center space-x-1 p-1 text-gray-700 dark:text-gray-300 rounded-lg text-xs hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                >
+                  <span>{selectedAspectRatio}</span>
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
               </div>
-            )}
-          </div>
+              
+              {showRatioDropdown && (
+                <div className="absolute bottom-full left-0 mb-1 w-16 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-600 z-10">
+                  <div className="p-1">
+                    {['16:9', '9:16'].map((ratio) => (
+                      <button
+                        key={ratio}
+                        onClick={() => {
+                          setSelectedAspectRatio(ratio)
+                          setShowRatioDropdown(false)
+                        }}
+                        className={`w-full text-left px-2 py-1 text-xs rounded ${
+                          selectedAspectRatio === ratio 
+                            ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300' 
+                            : 'hover:bg-gray-100 dark:hover:bg-gray-700'
+                        }`}
+                      >
+                        {ratio}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* 4. 时长选择 - 对视频模型显示 */}
+          {selectedModelType === 'video' && (
+            <div className="relative">
+              <div className="flex items-center bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
+                <button
+                  onClick={() => setShowSecondsDropdown(!showSecondsDropdown)}
+                  className="flex items-center space-x-1 p-1 text-gray-700 dark:text-gray-300 rounded-lg text-xs hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                >
+                  <span>
+                    {selectedVideoModel === 'sora2' ? `${selectedVideoSeconds}s` : `${selectedVideoSeconds}s`}
+                  </span>
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+              </div>
+              
+              {showSecondsDropdown && (
+                <div className="absolute bottom-full left-0 mb-1 w-16 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-600 z-10">
+                  <div className="p-1">
+                    {(selectedVideoModel === 'sora2' ? ['10', '15'] : ['8']).map((seconds) => (
+                      <button
+                        key={seconds}
+                        onClick={() => {
+                          setSelectedVideoSeconds(seconds)
+                          setShowSecondsDropdown(false)
+                        }}
+                        className={`w-full text-left px-2 py-1 text-xs rounded ${
+                          selectedVideoSeconds === seconds 
+                            ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300' 
+                            : 'hover:bg-gray-100 dark:hover:bg-gray-700'
+                        }`}
+                      >
+                        {seconds}s
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* 4. 输入框 */}
           <textarea

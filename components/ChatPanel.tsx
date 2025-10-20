@@ -11,6 +11,7 @@ interface Message {
   content: string
   timestamp: Date
   imageData?: string
+  videoData?: string
 }
 
 interface ChatPanelProps {
@@ -30,11 +31,12 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
   const [uploadedImagePreviews, setUploadedImagePreviews] = useState<string[]>([])
   const [showModelSettings, setShowModelSettings] = useState(false)
   const [showAspectRatio, setShowAspectRatio] = useState(false)
-  const [showImageCount, setShowImageCount] = useState(false)
-  const [selectedModel, setSelectedModel] = useState<ImageModel | VideoModel | TextModel>('seedream-4')
+  const [showDuration, setShowDuration] = useState(false)
+  const [selectedModel, setSelectedModel] = useState<ImageModel | VideoModel | TextModel>('nano-banana')
   const [selectedAspectRatio, setSelectedAspectRatio] = useState('16:9')
-  const [imageCount, setImageCount] = useState(1)
+  const [selectedDuration, setSelectedDuration] = useState('8s')
   const [selectedModelType, setSelectedModelType] = useState<'image' | 'video' | 'text'>('image')
+  const [notification, setNotification] = useState<{message: string, type: 'success' | 'error' | 'info'} | null>(null)
   const [panelWidth, setPanelWidth] = useState(320) // 默认宽度320px
   const [isResizing, setIsResizing] = useState(false)
   const resizeStartXRef = useRef(0)
@@ -91,7 +93,7 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
   const fileInputRef = useRef<HTMLInputElement>(null)
   const modelSettingsRef = useRef<HTMLDivElement>(null)
   const aspectRatioRef = useRef<HTMLDivElement>(null)
-  const imageCountRef = useRef<HTMLDivElement>(null)
+  const durationRef = useRef<HTMLDivElement>(null)
 
   const toggleCollapse = () => {
     setIsCollapsed(!isCollapsed)
@@ -130,7 +132,8 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
             type: msg.type,
             content: msg.content,
             timestamp: new Date(msg.timestamp),
-            imageData: msg.imageData
+            imageData: msg.imageData,
+            videoData: msg.videoData
           }))
           
           setMessages(formattedMessages)
@@ -164,8 +167,8 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
       if (aspectRatioRef.current && !aspectRatioRef.current.contains(event.target as Node)) {
         setShowAspectRatio(false)
       }
-      if (imageCountRef.current && !imageCountRef.current.contains(event.target as Node)) {
-        setShowImageCount(false)
+      if (durationRef.current && !durationRef.current.contains(event.target as Node)) {
+        setShowDuration(false)
       }
     }
 
@@ -174,6 +177,15 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
       document.removeEventListener('mousedown', handleClickOutside)
     }
   }, [])
+
+  // 显示通知
+  const showNotification = (message: string, type: 'success' | 'error' | 'info') => {
+    setNotification({ message, type })
+    // 3秒后自动隐藏
+    setTimeout(() => {
+      setNotification(null)
+    }, 3000)
+  }
 
   const handleSendMessage = async () => {
     if (!inputText.trim() && !screenshotPreview && uploadedImagePreviews.length === 0) return
@@ -191,7 +203,15 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
     }
 
     // 构建包含设置信息的消息内容
-    const settingsInfo = `[模型: ${selectedModel}, 比例: ${selectedAspectRatio}, 张数: ${imageCount}]`
+    const modelInfo = ModelService.getModelInfo(selectedModel)
+    const settingsInfo = modelInfo?.type === 'text' 
+      ? `[模型: ${selectedModel}]`
+      : selectedModel === 'sora2'
+        ? `[模型: ${selectedModel}, 比例: ${selectedAspectRatio}, 时长: ${selectedDuration}]`
+        : selectedModel === 'veo3.1'
+          ? `[模型: ${selectedModel}, 时长: ${selectedDuration}]`
+          : `[模型: ${selectedModel}, 比例: ${selectedAspectRatio}]`
+    
     const imageCountText = uploadedImagePreviews.length > 1 ? `${uploadedImagePreviews.length}张图片` : '一张图片'
     const messageContent = inputText ? `${inputText} ${settingsInfo}` : `我上传了${imageCountText} ${settingsInfo}`
 
@@ -225,21 +245,44 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
     }
     setIsGenerating(true)
 
+    // 根据模型获取API密钥
+    const getApiKeyForModel = (model: string): string => {
+      // 统一使用通用的API密钥
+      return process.env.NEXT_PUBLIC_API_KEY || ''
+    }
+
     try {
-      // 调用实际的AI模型API
-      const request = {
+      // 根据模型类型构建不同的请求参数
+      const modelInfo = ModelService.getModelInfo(selectedModel)
+      let request: any = {
         model: selectedModel,
         prompt: inputText,
         key: getApiKeyForModel(selectedModel), // 从环境变量获取API密钥
-        images: imageData ? [imageData] : undefined,
-        size: selectedAspectRatio === '16:9' ? '1024x576' : 
-              selectedAspectRatio === '9:16' ? '576x1024' : 
-              selectedAspectRatio === '4:3' ? '1024x768' : 
-              selectedAspectRatio === '3:4' ? '768x1024' : '1024x1024'
+      }
+
+      if (modelInfo?.type === 'image') {
+        // 图片模型请求
+        request.images = imageData ? [imageData] : undefined
+        request.size = selectedAspectRatio === '16:9' ? '1024x576' : 
+                      selectedAspectRatio === '9:16' ? '576x1024' : 
+                      selectedAspectRatio === '4:3' ? '1024x768' : 
+                      selectedAspectRatio === '3:4' ? '768x1024' : '1024x1024'
+      } else if (modelInfo?.type === 'video') {
+        // 视频模型请求
+        request.images = imageData ? [imageData] : undefined
+        request.duration = selectedModel === 'sora2' ? selectedDuration : undefined
+        request.aspectRatio = selectedModel === 'sora2' ? selectedAspectRatio : undefined
+      } else if (modelInfo?.type === 'text') {
+        // 文本模型请求 - 添加文本生成参数
+        request.maxTokens = 2048
+        request.temperature = 0.7
+        request.topP = 0.9
       }
 
       // 调用ModelService创建任务
       const taskId = await ModelService.createTask(request as any)
+
+
 
       // 直接开始轮询任务状态，不显示中间状态消息
       await pollTaskStatus(taskId, request)
@@ -258,22 +301,6 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
     }
   }
 
-  // 根据模型获取API密钥
-  const getApiKeyForModel = (model: string): string => {
-    switch (model) {
-      case 'nano-banana':
-        return process.env.NEXT_PUBLIC_NANO_BANANA_API_KEY || ''
-      case 'seedream-4':
-        return process.env.NEXT_PUBLIC_SEEDREAM4_API_KEY || ''
-      case 'veo3':
-        return process.env.NEXT_PUBLIC_VEO3_API_KEY || ''
-      case 'sora2':
-        return process.env.NEXT_PUBLIC_SORA2_API_KEY || ''
-      default:
-        return ''
-    }
-  }
-
   // 轮询任务状态
   const pollTaskStatus = async (taskId: string, request: any) => {
     let attempts = 0
@@ -281,98 +308,122 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
     const pollInterval = 3000 // 3秒轮询一次
     let lastStatus = '' // 记录上一次的状态
 
-    const poll = async () => {
-      if (attempts >= maxAttempts) {
-        // 只在超时时添加消息
-        if (lastStatus !== 'timeout') {
-          const timeoutMessage: Message = {
-            id: `ai-timeout-${Date.now()}-${Math.random().toString(36).substr(2, 9)}-${performance.now()}`,
-            type: 'ai',
-            content: '任务处理超时，请稍后重试',
-            timestamp: new Date(),
-          }
-          setMessages(prev => [...prev, timeoutMessage])
-          
-          // 异步保存到数据库
-          if (typeof window !== 'undefined') {
-            chatDB.addMessage({
-              type: timeoutMessage.type,
-              content: timeoutMessage.content,
-              timestamp: timeoutMessage.timestamp,
-              imageData: timeoutMessage.imageData
-            }, 'default').catch(error => {
-            })
-          }
-          
-          lastStatus = 'timeout'
-        }
-        return
-      }
-
+    // 使用简单的循环而不是复杂的定时器
+    while (attempts < maxAttempts) {
+      attempts++
+      
       try {
+        // 直接调用ModelService.getTaskStatus，它会内部处理轮询直到最终状态
         const status = await ModelService.getTaskStatus({
           ...request,
           taskId
         })
 
-        // 只在状态发生变化时添加消息
-        if (status.status === '2' && lastStatus !== 'success') { // 成功
-          const successMessage: Message = {
-            id: `ai-success-${Date.now()}-${Math.random().toString(36).substr(2, 9)}-${performance.now()}`,
-            type: 'ai',
-            content: '内容生成完成！',
-            timestamp: new Date(),
-            imageData: (status as any).imageUrl || (status as any).videoUrl
-          }
-          setMessages(prev => [...prev, successMessage])
-          
-          // 异步保存到数据库
-          if (typeof window !== 'undefined') {
-            chatDB.addMessage({
-              type: successMessage.type,
-              content: successMessage.content,
-              timestamp: successMessage.timestamp,
-              imageData: successMessage.imageData
-            }, 'default').catch(error => {
-            })
+        // 处理任务状态 - ModelService.getTaskStatus已经确保返回的是最终状态
+        if (status.status === '2') { // 成功
+          // 只在状态发生变化时添加消息
+          if (lastStatus !== 'success') {
+            const modelInfo = ModelService.getModelInfo(request.model)
+            let content = '内容生成完成！'
+            let imageData: string | undefined
+            let videoData: string | undefined
+            
+            if (modelInfo?.type === 'image') {
+              imageData = (status as any).imageUrl
+              content = '图片生成完成！'
+            } else if (modelInfo?.type === 'video') {
+              videoData = (status as any).videoUrl
+              content = '视频生成完成！'
+            } else if (modelInfo?.type === 'text') {
+              // 文本模型显示生成的文本内容
+              const generatedText = (status as any).text
+              content = generatedText || '文本生成完成！'
+            }
+            
+            const successMessage: Message = {
+              id: `ai-success-${Date.now()}-${Math.random().toString(36).substr(2, 9)}-${performance.now()}`,
+              type: 'ai',
+              content: content,
+              timestamp: new Date(),
+              imageData: imageData,
+              videoData: videoData
+            }
+            setMessages(prev => [...prev, successMessage])
+            
+            // 异步保存到数据库
+            if (typeof window !== 'undefined') {
+              chatDB.addMessage({
+                type: successMessage.type,
+                content: successMessage.content,
+                timestamp: successMessage.timestamp,
+                imageData: successMessage.imageData,
+                videoData: successMessage.videoData
+              }, 'default').catch(error => {
+              })
+            }
           }
           
           lastStatus = 'success'
-        } else if (status.status === '3' && lastStatus !== 'failure') { // 失败
-          const failureMessage: Message = {
-            id: `ai-failure-${Date.now()}-${Math.random().toString(36).substr(2, 9)}-${performance.now()}`,
-            type: 'ai',
-            content: `生成失败: ${status.error || '未知错误'}`,
-            timestamp: new Date(),
-          }
-          setMessages(prev => [...prev, failureMessage])
-          
-          // 异步保存到数据库
-          if (typeof window !== 'undefined') {
-            chatDB.addMessage({
-              type: failureMessage.type,
-              content: failureMessage.content,
-              timestamp: failureMessage.timestamp,
-              imageData: failureMessage.imageData
-            }, 'default').catch(error => {
-            })
+          return // 成功状态，停止轮询
+        } else if (status.status === '3') { // 失败
+          // 只在状态发生变化时添加消息
+          if (lastStatus !== 'failure') {
+            const failureMessage: Message = {
+              id: `ai-failure-${Date.now()}-${Math.random().toString(36).substr(2, 9)}-${performance.now()}`,
+              type: 'ai',
+              content: `生成失败: ${status.error || '未知错误'}`,
+              timestamp: new Date(),
+            }
+            setMessages(prev => [...prev, failureMessage])
+            
+            // 异步保存到数据库
+            if (typeof window !== 'undefined') {
+              chatDB.addMessage({
+                type: failureMessage.type,
+                content: failureMessage.content,
+                timestamp: failureMessage.timestamp,
+                imageData: failureMessage.imageData
+              }, 'default').catch(error => {
+              })
+            }
           }
           
           lastStatus = 'failure'
-        } else if (status.status === '1') { // 处理中，继续轮询
-          attempts++
-          setTimeout(poll, pollInterval)
-        } else { // 其他状态，继续轮询
-          attempts++
-          setTimeout(poll, pollInterval)
+          return // 失败状态，停止轮询
         }
+        
+        // 如果ModelService.getTaskStatus返回的状态不是2或3，说明有异常情况
+        // 这种情况下我们继续轮询
+        
       } catch (error) {
-        attempts++
-        setTimeout(poll, pollInterval)
+        // 错误状态，继续轮询
+      }
+      
+      // 等待指定时间后继续下一次轮询
+      await new Promise(resolve => setTimeout(resolve, pollInterval))
+    }
+    
+    // 超时处理
+    if (lastStatus !== 'timeout') {
+      const timeoutMessage: Message = {
+        id: `ai-timeout-${Date.now()}-${Math.random().toString(36).substr(2, 9)}-${performance.now()}`,
+        type: 'ai',
+        content: '任务处理超时，请稍后重试',
+        timestamp: new Date(),
+      }
+      setMessages(prev => [...prev, timeoutMessage])
+      
+      // 异步保存到数据库
+      if (typeof window !== 'undefined') {
+        chatDB.addMessage({
+          type: timeoutMessage.type,
+          content: timeoutMessage.content,
+          timestamp: timeoutMessage.timestamp,
+          imageData: timeoutMessage.imageData
+        }, 'default').catch(error => {
+        })
       }
     }
-
-    await poll()
   }
 
 
@@ -511,13 +562,185 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
     }
   }
 
+  // 记录视频生成任务到聊天记录
+  const logGenerateVideoTask = (prompt: string, model: string, duration: string, aspectRatio: string, imageData?: string) => {
+    const settingsInfo = `[模型: ${model}, 时长: ${duration}, 比例: ${aspectRatio}]`
+    const messageContent = prompt ? `${prompt} ${settingsInfo}` : `生成视频 ${settingsInfo}`
+
+    // 确保图片数据格式正确（仅对纯base64数据添加前缀）
+    let formattedImageData = imageData
+    if (imageData && !imageData.startsWith('data:') && imageData.length > 100) {
+      // 如果是纯base64数据（长度较长），添加前缀
+      formattedImageData = `data:image/png;base64,${imageData}`
+    } else if (imageData && imageData.startsWith('data:')) {
+      // 如果已经是data URL格式，直接使用
+      formattedImageData = imageData
+    }
+
+    const userMessage: Message = {
+      id: `generate-video-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      type: 'user',
+      content: messageContent,
+      timestamp: new Date(),
+      imageData: formattedImageData,
+    }
+
+    // 直接更新消息状态，不嵌套数据库操作
+    setMessages(prev => [...prev, userMessage])
+    
+    // 异步保存到数据库
+    if (typeof window !== 'undefined') {
+      chatDB.addMessage({
+        type: userMessage.type,
+        content: userMessage.content,
+        timestamp: userMessage.timestamp,
+        imageData: userMessage.imageData
+      }, 'default').catch(error => {
+      })
+    }
+  }
+
+  // 将图片添加到画板 - 切换到箭头工具模式
+  const handleAddToCanvas = useCallback(async (imageData: string) => {
+    // 检查全局画布对象是否存在 - 使用更可靠的检查方法
+    const checkCanvasInitialized = () => {
+      if (typeof window === 'undefined') {
+        return false
+      }
+      
+      // 检查 window.fabricCanvas 是否存在且是有效的 canvas 对象
+      const canvas = (window as any).fabricCanvas
+      
+      if (!canvas) {
+        return false
+      }
+      
+      // 检查 canvas 对象是否具有基本的方法和属性
+      return typeof canvas.add === 'function' && 
+             typeof canvas.renderAll === 'function' &&
+             canvas.width > 0 && canvas.height > 0
+    }
+
+    const canvasInitialized = checkCanvasInitialized()
+
+    if (canvasInitialized) {
+      try {
+        // 切换到箭头工具模式 - 通过自定义事件
+        const switchEvent = new CustomEvent('canvas:switchToArrowTool', {
+          detail: { imageData: imageData }
+        })
+        window.dispatchEvent(switchEvent)
+
+        // 创建 fabric.Image 对象
+        const canvas = (window as any).fabricCanvas
+        const fabric = (window as any).fabric
+        
+        if (!fabric) {
+          alert('画布引擎未加载，请刷新页面')
+          return
+        }
+        
+        fabric.Image.fromURL(imageData, (img) => {
+          if (img) {
+            // 设置图片位置和大小
+            img.set({
+              left: 100,
+              top: 100,
+              scaleX: 0.5,
+              scaleY: 0.5
+            })
+            
+            // 添加到画布
+            canvas.add(img)
+            canvas.renderAll()
+            
+            // 选中新添加的图片
+            canvas.setActiveObject(img)
+            canvas.renderAll()
+          }
+        })
+      } catch (error) {
+        alert('添加图片到画板失败，请重试')
+      }
+    } else {
+      alert('画板未初始化，请先打开画板')
+    }
+  }, [])
+
+
+
+  const handleDownload = (fileData: string, filename: string) => {
+    const link = document.createElement('a')
+    link.download = filename
+    link.href = fileData
+    link.click()
+  }
+
+  // 将视频添加到画板 - 切换到箭头工具模式
+  const handleAddVideoToCanvas = async (videoData: string) => {
+    // 检查全局画布对象是否存在 - 使用更可靠的检查方法
+    const checkCanvasInitialized = () => {
+      if (typeof window === 'undefined') return false
+      
+      // 检查 window.fabricCanvas 是否存在且是有效的 canvas 对象
+      const canvas = (window as any).fabricCanvas
+      if (!canvas) return false
+      
+      // 检查 canvas 对象是否具有基本的方法和属性
+      return typeof canvas.add === 'function' && 
+             typeof canvas.renderAll === 'function' &&
+             canvas.width > 0 && canvas.height > 0
+    }
+    
+    if (checkCanvasInitialized()) {
+      
+      // 直接使用视频URL，不需要转换为base64
+      // 视频URL可以直接在video元素中使用
+      const processedVideoData = videoData;
+      
+      // 触发自定义事件，通知画板切换到箭头工具并传递视频数据
+      const event = new CustomEvent('canvas:switchToArrowTool', {
+        detail: { videoData: processedVideoData }
+      })
+      window.dispatchEvent(event)
+      
+      // 显示提示信息
+      const notification = document.createElement('div')
+      notification.innerHTML = `
+        <div style="position: fixed; top: 20px; right: 20px; background: #3b82f6; color: white; padding: 8px 12px; border-radius: 6px; z-index: 10000; box-shadow: 0 2px 4px rgba(0,0,0,0.1); font-size: 14px;">
+          已切换到选择工具，请在画板上点击放置视频
+        </div>
+      `
+      document.body.appendChild(notification)
+      setTimeout(() => {
+        if (document.body.contains(notification)) {
+          document.body.removeChild(notification)
+        }
+      }, 3000)
+      
+    } else {
+      alert('画板未初始化，请先打开画板')
+    }
+  }
+
   // 使用useImperativeHandle暴露方法给父组件
   useImperativeHandle(ref, () => ({
     handleReceiveScreenshot,
     resetChat,
     logGenerateImageTask,
-    logGenerateImageResult
-  }), [handleReceiveScreenshot, resetChat, logGenerateImageTask, logGenerateImageResult])
+    logGenerateImageResult,
+    logGenerateVideoTask,
+    handleAddToCanvas,
+    handleAddVideoToCanvas,
+    setSelectedModel: (model: ImageModel | VideoModel | TextModel) => {
+      setSelectedModel(model);
+      // 根据模型类型设置模型类型
+      const modelInfo = ModelService.getModelInfo(model);
+      if (modelInfo?.type) {
+        setSelectedModelType(modelInfo.type);
+      }
+    }
+  }), [handleReceiveScreenshot, resetChat, logGenerateImageTask, logGenerateImageResult, logGenerateVideoTask, handleAddToCanvas, handleAddVideoToCanvas])
 
   // 使用useEffect监听onReceiveScreenshot的变化
   useEffect(() => {
@@ -534,6 +757,15 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
       setSelectedModel(supportedModels[0] as ImageModel | VideoModel | TextModel);
     }
   }, [selectedModelType, selectedModel])
+
+  // 监听模型变化，重置时长设置
+  useEffect(() => {
+    if (selectedModel === 'sora2') {
+      setSelectedDuration('10s');
+    } else if (selectedModel === 'veo3.1') {
+      setSelectedDuration('8s');
+    }
+  }, [selectedModel])
 
   const handleGenerateImage = async (prompt: string) => {
     setIsGenerating(true)
@@ -554,61 +786,119 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
     }, 3000)
   }
 
-  const handleGenerateVideo = async (prompt: string) => {
+  const handleGenerateVideo = async (prompt: string, images: string[] = []) => {
     setIsGenerating(true)
     
-    // 模拟视频生成
-    setTimeout(() => {
+    try {
+      // 获取API密钥
+      const apiKey = process.env.NEXT_PUBLIC_API_KEY || ''
+      
+      if (!apiKey) {
+        throw new Error('API密钥未配置')
+      }
+
+      // 准备请求参数
+      const requestBody = {
+        prompt,
+        model: selectedModel,
+        images,
+        duration: selectedDuration,
+        aspectRatio: selectedAspectRatio,
+        apiKey
+      }
+
+      // 调用视频生成API
+      const response = await fetch('/api/generate-video', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody)
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || '视频生成请求失败')
+      }
+
+      const result = await response.json()
+      
       const aiMessage: Message = {
         id: `ai-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         type: 'ai',
-        content: `已根据提示词"${prompt}"生成视频`,
+        content: `视频生成任务已创建，任务ID: ${result.taskId}
+提示词: "${prompt}"`,
         timestamp: new Date(),
       }
 
       setMessages(prev => [...prev, aiMessage])
-      setIsGenerating(false)
-    }, 5000)
-  }
-
-  const handleDownload = (imageData: string, filename: string) => {
-    const link = document.createElement('a')
-    link.download = filename
-    link.href = imageData
-    link.click()
-  }
-
-  // 将图片添加到画板 - 切换到箭头工具模式
-  const handleAddToCanvas = (imageData: string) => {
-    // 检查全局画布对象是否存在
-    if (typeof window !== 'undefined' && (window as any).fabricCanvas) {
       
-      // 触发自定义事件，通知画板切换到箭头工具并传递图片数据
-      const event = new CustomEvent('canvas:switchToArrowTool', {
-        detail: { imageData }
+      // 开始轮询任务状态，使用统一的轮询函数
+      await pollTaskStatus(result.taskId, {
+        model: selectedModel,
+        taskId: result.taskId,
+        key: apiKey
       })
-      window.dispatchEvent(event)
       
+    } catch (error: any) {
+      const errorMessage: Message = {
+        id: `error-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        type: 'ai',
+        content: `视频生成失败: ${error.message}`,
+        timestamp: new Date(),
+      }
 
-      
-      // 显示提示信息
-      const notification = document.createElement('div')
-      notification.innerHTML = `
-        <div style="position: fixed; top: 20px; right: 20px; background: #3b82f6; color: white; padding: 8px 12px; border-radius: 6px; z-index: 10000; box-shadow: 0 2px 4px rgba(0,0,0,0.1); font-size: 14px;">
-          已切换到选择工具，请在画板上点击放置图片
-        </div>
-      `
-      document.body.appendChild(notification)
-      setTimeout(() => {
-        if (document.body.contains(notification)) {
-          document.body.removeChild(notification)
-        }
-      }, 3000)
-      
-    } else {
-      alert('画板未初始化，请先打开画板')
+      setMessages(prev => [...prev, errorMessage])
+    } finally {
+      setIsGenerating(false)
     }
   }
+
+  // 轮询视频任务状态
+  const pollVideoTaskStatus = async (taskId: string, apiKey: string) => {
+    const maxAttempts = 60 // 最大轮询次数
+    const interval = 5000 // 5秒轮询一次
+    
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      try {
+        await new Promise(resolve => setTimeout(resolve, interval))
+        
+        const response = await fetch(`/api/generate-video?taskId=${taskId}&apiKey=${apiKey}`)
+        
+        if (!response.ok) {
+          continue
+        }
+
+        const result = await response.json()
+        
+        if (result.data.status === '2') { // 成功
+          const successMessage: Message = {
+            id: `video-success-${Date.now()}`,
+            type: 'ai',
+            content: `视频生成成功！视频链接: ${result.data.videoUrl}`,
+            timestamp: new Date(),
+          }
+          setMessages(prev => [...prev, successMessage])
+          break
+        } else if (result.data.status === '3') { // 失败
+          const errorMessage: Message = {
+            id: `video-error-${Date.now()}`,
+            type: 'ai',
+            content: `视频生成失败: ${result.data.error}`,
+            timestamp: new Date(),
+          }
+          setMessages(prev => [...prev, errorMessage])
+          break
+        }
+        // 状态为'1'（进行中）则继续轮询
+        
+      } catch (error) {
+        // 轮询错误，继续尝试
+      }
+    }
+  }
+
+
 
   // 如果面板被关闭，显示展开按钮
   if (!isOpen) {
@@ -652,6 +942,36 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
       style={{ width: `${panelWidth}px` }}
       data-chat-panel="true"
     >
+      {/* 通知组件 */}
+      {notification && (
+        <div className={`fixed top-4 right-4 z-50 p-3 rounded-lg shadow-lg transition-all duration-300 ${
+          notification.type === 'success' 
+            ? 'bg-green-500 text-white' 
+            : notification.type === 'error' 
+              ? 'bg-red-500 text-white' 
+              : 'bg-blue-500 text-white'
+        }`}>
+          <div className="flex items-center space-x-2">
+            {notification.type === 'success' && (
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            )}
+            {notification.type === 'error' && (
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            )}
+            {notification.type === 'info' && (
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            )}
+            <span className="text-sm font-medium">{notification.message}</span>
+          </div>
+        </div>
+      )}
+
       {/* 拖拽手柄 - 放在左侧外部 */}
       <div
         className="absolute -left-2 top-0 bottom-0 w-4 cursor-col-resize z-40"
@@ -699,6 +1019,7 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
                 : 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-gray-100'
             }`}>
               <p className="text-sm" data-message-content="true">{message.content}</p>
+
               
               {message.imageData && (
                 <div className="mt-2" data-ai-generated={message.type === 'ai' ? 'true' : 'false'}>
@@ -718,6 +1039,36 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
                       </button>
                       <button
                         onClick={() => handleAddToCanvas(message.imageData!)}
+                        className="flex items-center space-x-1 text-xs text-green-600 hover:text-green-800"
+                      >
+                        <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                        </svg>
+                        <span>添加到画板</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+              
+              {message.videoData && (
+                <div className="mt-2" data-ai-generated={message.type === 'ai' ? 'true' : 'false'}>
+                  <video 
+                    src={message.videoData} 
+                    controls
+                    className="rounded border border-gray-200 dark:border-gray-600 max-w-full"
+                  />
+                  {message.type === 'ai' && (
+                    <div className="flex space-x-2 mt-2">
+                      <button
+                        onClick={() => handleDownload(message.videoData!, 'ai-generated.mp4')}
+                        className="flex items-center space-x-1 text-xs text-blue-600 hover:text-blue-800"
+                      >
+                        <Download className="h-3 w-3" />
+                        <span>下载视频</span>
+                      </button>
+                      <button
+                        onClick={() => handleAddVideoToCanvas(message.videoData!)}
                         className="flex items-center space-x-1 text-xs text-green-600 hover:text-green-800"
                       >
                         <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -906,81 +1257,86 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
               )}
             </div>
 
-            {/* 比例选择 - 下拉菜单方式 */}
-            <div className="relative" ref={aspectRatioRef}>
-              <div className="flex items-center bg-gray-100 dark:bg-gray-700 rounded-lg p-1.5">
-                <button
-                  onClick={() => setShowAspectRatio(!showAspectRatio)}
-                  className="flex items-center space-x-1.5 p-1.5 text-gray-700 dark:text-gray-300 rounded-lg text-sm hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-                >
-                  <span className="whitespace-nowrap">{selectedAspectRatio}</span>
-                  <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                </button>
-              </div>
-              
-              {showAspectRatio && (
-                <div className="absolute bottom-full left-0 mb-1.5 w-20 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-600 z-10">
-                  <div className="p-1.5">
-                    {['16:9', '9:16', '4:3', '3:4', '1:1'].map((ratio) => (
-                      <button
-                        key={ratio}
-                        onClick={() => {
-                          setSelectedAspectRatio(ratio)
-                          setShowAspectRatio(false)
-                        }}
-                        className={`w-full text-left px-2.5 py-1.5 text-sm rounded truncate ${
-                          selectedAspectRatio === ratio 
-                            ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300' 
-                            : 'hover:bg-gray-100 dark:hover:bg-gray-700'
-                        }`}
-                      >
-                        {ratio}
-                      </button>
-                    ))}
-                  </div>
+            {/* 比例选择 - 下拉菜单方式（对veo3.1模型隐藏） */}
+            {selectedModel !== 'veo3.1' && (
+              <div className="relative" ref={aspectRatioRef}>
+                <div className="flex items-center bg-gray-100 dark:bg-gray-700 rounded-lg p-1.5">
+                  <button
+                    onClick={() => setShowAspectRatio(!showAspectRatio)}
+                    className="flex items-center space-x-1.5 p-1.5 text-gray-700 dark:text-gray-300 rounded-lg text-sm hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                  >
+                    <span className="whitespace-nowrap">{selectedAspectRatio}</span>
+                    <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
                 </div>
-              )}
-            </div>
+                
+                {showAspectRatio && (
+                  <div className="absolute bottom-full left-0 mb-1.5 w-20 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-600 z-10">
+                    <div className="p-1.5">
+                      {(selectedModel === 'sora2' ? ['16:9', '9:16'] : ['16:9', '9:16', '4:3', '3:4', '1:1']).map((ratio) => (
+                        <button
+                          key={ratio}
+                          onClick={() => {
+                            setSelectedAspectRatio(ratio)
+                            setShowAspectRatio(false)
+                          }}
+                          className={`w-full text-left px-2.5 py-1.5 text-sm rounded truncate ${
+                            selectedAspectRatio === ratio 
+                              ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300' 
+                              : 'hover:bg-gray-100 dark:hover:bg-gray-700'
+                          }`}
+                        >
+                          {ratio}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
-            {/* 张数选择 - 下拉菜单方式 */}
-            <div className="relative" ref={imageCountRef}>
-              <div className="flex items-center bg-gray-100 dark:bg-gray-700 rounded-lg p-1.5">
-                <button
-                  onClick={() => setShowImageCount(!showImageCount)}
-                  className="flex items-center space-x-1.5 p-1.5 text-gray-700 dark:text-gray-300 rounded-lg text-sm hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-                >
-                  <span className="whitespace-nowrap">{imageCount}张</span>
-                  <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                </button>
-              </div>
-              
-              {showImageCount && (
-                <div className="absolute bottom-full left-0 mb-1.5 w-20 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-600 z-10">
-                  <div className="p-1.5">
-                    {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((count) => (
-                      <button
-                        key={count}
-                        onClick={() => {
-                          setImageCount(count)
-                          setShowImageCount(false)
-                        }}
-                        className={`w-full text-left px-2.5 py-1.5 text-sm rounded truncate ${
-                          imageCount === count 
-                            ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300' 
-                            : 'hover:bg-gray-100 dark:hover:bg-gray-700'
-                        }`}
-                      >
-                        {count}张
-                      </button>
-                    ))}
-                  </div>
+            {/* 时长选择 - 对视频模型显示 */}
+            {(selectedModel === 'sora2' || selectedModel === 'veo3.1') && (
+              <div className="relative" ref={durationRef}>
+                <div className="flex items-center bg-gray-100 dark:bg-gray-700 rounded-lg p-1.5">
+                  <button
+                    onClick={() => setShowDuration(!showDuration)}
+                    className="flex items-center space-x-1.5 p-1.5 text-gray-700 dark:text-gray-300 rounded-lg text-sm hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                  >
+                    <span className="whitespace-nowrap">{selectedDuration}</span>
+                    <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
                 </div>
-              )}
-            </div>
+                
+                {showDuration && (
+                  <div className="absolute bottom-full left-0 mb-1.5 w-20 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-600 z-10">
+                    <div className="p-1.5">
+                      {(selectedModel === 'sora2' ? ['10s', '15s'] : ['8s']).map((duration) => (
+                        <button
+                          key={duration}
+                          onClick={() => {
+                            setSelectedDuration(duration)
+                            setShowDuration(false)
+                          }}
+                          className={`w-full text-left px-2.5 py-1.5 text-sm rounded truncate ${
+                            selectedDuration === duration 
+                              ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300' 
+                              : 'hover:bg-gray-100 dark:hover:bg-gray-700'
+                          }`}
+                        >
+                          {duration}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
           </div>
         </div>
         

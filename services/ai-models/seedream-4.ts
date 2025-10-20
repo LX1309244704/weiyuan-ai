@@ -1,4 +1,13 @@
 import axios from 'axios';
+import qs from 'qs';
+
+// 常量定义
+const SUCCESS_CODE = '0';
+const SUCCESS_STATUS = 'SUCCESS';
+const ApiConst = {
+  STRING_TWO: '2',
+  STRING_THREE: '3'
+};
 
 // 请求参数接口
 interface ToImageDvo {
@@ -10,123 +19,111 @@ interface ToImageDvo {
   aspectRatio?: string;
 }
 
-interface HumanDto {
+interface ImageDto {
   status: string;
   imageUrl?: string;
-  error?: string;
 }
 
 /**
  * Seedream-4 模型配置
  */
 export const seedream4Config = {
-  name: 'Seedream-4',
+  name: 'doubao-seedream-4-0-250828',
   type: 'image' as const,
-  baseUrl: process.env.NEXT_PUBLIC_SEEDREAM_API_BASE_URL || 'https://api.seedream.ai/v1',
+  baseUrl: process.env.NEXT_PUBLIC_API_BASE_URL || 'https://api.jmyps.com',
   defaultSize: '1024x1024',
-  supportedSizes: ['1024x1024', '768x768', '512x512'],
+  supportedSizes: ['1024x1024', '512x512', '256x256'],
   supportedAspectRatios: ['1:1', '16:9', '9:16', '4:3', '3:4'],
   
-  // 创建图片生成任务
+  // 创建异步图片生成任务
   async createAsyncImage(toImageDvo: ToImageDvo): Promise<string> {
     // 使用环境变量中的API密钥
-    const apiKey = process.env.NEXT_PUBLIC_SEEDREAM_API_KEY || toImageDvo.key;
+    const apiKey = process.env.NEXT_PUBLIC_API_KEY || toImageDvo.key;
     
-    // 根据宽高比获取对应的尺寸（比例参数通过size对应）
+    // 根据宽高比获取对应的尺寸，优先使用aspectRatio
     const size = toImageDvo.aspectRatio 
       ? this.getSizeByAspectRatio(toImageDvo.aspectRatio)
-      : (toImageDvo.size || this.defaultSize);
+      : toImageDvo.size || "1024x1024";
     
-    const requestBody = {
-      model: "seedream-4",
+    // 构建请求体
+    const map = {
+      model: "doubao-seedream-4-0-250828",
+     size: size,
       prompt: toImageDvo.prompt,
-      size: size, // 比例参数通过size对应
-      num_images: 1,
-      guidance_scale: 7.5,
-      steps: 50,
-      ...(toImageDvo.images && toImageDvo.images.length > 0 && {
-        init_image: toImageDvo.images[0],
-        strength: 0.7
-      })
+      image: toImageDvo.images || []
     };
     
+    // 设置请求头
     const headers = {
       'Authorization': `Bearer ${apiKey}`,
       'Content-Type': 'application/json'
     };
     
+    // 构建带Query参数的URL
+    const url = `${this.baseUrl}/v1/images/generations`;
+    const urlWithParams = `${url}?${qs.stringify({ async: 'true' })}`;
+    
     try {
-      const response = await axios.post(`${this.baseUrl}/images/generations`, requestBody, { headers });
-      return response.data.id || response.data.task_id;
+      // 发送POST请求
+      const response = await axios.post(urlWithParams, map, { headers });
+      return response.data.task_id.toString();
     } catch (error) {
       throw error;
     }
   },
 
   /**
-   * 查询任务状态
+   * 根据taskId查询结果
    */
-  async getTask(toImageDvo: ToImageDvo): Promise<HumanDto | null> {
+  async getTask(toImageDvo: ToImageDvo): Promise<ImageDto | null> {
     // 使用环境变量中的API密钥
-    const apiKey = process.env.NEXT_PUBLIC_SEEDREAM_API_KEY || toImageDvo.key;
+    const apiKey = process.env.NEXT_PUBLIC_API_KEY || toImageDvo.key;
     
-    const humanDto: HumanDto = { status: '3' };
-    
-    if (!toImageDvo.taskId) {
-      humanDto.error = '任务ID不能为空';
-      return humanDto;
-    }
-
+    const ImageDto: ImageDto = { status: ApiConst.STRING_THREE };
     const headers = {
       'Authorization': `Bearer ${apiKey}`,
       'Content-Type': 'application/json'
     };
     
     try {
-      // 循环查询直到任务完成或失败
-      while (true) {
-        const response = await axios.get(`${this.baseUrl}/images/tasks/${toImageDvo.taskId}`, { headers });
-        const result = response.data;
+      const response = await axios.get(
+        `${this.baseUrl}/v1/images/tasks/${toImageDvo.taskId}`,
+        { headers }
+      );
+      
+      const result = response.data;
+      
+      if (result.code === 'success') {
+        const taskData = result.data;
+        const status = taskData.status;
         
-        if (result.code === 'success') {
-          const taskData = result.data;
-          const status = taskData.status;
+        if (status === 'SUCCESS') {
+          // 任务成功完成
+          const imageData = taskData.data?.data;
           
-          if (status === 'SUCCESS') {
-            // 任务成功完成
-            const imageData = taskData.data?.data;
-            
-            if (imageData && imageData.length > 0) {
-              humanDto.status = '2';
-              humanDto.imageUrl = imageData[0].url;
-              return humanDto; // 成功获取图片，立即返回
-            } else {
-              // 没有图片数据，返回失败
-              humanDto.status = '3';
-              humanDto.error = '任务成功但未获取到图片数据';
-              return humanDto;
-            }
-          } else if (status === 'FAILURE') {
-            // 任务失败
-            humanDto.status = '3';
-            humanDto.error = taskData.fail_reason || '任务执行失败';
-            return humanDto;
-          } else if (status === 'NOT_START' || status === 'IN_PROGRESS') {
-            // 任务未开始或处理中，等待1秒后继续查询
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            continue;
+          if (imageData && imageData.length > 0) {
+            ImageDto.status = ApiConst.STRING_TWO;
+            ImageDto.imageUrl = imageData[0].url;
+            return ImageDto;
           } else {
-            // 未知状态，返回失败
-            humanDto.status = '3';
-            humanDto.error = '未知的任务状态';
-            return humanDto;
+            // 没有图片数据，返回失败
+            ImageDto.status = ApiConst.STRING_THREE;
+            return ImageDto;
           }
+        } else if (status === 'FAILURE') {
+          // 任务失败
+          ImageDto.status = ApiConst.STRING_THREE;
+          return ImageDto;
         } else {
-          // API调用失败
-          humanDto.status = '3';
-          humanDto.error = result.message || 'API调用失败';
-          return humanDto;
+          // 任务未完成状态（NOT_START、IN_PROGRESS等），返回中间状态
+          // 循环查询由ModelService统一处理
+          ImageDto.status = '1'; // 处理中状态，ModelService会继续查询
+          return ImageDto;
         }
+      } else {
+        // API调用失败
+        ImageDto.status = ApiConst.STRING_THREE;
+        return ImageDto;
       }
     } catch (error) {
       throw error;
@@ -135,12 +132,12 @@ export const seedream4Config = {
 
   // 验证API密钥格式
   validateApiKey(key: string): boolean {
-    return key && key.startsWith('sk-') && key.length > 10;
+    return key && key.length > 0;
   },
 
   // 验证提示词格式
   validatePrompt(prompt: string): boolean {
-    return prompt && prompt.trim().length > 0 && prompt.trim().length <= 1000;
+    return prompt && prompt.trim().length > 0;
   },
 
   // 获取支持的图片尺寸
@@ -156,15 +153,15 @@ export const seedream4Config = {
   // 根据宽高比获取对应的尺寸
   getSizeByAspectRatio(aspectRatio: string): string {
     const ratioMap: Record<string, string> = {
-      '1:1': '1024x1024',
-      '16:9': '1024x576',
-      '9:16': '576x1024',
-      '4:3': '1024x768',
-      '3:4': '768x1024'
+      '1:1': '2048x2048',
+      '16:9': '2560x1440',
+      '9:16': '1440x2560',
+      '4:3': '2304x1728',
+      '3:4': '1728x2304'
     };
     
     return ratioMap[aspectRatio] || this.defaultSize;
   }
 };
 
-export type { ToImageDvo, HumanDto };
+export type { ToImageDvo, ImageDto };

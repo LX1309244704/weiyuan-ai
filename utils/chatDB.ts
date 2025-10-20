@@ -6,6 +6,7 @@ interface ChatMessage {
   content: string;
   timestamp: Date;
   imageData?: string;
+  videoData?: string;
   sessionId?: string; // 可选：用于区分不同会话
 }
 
@@ -246,6 +247,38 @@ class ChatDB {
       sessionRequest.onerror = () => reject(sessionRequest.error);
       
       transaction.oncomplete = () => resolve();
+    });
+  }
+
+  // 更新消息
+  async updateMessage(messageId: string, updatedMessage: Omit<ChatMessage, 'id'>): Promise<void> {
+    if (!this.db) await this.init();
+
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction([this.storeNames.messages], 'readwrite');
+      const store = transaction.objectStore(this.storeNames.messages);
+      
+      // 获取现有消息
+      const getRequest = store.get(messageId);
+      
+      getRequest.onerror = () => reject(getRequest.error);
+      getRequest.onsuccess = () => {
+        if (!getRequest.result) {
+          reject(new Error('消息不存在'));
+          return;
+        }
+        
+        // 更新消息
+        const fullMessage: ChatMessage = {
+          ...getRequest.result,
+          ...updatedMessage,
+          id: messageId // 保持原有ID
+        };
+        
+        const putRequest = store.put(fullMessage);
+        putRequest.onerror = () => reject(putRequest.error);
+        putRequest.onsuccess = () => resolve();
+      };
     });
   }
 

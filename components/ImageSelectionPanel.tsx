@@ -25,12 +25,13 @@ const ImageSelectionPanel: React.FC<ImageSelectionPanelProps> = ({
   const [canvasScale, setCanvasScale] = useState(1)
   const [isMultipleSelection, setIsMultipleSelection] = useState(false)
   const [selectedModelType, setSelectedModelType] = useState<'image' | 'video'>('image')
-  const [selectedImageModel, setSelectedImageModel] = useState('seedream-4')
+  const [selectedImageModel, setSelectedImageModel] = useState('nano-banana')
   const [selectedVideoModel, setSelectedVideoModel] = useState('veo3')
   const [selectedAspectRatio, setSelectedAspectRatio] = useState('16:9')
-  const [selectedVideoSeconds, setSelectedVideoSeconds] = useState('5')
+  const [selectedVideoSeconds, setSelectedVideoSeconds] = useState('8')
   const [showModelDropdown, setShowModelDropdown] = useState(false)
   const [showAspectDropdown, setShowAspectDropdown] = useState(false)
+  const [showRatioDropdown, setShowRatioDropdown] = useState(false)
   const [showSecondsDropdown, setShowSecondsDropdown] = useState(false)
   const [customPrompt, setCustomPrompt] = useState('')
   const [textareaHeight, setTextareaHeight] = useState('32px')
@@ -279,7 +280,24 @@ const ImageSelectionPanel: React.FC<ImageSelectionPanelProps> = ({
     setPanelPosition({ left: panelLeft, top: panelTop })
   }, [addButtonPosition, canvasScale])
 
+  // 监听视频模型变化，重置时长设置
+  useEffect(() => {
+    if (selectedVideoModel === 'sora2') {
+      setSelectedVideoSeconds('10');
+    } else if (selectedVideoModel === 'veo3.1') {
+      setSelectedVideoSeconds('8');
+    }
+  }, [selectedVideoModel])
+
   if (!selectedImage || !canvas || isMultipleSelection) return null
+  
+  // 检测是否为视频对象 - 如果是视频，不显示任何面板
+  const isVideoObject = 
+    selectedImage.type === 'image' && 
+    selectedImage._element && 
+    selectedImage._element.tagName === 'VIDEO'
+  
+  if (isVideoObject) return null
   
   // 在渲染时重新计算position
   const currentPosition = getImagePosition()
@@ -458,21 +476,35 @@ const ImageSelectionPanel: React.FC<ImageSelectionPanelProps> = ({
                     <>
                       <button
                         onClick={() => {
-                          setSelectedVideoModel('veo3')
+                          setSelectedVideoModel('veo3.1')
                           setShowAspectDropdown(false)
+                          // 同步到ChatPanel
+                          if (typeof window !== 'undefined' && (window as any).chatPanelRef) {
+                            const chatPanel = (window as any).chatPanelRef
+                            if (chatPanel.setSelectedModel) {
+                              chatPanel.setSelectedModel('veo3.1')
+                            }
+                          }
                         }}
                         className={`w-full text-left px-2 py-1 text-xs rounded ${
-                          selectedVideoModel === 'veo3' 
+                          selectedVideoModel === 'veo3.1' 
                             ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300' 
                             : 'hover:bg-gray-100 dark:hover:bg-gray-700'
                         }`}
                       >
-                        Veo3
+                        Veo3.1
                       </button>
                       <button
                         onClick={() => {
                           setSelectedVideoModel('sora2')
                           setShowAspectDropdown(false)
+                          // 同步到ChatPanel
+                          if (typeof window !== 'undefined' && (window as any).chatPanelRef) {
+                            const chatPanel = (window as any).chatPanelRef
+                            if (chatPanel.setSelectedModel) {
+                              chatPanel.setSelectedModel('sora2')
+                            }
+                          }
                         }}
                         className={`w-full text-left px-2 py-1 text-xs rounded ${
                           selectedVideoModel === 'sora2' 
@@ -489,71 +521,87 @@ const ImageSelectionPanel: React.FC<ImageSelectionPanelProps> = ({
             )}
           </div>
 
-          {/* 3. 比例/秒数选择 */}
-          <div className="relative">
-            <div className="flex items-center bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
-              <button
-                onClick={() => setShowSecondsDropdown(!showSecondsDropdown)}
-                className="flex items-center space-x-1 p-1 text-gray-700 dark:text-gray-300 rounded-lg text-xs hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-              >
-                <span>
-                  {selectedModelType === 'image' 
-                    ? selectedAspectRatio
-                    : `${selectedVideoSeconds}s`
-                  }
-                </span>
-                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-              </button>
-            </div>
-            
-            {showSecondsDropdown && (
-              <div className="absolute bottom-full left-0 mb-1 w-16 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-600 z-10">
-                <div className="p-1">
-                  {selectedModelType === 'image' ? (
-                    <>
-                      {['16:9', '9:16', '4:3', '3:4', '1:1'].map((ratio) => (
-                        <button
-                          key={ratio}
-                          onClick={() => {
-                            setSelectedAspectRatio(ratio)
-                            setShowSecondsDropdown(false)
-                          }}
-                          className={`w-full text-left px-2 py-1 text-xs rounded ${
-                            selectedAspectRatio === ratio 
-                              ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300' 
-                              : 'hover:bg-gray-100 dark:hover:bg-gray-700'
-                          }`}
-                        >
-                          {ratio}
-                        </button>
-                      ))}
-                    </>
-                  ) : (
-                    <>
-                      {['3', '5', '10', '15', '30'].map((seconds) => (
-                        <button
-                          key={seconds}
-                          onClick={() => {
-                            setSelectedVideoSeconds(seconds)
-                            setShowSecondsDropdown(false)
-                          }}
-                          className={`w-full text-left px-2 py-1 text-xs rounded ${
-                            selectedVideoSeconds === seconds 
-                              ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300' 
-                              : 'hover:bg-gray-100 dark:hover:bg-gray-700'
-                          }`}
-                        >
-                          {seconds}s
-                        </button>
-                      ))}
-                    </>
-                  )}
-                </div>
+          {/* 3. 比例选择 - 对图片模型和Sora2视频模型显示 */}
+          {(selectedModelType === 'image' || (selectedModelType === 'video' && selectedVideoModel === 'sora2')) && (
+            <div className="relative">
+              <div className="flex items-center bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
+                <button
+                  onClick={() => setShowRatioDropdown(!showRatioDropdown)}
+                  className="flex items-center space-x-1 p-1 text-gray-700 dark:text-gray-300 rounded-lg text-xs hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                >
+                  <span>{selectedAspectRatio}</span>
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
               </div>
-            )}
-          </div>
+              
+              {showRatioDropdown && (
+                <div className="absolute bottom-full left-0 mb-1 w-16 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-600 z-10">
+                  <div className="p-1">
+                    {['16:9', '9:16'].map((ratio) => (
+                      <button
+                        key={ratio}
+                        onClick={() => {
+                          setSelectedAspectRatio(ratio)
+                          setShowRatioDropdown(false)
+                        }}
+                        className={`w-full text-left px-2 py-1 text-xs rounded ${
+                          selectedAspectRatio === ratio 
+                            ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300' 
+                            : 'hover:bg-gray-100 dark:hover:bg-gray-700'
+                        }`}
+                      >
+                        {ratio}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* 4. 时长选择 - 对视频模型显示 */}
+          {selectedModelType === 'video' && (
+            <div className="relative">
+              <div className="flex items-center bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
+                <button
+                  onClick={() => setShowSecondsDropdown(!showSecondsDropdown)}
+                  className="flex items-center space-x-1 p-1 text-gray-700 dark:text-gray-300 rounded-lg text-xs hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                >
+                  <span>
+                    {selectedVideoModel === 'sora2' ? `${selectedVideoSeconds}s` : `${selectedVideoSeconds}s`}
+                  </span>
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+              </div>
+              
+              {showSecondsDropdown && (
+                <div className="absolute bottom-full left-0 mb-1 w-16 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-600 z-10">
+                  <div className="p-1">
+                    {(selectedVideoModel === 'sora2' ? ['10', '15'] : ['8']).map((seconds) => (
+                      <button
+                        key={seconds}
+                        onClick={() => {
+                          setSelectedVideoSeconds(seconds)
+                          setShowSecondsDropdown(false)
+                        }}
+                        className={`w-full text-left px-2 py-1 text-xs rounded ${
+                          selectedVideoSeconds === seconds 
+                            ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300' 
+                            : 'hover:bg-gray-100 dark:hover:bg-gray-700'
+                        }`}
+                      >
+                        {seconds}s
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* 4. 输入框 */}
           <textarea
@@ -589,7 +637,30 @@ const ImageSelectionPanel: React.FC<ImageSelectionPanelProps> = ({
                 const model = selectedModelType === 'image' ? selectedImageModel : selectedVideoModel
                 const aspectRatio = selectedModelType === 'image' ? selectedAspectRatio : '16:9'
                 
-                onGenerateFromImage(selectedImage, prompt, model, aspectRatio)
+                // 生成任务会在canvas/page.tsx的handleGenerateFromImage函数中记录到聊天记录
+                // 这里不再重复记录，避免参数重复显示
+                
+                if (selectedModelType === 'image') {
+                  onGenerateFromImage(selectedImage, prompt, model, aspectRatio)
+                } else {
+                  // 视频生成：调用画布页面的视频生成功能
+                  if (typeof window !== 'undefined' && (window as any).fabricCanvas) {
+                    // 计算视频生成位置（在选中图片右侧）
+                    const videoPosition = {
+                      x: (selectedImage.left || 0) + (selectedImage.width || 0) * (selectedImage.scaleX || 1) + 20,
+                      y: selectedImage.top || 0
+                    }
+                    
+                    // 获取图片数据作为输入
+                    const imageData = selectedImage._element?.src || selectedImage.src
+                    
+                    // 调用画布页面的视频生成函数
+                    if (typeof window !== 'undefined' && (window as any).handleGenerateVideo) {
+                      (window as any).handleGenerateVideo(prompt, model, videoPosition, imageData, aspectRatio)
+                    }
+                  }
+                }
+                
                 setCustomPrompt('')
                 onClearSelection()
               }}

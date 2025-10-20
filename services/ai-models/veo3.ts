@@ -17,24 +17,24 @@ interface HumanDto {
 }
 
 /**
- * Veo3 模型配置 - 视频生成
+ * Veo3.1 模型配置 - 视频生成
  */
 export const veo3Config = {
-  name: 'Veo3',
+  name: 'Veo3.1',
   type: 'video' as const,
   baseUrl: process.env.NEXT_PUBLIC_VEO_API_BASE_URL || 'https://api.veo.ai/v1',
-  defaultDuration: '5s',
+  defaultDuration: '8s',
   defaultResolution: '720p',
-  supportedDurations: ['3s', '5s', '10s', '15s', '30s'],
-  supportedResolutions: ['480p', '720p', '1080p'],
+  supportedDurations: ['8s'],
+  supportedResolutions: ['720p', '1080p'],
   
   // 创建视频生成任务
   async createVideo(toVideoDvo: ToVideoDvo): Promise<string> {
     // 使用环境变量中的API密钥
-    const apiKey = process.env.NEXT_PUBLIC_VEO_API_KEY || toVideoDvo.key;
+    const apiKey = process.env.NEXT_PUBLIC_API_KEY || toVideoDvo.key;
     
     const requestBody = {
-      model: "veo-3",
+      model: "veo-3.1",
       prompt: toVideoDvo.prompt,
       duration: toVideoDvo.duration || this.defaultDuration,
       resolution: toVideoDvo.resolution || this.defaultResolution,
@@ -62,7 +62,7 @@ export const veo3Config = {
    */
   async getTask(toVideoDvo: ToVideoDvo): Promise<HumanDto | null> {
     // 使用环境变量中的API密钥
-    const apiKey = process.env.NEXT_PUBLIC_VEO_API_KEY || toVideoDvo.key;
+    const apiKey = process.env.NEXT_PUBLIC_API_KEY || toVideoDvo.key;
     
     const humanDto: HumanDto = { status: '3' };
     

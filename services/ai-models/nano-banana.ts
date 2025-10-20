@@ -19,7 +19,7 @@ interface ToImageDvo {
   aspectRatio?: string;
 }
 
-interface HumanDto {
+interface ImageDto {
   status: string;
   imageUrl?: string;
 }
@@ -30,7 +30,7 @@ interface HumanDto {
 export const nanoBananaConfig = {
   name: 'Nano-Banana',
   type: 'image' as const,
-  baseUrl: process.env.NEXT_PUBLIC_API_BASE_URL || 'https://api.jmyps.com/v1',
+  baseUrl: process.env.NEXT_PUBLIC_API_BASE_URL || 'https://api.jmyps.com',
   defaultSize: '1024x1024',
   supportedSizes: ['1024x1024', '512x512', '256x256'],
   supportedAspectRatios: ['1:1', '16:9', '9:16', '4:3', '3:4'],
@@ -38,12 +38,12 @@ export const nanoBananaConfig = {
   // 创建异步图片生成任务
   async createAsyncImage(toImageDvo: ToImageDvo): Promise<string> {
     // 使用环境变量中的API密钥
-    const apiKey = process.env.NEXT_PUBLIC_NANO_BANANA_API_KEY || toImageDvo.key;
+    const apiKey = process.env.NEXT_PUBLIC_API_KEY || toImageDvo.key;
     
     // 根据宽高比获取对应的尺寸，优先使用aspectRatio
     const size = toImageDvo.aspectRatio 
       ? this.getSizeByAspectRatio(toImageDvo.aspectRatio)
-      : toImageDvo.size || "1024x1024";
+      : toImageDvo.size || "auto";
     
     // 构建请求体
     const map = {
@@ -60,7 +60,7 @@ export const nanoBananaConfig = {
     };
     
     // 构建带Query参数的URL
-    const url = `${this.baseUrl}/images/generations`;
+    const url = `${this.baseUrl}/v1/images/generations`;
     const urlWithParams = `${url}?${qs.stringify({ async: 'true' })}`;
     
     try {
@@ -75,20 +75,19 @@ export const nanoBananaConfig = {
   /**
    * 根据taskId查询结果
    */
-  async getTask(toImageDvo: ToImageDvo): Promise<HumanDto | null> {
+  async getTask(toImageDvo: ToImageDvo): Promise<ImageDto | null> {
     // 使用环境变量中的API密钥
-    const apiKey = process.env.NEXT_PUBLIC_NANO_BANANA_API_KEY || toImageDvo.key;
+    const apiKey = process.env.NEXT_PUBLIC_API_KEY || toImageDvo.key;
     
-    const humanDto: HumanDto = { status: ApiConst.STRING_THREE };
+    const ImageDto: ImageDto = { status: ApiConst.STRING_THREE };
     const headers = {
       'Authorization': `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-      'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/54.0.2840.99 Safari/537.36'
+      'Content-Type': 'application/json'
     };
     
     try {
       const response = await axios.get(
-        `${this.baseUrl}/images/tasks/${toImageDvo.taskId}`,
+        `${this.baseUrl}/v1/images/tasks/${toImageDvo.taskId}`,
         { headers }
       );
       
@@ -103,28 +102,28 @@ export const nanoBananaConfig = {
           const imageData = taskData.data?.data;
           
           if (imageData && imageData.length > 0) {
-            humanDto.status = ApiConst.STRING_TWO;
-            humanDto.imageUrl = imageData[0].url;
-            return humanDto;
+            ImageDto.status = ApiConst.STRING_TWO;
+            ImageDto.imageUrl = imageData[0].url;
+            return ImageDto;
           } else {
             // 没有图片数据，返回失败
-            humanDto.status = ApiConst.STRING_THREE;
-            return humanDto;
+            ImageDto.status = ApiConst.STRING_THREE;
+            return ImageDto;
           }
         } else if (status === 'FAILURE') {
           // 任务失败
-          humanDto.status = ApiConst.STRING_THREE;
-          return humanDto;
+          ImageDto.status = ApiConst.STRING_THREE;
+          return ImageDto;
         } else {
           // 任务未完成状态（NOT_START、IN_PROGRESS等），返回中间状态
           // 循环查询由ModelService统一处理
-          humanDto.status = '1'; // 处理中状态，ModelService会继续查询
-          return humanDto;
+          ImageDto.status = '1'; // 处理中状态，ModelService会继续查询
+          return ImageDto;
         }
       } else {
         // API调用失败
-        humanDto.status = ApiConst.STRING_THREE;
-        return humanDto;
+        ImageDto.status = ApiConst.STRING_THREE;
+        return ImageDto;
       }
     } catch (error) {
       throw error;
@@ -155,14 +154,14 @@ export const nanoBananaConfig = {
   getSizeByAspectRatio(aspectRatio: string): string {
     const ratioMap: Record<string, string> = {
       '1:1': '1024x1024',
-      '16:9': '1024x576',
-      '9:16': '576x1024',
-      '4:3': '1024x768',
-      '3:4': '768x1024'
+      '16:9': '2560x1440',
+      '9:16': '1440x2560',
+      '4:3': '2304x1728',
+      '3:4': '1728x2304'
     };
     
     return ratioMap[aspectRatio] || this.defaultSize;
   }
 };
 
-export type { ToImageDvo, HumanDto };
+export type { ToImageDvo, ImageDto };

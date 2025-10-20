@@ -9,9 +9,10 @@ interface ToVideoDvo {
   duration?: string;
   resolution?: string;
   style?: string;
+  aspectRatio?: string;
 }
 
-interface HumanDto {
+interface VideoDto {
   status: string;
   videoUrl?: string;
   error?: string;
@@ -23,7 +24,7 @@ interface HumanDto {
 export const sora2Config = {
   name: 'Sora2',
   type: 'video' as const,
-  baseUrl: process.env.NEXT_PUBLIC_SORA_API_BASE_URL || 'https://api.sora.ai/v2',
+  baseUrl: process.env.NEXT_PUBLIC_API_BASE_URL || 'https://api.jmyps.com',
   defaultDuration: '10s',
   defaultResolution: '1080p',
   defaultStyle: 'realistic',
@@ -34,27 +35,26 @@ export const sora2Config = {
   // 创建视频生成任务
   async createVideo(toVideoDvo: ToVideoDvo): Promise<string> {
     const requestBody = {
-      model: "sora-2",
       prompt: toVideoDvo.prompt,
+      model: "sora-2",
+      aspect_ratio: toVideoDvo.aspectRatio || "16:9",
+      hd: true,
       duration: toVideoDvo.duration || this.defaultDuration,
-      resolution: toVideoDvo.resolution || this.defaultResolution,
-      style: toVideoDvo.style || this.defaultStyle,
-      num_videos: 1,
-      motion_intensity: 5,
-      camera_movement: "static",
+      watermark: false,
       ...(toVideoDvo.images && toVideoDvo.images.length > 0 && {
-        init_images: toVideoDvo.images
+        images: toVideoDvo.images
       })
     };
     
     const headers = {
-      'Authorization': `Bearer ${process.env.SORA_API_KEY || toVideoDvo.key}`,
+      'Authorization': `Bearer ${process.env.NEXT_PUBLIC_API_KEY || toVideoDvo.key}`,
       'Content-Type': 'application/json',
       'X-Sora-Version': '2.0'
     };
     
     try {
-      const response = await axios.post(`${this.baseUrl}/videos/generations`, requestBody, { headers });
+      const response = await axios.post(`${this.baseUrl}/v2/videos/generations`, requestBody, { headers });
+      
       return response.data.id || response.data.task_id;
     } catch (error) {
       throw error;
@@ -64,46 +64,66 @@ export const sora2Config = {
   /**
    * 查询视频生成任务状态
    */
-  async getTask(toVideoDvo: ToVideoDvo): Promise<HumanDto | null> {
-    const humanDto: HumanDto = { status: '3' };
+  async getTask(toVideoDvo: ToVideoDvo): Promise<VideoDto | null> {
+    const VideoDto: VideoDto = { status: '3' };
     
     if (!toVideoDvo.taskId) {
-      humanDto.error = '任务ID不能为空';
-      return humanDto;
+      VideoDto.error = '任务ID不能为空';
+      return VideoDto;
     }
 
     const headers = {
-      'Authorization': `Bearer ${process.env.SORA_API_KEY || toVideoDvo.key}`,
+      'Authorization': `Bearer ${process.env.NEXT_PUBLIC_API_KEY || toVideoDvo.key}`,
       'Content-Type': 'application/json',
       'X-Sora-Version': '2.0'
     };
     
     try {
-      const response = await axios.get(`${this.baseUrl}/videos/tasks/${toVideoDvo.taskId}`, { headers });
+      const response = await axios.get(`${this.baseUrl}/v2/videos/generations/${toVideoDvo.taskId}`, { headers });
       
       const result = response.data;
       
       // 根据新的API响应格式处理状态
-      if (result.code === 'success') {
-        const taskData = result.data;
+      if (result.status === 'SUCCESS' || result.status === 'success' || result.status === 'SUCCESSFUL') {
+        VideoDto.status = '2';
         
-        if (taskData.status === 'SUCCESS') {
-          humanDto.status = '2';
-          // 获取data.data数组中的第一个url
-          const videoData = taskData.data?.data?.[0];
-          humanDto.videoUrl = videoData?.url;
-          return humanDto;
-        } else if (taskData.status === 'FAILURE') {
-          humanDto.status = '3';
-          humanDto.error = taskData.fail_reason || '视频生成失败';
-          return humanDto;
-        } else if (taskData.status === 'IN_PROGRESS' || taskData.status === 'NOT_START') {
-          humanDto.status = '1';
-          return humanDto;
+        // 尝试从多个可能的路径提取视频URL
+        // 1. 首先尝试 result.data?.output
+        // 2. 然后尝试 result.output
+        // 3. 最后尝试 result.video_url 或 result.url
+        VideoDto.videoUrl = result.data?.output || 
+                           result.output || 
+                           result.video_url || 
+                           result.url ||
+                           result.data?.url;
+        
+        // 如果视频URL是相对路径，转换为完整URL
+        if (VideoDto.videoUrl && !VideoDto.videoUrl.startsWith('http')) {
+          VideoDto.videoUrl = `${this.baseUrl}${VideoDto.videoUrl.startsWith('/') ? '' : '/'}${VideoDto.videoUrl}`;
         }
+        
+        return VideoDto;
+      } else if (result.status === 'FAILURE' || result.status === 'failure' || result.status === 'FAILED') {
+        VideoDto.status = '3';
+        // 提取详细的失败原因
+        let errorMessage = result.fail_reason || result.error || '视频生成失败';
+        // 如果是JSON格式的错误信息，解析它
+        if (errorMessage.startsWith('{') && errorMessage.endsWith('}')) {
+          try {
+            const errorObj = JSON.parse(errorMessage);
+            errorMessage = errorObj.message || errorObj.error || errorMessage;
+          } catch (e) {
+            // 解析失败，保持原错误信息
+          }
+        }
+        VideoDto.error = errorMessage;
+        return VideoDto;
+      } else if (result.status === 'IN_PROGRESS' || result.status === 'NOT_START' || result.status === 'PROCESSING' || result.status === 'in_progress' || result.status === 'PENDING') {
+        VideoDto.status = '1';
+        return VideoDto;
       }
       
-      return humanDto;
+      return VideoDto;
     } catch (error) {
       throw error;
     }
@@ -111,7 +131,7 @@ export const sora2Config = {
 
   // 验证API密钥格式
   validateApiKey(key: string): boolean {
-    return key && key.startsWith('sk-sora-') && key.length > 15;
+    return key && key.startsWith('sk-') && key.length > 15;
   },
 
   // 验证提示词格式
@@ -145,4 +165,4 @@ export const sora2Config = {
   }
 };
 
-export type { ToVideoDvo, HumanDto };
+export type { ToVideoDvo, VideoDto };

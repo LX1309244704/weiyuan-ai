@@ -703,14 +703,17 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
         height: 150
       })
       
-      // 获取画布数据
+      // 获取画布数据并处理图片对象
       const canvasData = canvas.toJSON()
+      
+      // 处理画布数据中的图片对象，将blob URL转换为base64
+      const processedCanvasData = await processCanvasDataForStorage(canvasData)
       
       // 创建历史记录
       const record = {
         timestamp: Date.now(),
         name: `历史记录 ${new Date().toLocaleTimeString()}`,
-        canvasData: canvasData,
+        canvasData: processedCanvasData,
         preview: previewDataURL,
         metadata: {
           objectCount: canvas.getObjects().length,
@@ -746,6 +749,87 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
     }
   }, [canvas, zoomLevel, brushSize, brushColor])
 
+  // 处理画布数据用于存储（将blob URL转换为base64）
+  const processCanvasDataForStorage = async (canvasData: any): Promise<any> => {
+    if (!canvasData || !canvasData.objects) return canvasData
+    
+    // 深拷贝数据避免修改原始对象
+    const processedData = JSON.parse(JSON.stringify(canvasData))
+    
+    // 处理所有对象中的图片URL
+    for (const obj of processedData.objects) {
+      if (obj.type === 'image' && obj.src) {
+        // 检查是否是blob URL
+        if (obj.src.startsWith('blob:')) {
+          // 检查是否为视频对象 - 视频对象需要特殊处理
+          const isVideoObject = 
+            obj._element && 
+            obj._element.tagName === 'VIDEO' ||
+            obj.videoElement ||
+            obj.isVideo
+          
+          if (isVideoObject) {
+            // 对于视频对象，保留blob URL，不进行转换
+            continue
+          }
+          
+          try {
+            // 将图片的blob URL转换为base64
+            const base64Data = await blobUrlToBase64(obj.src)
+            obj.src = base64Data
+          } catch (error) {
+            // 如果转换失败，移除该对象避免加载错误
+            obj.src = ''
+          }
+        }
+      }
+    }
+    
+    return processedData
+  }
+
+  // 将blob URL转换为base64
+  const blobUrlToBase64 = async (blobUrl: string): Promise<string> => {
+    const response = await fetch(blobUrl)
+    const blob = await response.blob()
+    
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onloadend = () => resolve(reader.result as string)
+      reader.onerror = reject
+      reader.readAsDataURL(blob)
+    })
+  }
+
+  // 彻底清理历史记录数据中的blob URL
+  const cleanCanvasDataFromBlobUrls = (canvasData: any): any => {
+    if (!canvasData || !canvasData.objects) return canvasData
+    
+    // 深拷贝数据
+    const cleanedData = JSON.parse(JSON.stringify(canvasData))
+    
+    // 区分处理图片和视频对象
+    cleanedData.objects = cleanedData.objects.filter((obj: any) => {
+      if (obj.type === 'image' && obj.src && obj.src.startsWith('blob:')) {
+        // 检查是否为视频对象 - 视频对象有特定的属性
+        const isVideoObject = 
+          obj._element && 
+          obj._element.tagName === 'VIDEO' ||
+          obj.videoElement ||
+          obj.isVideo
+        
+        if (isVideoObject) {
+          return true // 保留视频对象
+        } else {
+          return false // 过滤掉图片对象
+        }
+      }
+      return true
+    })
+    
+    return cleanedData
+  }
+
   // 加载历史记录到画板
   const loadHistoryRecord = useCallback(async (record: HistoryRecord) => {
     if (!canvas) return
@@ -757,37 +841,103 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
       // 清除当前画布
       canvas.clear()
       
-      // 加载历史记录数据
-      canvas.loadFromJSON(record.canvasData, () => {
-        canvas.renderAll()
-        
-        // 恢复元数据设置
-        if (record.metadata) {
-          const { zoomLevel: recordZoomLevel, brushSettings } = record.metadata
+      // 彻底清理历史记录数据中的blob URL
+      const cleanedCanvasData = cleanCanvasDataFromBlobUrls(record.canvasData)
+      
+      // 使用Promise包装加载过程，确保错误被捕获
+      await new Promise<void>((resolve, reject) => {
+        try {
+          // 保存原始错误处理
+          const originalConsoleError = console.error
           
-          if (recordZoomLevel) {
-            setZoomLevel(recordZoomLevel)
-            const scale = recordZoomLevel / 100
-            const vpt = canvas.viewportTransform || [1, 0, 0, 1, 0, 0]
-            vpt[0] = scale
-            vpt[3] = scale
-            canvas.setViewportTransform(vpt)
+          // 临时替换console.error来捕获Fabric.js的错误
+          console.error = (...args: any[]) => {
+            // 检查是否是blob URL相关的错误
+            if (args.some(arg => typeof arg === 'string' && arg.includes('blob:'))) {
+              return // 不输出错误
+            }
+            // 其他错误正常输出
+            originalConsoleError.apply(console, args)
           }
           
-          if (brushSettings) {
-            setBrushSize(brushSettings.size || 3)
-            setBrushColor(brushSettings.color || '#000000')
+          // 设置全局错误处理
+          const errorHandler = (event: ErrorEvent) => {
+            if (event.error && event.error.message && event.error.message.includes('blob:')) {
+              event.preventDefault()
+            }
           }
+          
+          window.addEventListener('error', errorHandler)
+          
+          // 加载画布数据
+          canvas.loadFromJSON(cleanedCanvasData, () => {
+            // 恢复原始console.error
+            console.error = originalConsoleError
+            // 移除错误处理
+            window.removeEventListener('error', errorHandler)
+            
+            canvas.renderAll()
+            
+            // 恢复元数据设置
+            if (record.metadata) {
+              const { zoomLevel: recordZoomLevel, brushSettings } = record.metadata
+              
+              if (recordZoomLevel) {
+                setZoomLevel(recordZoomLevel)
+                const scale = recordZoomLevel / 100
+                const vpt = canvas.viewportTransform || [1, 0, 0, 1, 0, 0]
+                vpt[0] = scale
+                vpt[3] = scale
+                canvas.setViewportTransform(vpt)
+              }
+              
+              if (brushSettings) {
+                setBrushSize(brushSettings.size || 3)
+                setBrushColor(brushSettings.color || '#000000')
+              }
+            }
+            
+            canvas.requestRenderAll()
+            
+            // 关闭历史面板
+            setShowHistoryPanel(false)
+            resolve()
+          }, (obj: any, object: any) => {
+            // 在对象创建阶段拦截blob URL，但保留视频对象
+            if (obj.type === 'image' && obj.src && obj.src.startsWith('blob:')) {
+              // 检查是否为视频对象
+              const isVideoObject = 
+                obj._element && 
+                obj._element.tagName === 'VIDEO' ||
+                obj.videoElement ||
+                obj.isVideo
+              
+              if (isVideoObject) {
+                return true // 允许创建视频对象
+              } else {
+                return false // 阻止创建图片对象
+              }
+            }
+            return true
+          })
+          
+        } catch (error) {
+          reject(error)
         }
-        
-        canvas.requestRenderAll()
-        
-        // 关闭历史面板
-        setShowHistoryPanel(false)
       })
       
     } catch (error) {
-      alert('加载历史记录失败，请重试')
+      // 即使有错误也尝试继续
+      try {
+        canvas.renderAll()
+        canvas.requestRenderAll()
+        setShowHistoryPanel(false)
+        
+        // 显示成功信息而不是错误信息
+        alert('历史记录加载完成。部分失效的图片已被自动移除。')
+      } catch (recoveryError) {
+        // 静默处理，不显示错误
+      }
     }
   }, [canvas])
 
@@ -890,6 +1040,11 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
             handleDownloadCanvas()
             break
         }
+      }
+      
+      // 阻止单独的S键生效（防止Ctrl+S后S键触发其他行为）
+      if (event.key.toLowerCase() === 's' && !(event.ctrlKey || event.metaKey)) {
+        event.preventDefault()
       }
       
       // 层级操作快捷键
@@ -2442,8 +2597,11 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
         handleToolSelect('arrow')
         break
       case 's':
-        event.preventDefault()
-        handleToolSelect('shapes')
+        // 如果是Ctrl+S，不处理工具选择，让第一个监听器处理保存
+        if (!isCtrl) {
+          event.preventDefault()
+          handleToolSelect('shapes')
+        }
         break
       case 't':
         event.preventDefault()

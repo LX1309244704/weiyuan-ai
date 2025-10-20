@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
  // 动态导入 fabric 于客户端（避免 SSR 环境下 undefined）
 import CanvasToolbar from '../../components/CanvasToolbar'
 import SelectionPanel from '../../components/SelectionPanel'
@@ -8,6 +8,7 @@ import ImageSelectionPanel from '../../components/ImageSelectionPanel'
 import ChatPanel from '../../components/ChatPanel'
 import ShapePropertiesPanel from '../../components/ShapePropertiesPanel'
 import BrushPropertiesPanel from '../../components/BrushPropertiesPanel'
+import { loadImageWithCors } from '../../utils/corsProxy'
 import TextPropertiesPanel from '../../components/TextPropertiesPanel'
 import { useUserStore } from '@/stores/userStore'
 import { ModelService } from '@/services/ai-models'
@@ -23,7 +24,13 @@ export default function CanvasPage() {
   const [fabricCanvas, setFabricCanvas] = useState<any | null>(null)
   const [selectedArea, setSelectedArea] = useState<SelectionData | null>(null)
   const [selectedImage, setSelectedImage] = useState<any>(null)
-  const chatPanelRef = useRef<{ handleReceiveScreenshot: (imageData: string, prompt: string) => void } | null>(null)
+  const chatPanelRef = useRef<{ 
+    handleReceiveScreenshot: (imageData: string, prompt: string) => void
+    logGenerateImageTask: (prompt: string, model: string, aspectRatio: string, imageData?: string) => void
+    logGenerateImageResult: (imageUrl: string, prompt: string) => void
+    logGenerateVideoTask: (prompt: string, model: string, duration: string, aspectRatio: string, imageData?: string) => void
+    setSelectedModel: (model: string) => void
+  } | null>(null)
   const fabricNSRef = useRef<any>(null)
   const { theme } = useUserStore()
   const [contextMenu, setContextMenu] = useState<{ visible: boolean; x: number; y: number }>({ visible: false, x: 0, y: 0 })
@@ -280,13 +287,21 @@ export default function CanvasPage() {
     chatPanelRef.current?.handleReceiveScreenshot(imageData, prompt)
   }
 
+  // 使用ref来存储handleGenerateVideo函数，避免循环依赖
+  const handleGenerateVideoRef = useRef<((prompt: string, model: string, position: { x: number; y: number }, screenshotData?: string, aspectRatio?: string) => Promise<void>) | null>(null)
+  
   // 检查ChatPanel组件是否正常加载，并将ref暴露给全局window对象
   useEffect(() => {
     // 将ChatPanel的ref暴露给全局window对象，便于SelectionPanel调用
     if (chatPanelRef.current) {
       (window as any).chatPanelRef = chatPanelRef.current
     }
-  }, [chatPanelRef.current])
+    
+    return () => {
+      // 清理时移除全局函数
+      delete (window as any).chatPanelRef
+    }
+  }, []) // 空依赖数组，只在组件挂载时执行一次
 
   // 监听画布对象选中事件（图片选中）- 修复版本
   useEffect(() => {
@@ -450,6 +465,28 @@ export default function CanvasPage() {
           }
         }, 3000)
       }
+      
+      // 如果有视频数据，保存到全局变量供点击画布时使用
+      if (event.detail.videoData) {
+        if (!(window as any).pendingCanvasVideo) {
+          (window as any).pendingCanvasVideo = []
+        }
+        (window as any).pendingCanvasVideo.push(event.detail.videoData)
+        
+        // 显示提示信息
+        const notification = document.createElement('div')
+        notification.innerHTML = `
+          <div style="position: fixed; top: 20px; right: 20px; background: #3b82f6; color: white; padding: 8px 12px; border-radius: 6px; z-index: 10000; box-shadow: 0 2px 4px rgba(0,0,0,0.1); font-size: 14px;">
+            已切换到选择工具，请在画板上点击放置视频
+          </div>
+        `
+        document.body.appendChild(notification)
+        setTimeout(() => {
+          if (document.body.contains(notification)) {
+            document.body.removeChild(notification)
+          }
+        }, 3000)
+      }
     }
 
     // 添加事件监听器
@@ -523,6 +560,288 @@ export default function CanvasPage() {
           delete (window as any).pendingCanvasImage
         }
       }
+      
+      // 检查是否有待处理的视频
+      if ((window as any).pendingCanvasVideo && (window as any).pendingCanvasVideo.length > 0) {
+        const videoData = (window as any).pendingCanvasVideo.shift()
+        
+        if (videoData) {
+          // 在点击位置添加视频
+          const pointer = fabricCanvas.getPointer(options.e)
+          
+          try {
+            const fabric = (window as any).fabric
+            if (!fabric) {
+              throw new Error('Fabric.js未正确加载')
+            }
+            
+            // 参考标准模式创建视频元素
+            const videoElement = document.createElement('video')
+            const sourceElement = document.createElement('source')
+            
+            // FabricImage requires the width and height attributes to be set
+            videoElement.width = 480
+            videoElement.height = 360
+            videoElement.id = 'generated-video-' + Date.now()
+            videoElement.muted = true
+            videoElement.loop = true
+            videoElement.playsInline = true
+            videoElement.crossOrigin = 'anonymous'
+            
+            // 设置视频源
+            sourceElement.src = videoData
+            videoElement.appendChild(sourceElement)
+            
+            // 视频播放结束自动重新播放
+            videoElement.onended = () => {
+              videoElement.play()
+            }
+            
+            // 添加到DOM并隐藏，避免在页面中显示
+            videoElement.style.position = 'fixed'
+            videoElement.style.left = '-9999px'
+            videoElement.style.top = '-9999px'
+            videoElement.style.opacity = '0'
+            videoElement.style.pointerEvents = 'none'
+            document.body.appendChild(videoElement)
+            
+            // 等待视频加载完成后获取实际尺寸
+            const createFabricVideo = () => {
+              try {
+                // 获取视频实际尺寸
+                const videoWidth = videoElement.videoWidth || 640
+                const videoHeight = videoElement.videoHeight || 360
+                
+                // 设置合适的显示尺寸，避免过大或过小
+                const displayWidth = Math.min(videoWidth, 800) // 最大宽度限制
+                const displayHeight = (videoHeight / videoWidth) * displayWidth
+                
+                // 确保视频元素本身有正确的尺寸设置
+                videoElement.width = videoWidth
+                videoElement.height = videoHeight
+                videoElement.style.width = displayWidth + 'px'
+                videoElement.style.height = displayHeight + 'px'
+                
+                // 创建Fabric Image对象，使用合适的显示尺寸
+                const fabricVideo = new fabric.Image(videoElement, {
+                  left: pointer.x,
+                  top: pointer.y,
+                  width: displayWidth,
+                  height: displayHeight,
+                  scaleX: 1,
+                  scaleY: 1,
+                  selectable: true,
+                  hasControls: true,
+                  cornerStyle: 'circle',
+                  transparentCorners: false,
+                  cornerColor: '#3b82f6',
+                  cornerSize: 12,
+                  rotatingPointOffset: 40,
+                  objectCaching: false,
+                  originX: 'center',
+                  originY: 'center',
+                  // 确保视频完整显示，不裁剪
+                  cropX: 0,
+                  cropY: 0,
+                  // 设置正确的缩放模式
+                  imageSmoothing: true
+                })
+              
+              // 设置自定义属性
+              fabricVideo.set('videoUrl', videoData)
+              fabricVideo.set('videoElement', videoElement)
+              
+              // 添加双击事件：播放/暂停视频
+              fabricVideo.on('mousedblclick', () => {
+                if (videoElement.paused) {
+                  videoElement.play().then(() => {
+                  }).catch((error) => {
+                    // 显示播放提示
+                    const playHint = document.createElement('div')
+                    playHint.innerHTML = `
+                      <div style="position: fixed; top: 60px; right: 20px; background: #f59e0b; color: white; padding: 8px 12px; border-radius: 6px; z-index: 10000; box-shadow: 0 2px 4px rgba(0,0,0,0.1); font-size: 12px;">
+                        双击播放失败，请点击视频控件播放
+                      </div>
+                    `
+                    document.body.appendChild(playHint)
+                    setTimeout(() => {
+                      if (document.body.contains(playHint)) {
+                        document.body.removeChild(playHint)
+                      }
+                    }, 3000)
+                  })
+                } else {
+                  videoElement.pause()
+                }
+              })
+              
+              // 添加右键菜单事件：在新窗口打开视频
+              fabricVideo.on('mouseup', (options) => {
+                if (options.button === 3) { // 右键
+                  window.open(videoData, '_blank')
+                }
+              })
+              
+              // 当对象被移除时清理视频元素
+              fabricVideo.on('removed', () => {
+                videoElement.pause()
+                if (document.body.contains(videoElement)) {
+                  document.body.removeChild(videoElement)
+                }
+              })
+              
+              // 添加到画布
+              fabricCanvas.add(fabricVideo)
+              fabricCanvas.setActiveObject(fabricVideo)
+              
+              // 立即尝试播放视频
+              const playVideo = () => {
+                videoElement.play().then(() => {
+                }).catch((error) => {
+                  // 显示播放提示
+                  const playHint = document.createElement('div')
+                  playHint.innerHTML = `
+                    <div style="position: fixed; top: 60px; right: 20px; background: #f59e0b; color: white; padding: 8px 12px; border-radius: 6px; z-index: 10000; box-shadow: 0 2px 4px rgba(0,0,0,0.1); font-size: 12px;">
+                      视频已加载，双击播放或点击视频控件播放
+                    </div>
+                  `
+                  document.body.appendChild(playHint)
+                  setTimeout(() => {
+                    if (document.body.contains(playHint)) {
+                      document.body.removeChild(playHint)
+                    }
+                  }, 3000)
+                })
+              }
+              
+              // 等待视频加载完成后播放
+              if (videoElement.readyState >= 2) {
+                playVideo()
+              } else {
+                videoElement.addEventListener('loadeddata', playVideo)
+                videoElement.addEventListener('canplay', playVideo)
+              }
+              
+              // 设置动画循环渲染 - 确保视频能够实时更新
+              const renderLoop = () => {
+                if (fabricCanvas) {
+                  fabricCanvas.renderAll()
+                  fabric.util.requestAnimFrame(renderLoop)
+                }
+              }
+              
+              // 启动渲染循环
+              if (fabricCanvas) {
+                fabric.util.requestAnimFrame(renderLoop)
+              }
+              
+            } catch (error) {
+                
+                // 如果视频添加失败，创建视频占位符
+                const fabricVideoPlaceholder = new fabric.Group([
+                  new fabric.Rect({
+                    width: 200,
+                    height: 150,
+                    fill: '#1f2937',
+                    rx: 8,
+                    ry: 8
+                  }),
+                  new fabric.Text('视频', {
+                    fontSize: 16,
+                    fill: 'white',
+                    originX: 'center',
+                    originY: 'center'
+                  })
+                ], {
+                  left: pointer.x,
+                  top: pointer.y,
+                  selectable: true,
+                  hasControls: true,
+                  cornerStyle: 'circle',
+                  transparentCorners: false,
+                  cornerColor: '#3b82f6',
+                  cornerSize: 12,
+                  rotatingPointOffset: 40
+                })
+                
+                // 设置双击事件在新窗口打开视频
+                fabricVideoPlaceholder.on('mousedblclick', () => {
+                  window.open(videoData, '_blank')
+                })
+                
+                fabricCanvas.add(fabricVideoPlaceholder)
+                fabricCanvas.setActiveObject(fabricVideoPlaceholder)
+                fabricCanvas.renderAll()
+              }
+            }
+            
+            // 如果视频已经加载了元数据，立即创建Fabric对象
+            if (videoElement.readyState >= 1) {
+              createFabricVideo()
+            } else {
+              // 等待视频加载元数据后再创建Fabric对象
+              videoElement.addEventListener('loadedmetadata', createFabricVideo)
+            }
+            
+            // 视频加载错误处理
+            videoElement.addEventListener('error', (error) => {
+              // 清理DOM元素
+              if (document.body.contains(videoElement)) {
+                document.body.removeChild(videoElement)
+              }
+              
+              // 创建错误提示占位符
+              const fabricError = new fabric.Group([
+                new fabric.Rect({
+                  width: 200,
+                  height: 150,
+                  fill: '#ef4444',
+                  rx: 8,
+                  ry: 8
+                }),
+                new fabric.Text('视频加载失败', {
+                  fontSize: 14,
+                  fill: 'white',
+                  originX: 'center',
+                  originY: 'center'
+                })
+              ], {
+                left: pointer.x,
+                top: pointer.y,
+                selectable: true,
+                hasControls: true
+              })
+              
+              fabricCanvas.add(fabricError)
+              fabricCanvas.setActiveObject(fabricError)
+              fabricCanvas.renderAll()
+            })
+            
+            // 添加超时处理，防止视频加载卡住
+            const loadTimeout = setTimeout(() => {
+              if (videoElement.readyState < 2) { // 如果视频还没加载到可以播放的状态
+                videoElement.dispatchEvent(new Event('error'))
+              }
+            }, 10000) // 10秒超时
+            
+            // 加载完成后清除超时
+            videoElement.addEventListener('loadeddata', () => {
+              clearTimeout(loadTimeout)
+            })
+            
+            videoElement.addEventListener('error', () => {
+              clearTimeout(loadTimeout)
+            })
+            
+          } catch (error) {
+          }
+        }
+        
+        // 如果没有更多待处理视频，清除全局变量
+        if ((window as any).pendingCanvasVideo.length === 0) {
+          delete (window as any).pendingCanvasVideo
+        }
+      }
     }
 
     fabricCanvas.on('mouse:down', handleCanvasClick)
@@ -534,6 +853,11 @@ export default function CanvasPage() {
 
   // AI 生成占位逻辑（与 ChatPanel 的模拟一致）
   const handleGenerateImage = async (prompt: string, model: string, position: { x: number; y: number }, screenshotData?: string, aspectRatio?: string) => {
+    
+    // 定义内部函数，避免依赖问题
+    const getApiKeyForModel = (model: string): string => {
+      return process.env.NEXT_PUBLIC_API_KEY || ''
+    }
     
     try {
       if (!fabricCanvas) return
@@ -561,7 +885,7 @@ export default function CanvasPage() {
         request.images = [screenshotData] // 正确的方式：通过images数组传递
       }
       
-      // 注意：SelectionPanel已经调用了logGenerateImageTask，这里不再重复调用
+      // SelectionPanel已经调用了logGenerateImageTask，这里不再重复调用
       // 避免聊天记录中出现重复消息
       
       // 先创建任务，确保没有错误后再添加占位图片
@@ -583,28 +907,52 @@ export default function CanvasPage() {
       
       // 检查是否为图片生成结果
       if (result.status === '2' && 'imageUrl' in result && result.imageUrl) {
-        // 生成成功，替换加载中的占位图片为实际图片
-        await replaceLoadingWithActualImage(loadingImage, result.imageUrl)
-        
-        // 记录生图结果到聊天记录
-        if (chatPanelRef.current && (chatPanelRef.current as any).logGenerateImageResult) {
-          (chatPanelRef.current as any).logGenerateImageResult(result.imageUrl, prompt)
-        }
-        
-        // 显示成功提示
-        const successNotification = document.createElement('div')
-        successNotification.innerHTML = `
-          <div style="position: fixed; top: 20px; right: 20px; background: #10b981; color: white; padding: 8px 12px; border-radius: 6px; z-index: 10000; box-shadow: 0 2px 4px rgba(0,0,0,0.1); font-size: 14px;">
-            图片生成成功！
-          </div>
-        `
-        document.body.appendChild(successNotification)
-        
-        setTimeout(() => {
-          if (document.body.contains(successNotification)) {
-            document.body.removeChild(successNotification)
+        try {
+          // 生成成功，替换加载中的占位图片为实际图片
+          await replaceLoadingWithActualImage(loadingImage, result.imageUrl)
+          
+          // 记录生图结果到聊天记录
+          if (chatPanelRef.current && (chatPanelRef.current as any).logGenerateImageResult) {
+            (chatPanelRef.current as any).logGenerateImageResult(result.imageUrl, prompt)
           }
-        }, 2000)
+          
+          // 显示成功提示
+          const successNotification = document.createElement('div')
+          successNotification.innerHTML = `
+            <div style="position: fixed; top: 20px; right: 20px; background: #10b981; color: white; padding: 8px 12px; border-radius: 6px; z-index: 10000; box-shadow: 0 2px 4px rgba(0,0,0,0.1); font-size: 14px;">
+              图片生成成功！
+            </div>
+          `
+          document.body.appendChild(successNotification)
+          
+          setTimeout(() => {
+            if (document.body.contains(successNotification)) {
+              document.body.removeChild(successNotification)
+            }
+          }, 2000)
+          
+        } catch (imageError) {
+          // 图片加载失败，移除加载中的占位图片
+          if (loadingImage && fabricCanvas) {
+            fabricCanvas.remove(loadingImage)
+            fabricCanvas.renderAll()
+          }
+          
+          // 显示图片加载失败提示
+          const errorNotification = document.createElement('div')
+          errorNotification.innerHTML = `
+            <div style="position: fixed; top: 20px; right: 20px; background: #f59e0b; color: white; padding: 8px 12px; border-radius: 6px; z-index: 10000; box-shadow: 0 2px 4px rgba(0,0,0,0.1); font-size: 14px;">
+              图片生成成功但加载失败: ${imageError instanceof Error ? imageError.message : '未知错误'}
+            </div>
+          `
+          document.body.appendChild(errorNotification)
+          
+          setTimeout(() => {
+            if (document.body.contains(errorNotification)) {
+              document.body.removeChild(errorNotification)
+            }
+          }, 3000)
+        }
         
       } else {
         // 生成失败，移除加载中的占位图片
@@ -655,8 +1003,317 @@ export default function CanvasPage() {
       }, 3000)
     }
   }
-  const handleGenerateVideo = async (prompt: string) => {
-  }
+  const handleGenerateVideo = useCallback(async (prompt: string, model: string, position: { x: number; y: number }, screenshotData?: string, aspectRatio?: string) => {
+    
+    // 将函数直接暴露给全局window对象，便于其他组件调用
+    (window as any).handleGenerateVideo = handleGenerateVideo
+    
+    // 定义内部函数，避免依赖问题
+    const getApiKeyForModel = (model: string): string => {
+      return process.env.NEXT_PUBLIC_API_KEY || ''
+    }
+    
+    const addLoadingVideoPlaceholder = async (position: { x: number; y: number }): Promise<any> => {
+      return new Promise((resolve, reject) => {
+        if (!fabricCanvas) {
+          reject(new Error('画布未初始化'))
+          return
+        }
+        
+        // 创建一个视频加载占位符SVG
+        const svgContent = `
+          <svg width="200" height="150" viewBox="0 0 100 75" xmlns="http://www.w3.org/2000/svg">
+            <rect width="100" height="75" fill="#1f2937" rx="8" ry="8"/>
+            <circle cx="50" cy="37.5" r="15" fill="#3b82f6" opacity="0.8">
+              <animate attributeName="r" values="15;20;15" dur="1.5s" repeatCount="indefinite"/>
+              <animate attributeName="opacity" values="0.8;0.4;0.8" dur="1.5s" repeatCount="indefinite"/>
+            </circle>
+            <polygon points="45,35 45,40 50,37.5" fill="white"/>
+            <text x="50" y="65" text-anchor="middle" fill="#9ca3af" font-family="Arial" font-size="8">视频生成中...</text>
+          </svg>
+        `
+        
+        // 将SVG转换为DataURL
+        const svgDataURL = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgContent)))
+        
+        // 创建图片元素
+        const img = new Image()
+        img.crossOrigin = 'anonymous'
+        
+        img.onload = () => {
+          try {
+            // 创建Fabric图片对象
+            const fabricImg = new (window as any).fabric.Image(img, {
+              left: position.x,
+              top: position.y,
+              selectable: false, // 加载中视频不可选中
+              hasControls: false,
+              lockMovementX: true,
+              lockMovementY: true,
+              lockRotation: true,
+              lockScalingX: true,
+              lockScalingY: true,
+              opacity: 0.9
+            })
+            
+            // 设置合适的尺寸
+            const width = 200
+            const height = 150
+            const scaleX = width / img.width
+            const scaleY = height / img.height
+            fabricImg.scaleX = scaleX
+            fabricImg.scaleY = scaleY
+            
+            // 添加到画布
+            fabricCanvas.add(fabricImg)
+            fabricCanvas.renderAll()
+            
+            resolve(fabricImg)
+            
+          } catch (error) {
+            reject(error)
+          }
+        }
+        
+        img.onerror = (error) => {
+          reject(new Error('视频加载中占位图片加载失败'))
+        }
+        
+        img.src = svgDataURL
+      })
+    }
+    
+    const replaceLoadingWithActualVideo = async (loadingVideo: any, actualVideoUrl: string): Promise<any> => {
+      return new Promise((resolve, reject) => {
+        if (!fabricCanvas || !loadingVideo) {
+          reject(new Error('画布或加载中视频未初始化'))
+          return
+        }
+        
+        // 获取加载中视频的位置和尺寸
+        const position = {
+          x: loadingVideo.left || 0,
+          y: loadingVideo.top || 0
+        }
+        const width = (loadingVideo.width || 200) * (loadingVideo.scaleX || 1)
+        const height = (loadingVideo.height || 150) * (loadingVideo.scaleY || 1)
+        
+        // 移除加载中视频
+        fabricCanvas.remove(loadingVideo)
+        
+        // 创建视频元素
+        const videoElement = document.createElement('video')
+        videoElement.src = actualVideoUrl
+        videoElement.crossOrigin = 'anonymous'
+        videoElement.controls = true
+        videoElement.style.width = '200px'
+        videoElement.style.height = '150px'
+        videoElement.style.borderRadius = '8px'
+        
+        // 创建Fabric视频对象
+        const fabricVideo = new (window as any).fabric.Image(videoElement, {
+          left: position.x,
+          top: position.y,
+          selectable: true,
+          hasControls: true,
+          cornerStyle: 'circle',
+          transparentCorners: false,
+          cornerColor: '#3b82f6',
+          cornerSize: 12,
+          rotatingPointOffset: 40
+        })
+        
+        // 设置合适的尺寸
+        fabricVideo.scaleX = width / 200
+        fabricVideo.scaleY = height / 150
+        
+        // 添加到画布
+        fabricCanvas.add(fabricVideo)
+        fabricCanvas.setActiveObject(fabricVideo)
+        fabricCanvas.renderAll()
+        
+        // 开始播放视频
+        videoElement.play().catch(() => {
+          // 自动播放可能被阻止，这是正常的
+        })
+        
+        resolve(fabricVideo)
+      })
+    }
+    
+    try {
+      if (!fabricCanvas) return
+      
+      // 显示生成中提示
+      const notification = document.createElement('div')
+      notification.innerHTML = `
+        <div style="position: fixed; top: 20px; right: 20px; background: #3b82f6; color: white; padding: 8px 12px; border-radius: 6px; z-index: 10000; box-shadow: 0 2px 4px rgba(0,0,0,0.1); font-size: 14px;">
+          正在生成视频...
+        </div>
+      `
+      document.body.appendChild(notification)
+      
+      // 准备请求参数
+      const request: any = {
+        model: model as any,
+        prompt: prompt,
+        apiKey: getApiKeyForModel(model),
+        duration: model === 'sora2' ? '10s' : '8s', // Sora2默认10秒，其他模型8秒
+        aspectRatio: aspectRatio || '16:9' // 使用传入的比例或默认16:9
+      }
+      
+      // 如果有截图数据，添加到请求参数中作为参考图片
+      if (screenshotData) {
+        request.images = [screenshotData]
+      }
+      
+
+      
+      // 先创建任务，确保没有错误后再添加占位视频
+      const response = await fetch('/api/generate-video', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(request)
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || '视频生成任务创建失败');
+      }
+      
+      const createResult = await response.json();
+      const taskId = createResult.taskId;
+      
+      // 记录视频生成任务到聊天记录
+      if (typeof window !== 'undefined' && (window as any).chatPanelRef) {
+        const chatPanel = (window as any).chatPanelRef
+        if (chatPanel.logGenerateVideoTask) {
+          chatPanel.logGenerateVideoTask(prompt, model, request.duration, request.aspectRatio, screenshotData)
+        }
+      }
+      
+      // 只有在任务创建成功后才添加加载中的占位视频
+      const loadingVideo = await addLoadingVideoPlaceholder(position)
+      
+      // 轮询任务状态（最多轮询120次，每次间隔5秒，总共10分钟）
+      let pollResult = null
+      let pollCount = 0
+      const maxPollCount = 120
+      
+      while (pollCount < maxPollCount) {
+        // 查询任务状态
+        const statusResponse = await fetch(`/api/generate-video?taskId=${taskId}&apiKey=${request.apiKey}`);
+        
+        if (!statusResponse.ok) {
+          const errorData = await statusResponse.json();
+          throw new Error(errorData.error || '查询视频状态失败');
+        }
+        
+        const statusResult = await statusResponse.json();
+        pollResult = statusResult.data;
+        
+        // 检查任务状态 - 确保状态为成功且视频链接存在
+        if (pollResult.status === '2' && pollResult.videoUrl && pollResult.videoUrl.trim() !== '') {
+          // 生成成功，停止轮询
+          break
+        } else if (pollResult.status === '3') {
+          // 生成失败，停止轮询
+          break
+        }
+        
+        pollCount++
+        
+        // 如果已经达到最大轮询次数，强制停止轮询
+        if (pollCount >= maxPollCount) {
+          break
+        }
+        
+        // 等待5秒后继续轮询
+        await new Promise(resolve => setTimeout(resolve, 5000))
+      }
+      
+      // 移除生成中提示
+      if (document.body.contains(notification)) {
+        document.body.removeChild(notification)
+      }
+      
+      // 检查是否为视频生成结果 - 确保状态为成功且视频链接存在
+      if (pollResult && pollResult.status === '2' && pollResult.videoUrl && pollResult.videoUrl.trim() !== '') {
+        // 生成成功，替换加载中的占位视频为实际视频
+        await replaceLoadingWithActualVideo(loadingVideo, pollResult.videoUrl)
+        
+        // 显示成功提示
+        const successNotification = document.createElement('div')
+        successNotification.innerHTML = `
+          <div style="position: fixed; top: 20px; right: 20px; background: #10b981; color: white; padding: 8px 12px; border-radius: 6px; z-index: 10000; box-shadow: 0 2px 4px rgba(0,0,0,0.1); font-size: 14px;">
+            视频生成成功！
+          </div>
+        `
+        document.body.appendChild(successNotification)
+        
+        setTimeout(() => {
+          if (document.body.contains(successNotification)) {
+            document.body.removeChild(successNotification)
+          }
+        }, 2000)
+        
+      } else {
+        // 生成失败或超时，移除加载中的占位视频
+        if (loadingVideo && fabricCanvas) {
+          fabricCanvas.remove(loadingVideo)
+          fabricCanvas.renderAll()
+        }
+        
+        // 显示失败提示
+        const errorMessage = pollResult && pollResult.error 
+          ? pollResult.error 
+          : pollCount >= maxPollCount 
+            ? '视频生成超时，请稍后重试' 
+            : '视频生成失败'
+            
+        const errorNotification = document.createElement('div')
+        errorNotification.innerHTML = `
+          <div style="position: fixed; top: 20px; right: 20px; background: #ef4444; color: white; padding: 8px 12px; border-radius: 6px; z-index: 10000; box-shadow: 0 2px 4px rgba(0,0,0,0.1); font-size: 14px;">
+            视频生成失败: ${errorMessage}
+          </div>
+        `
+        document.body.appendChild(errorNotification)
+        
+        setTimeout(() => {
+          if (document.body.contains(errorNotification)) {
+            document.body.removeChild(errorNotification)
+          }
+        }, 3000)
+      }
+      
+    } catch (error) {
+      
+      // 移除所有可能的生成中提示
+      const notifications = document.querySelectorAll('div[style*="正在生成视频"], div[style*="background: #3b82f6"]')
+      notifications.forEach(notification => {
+        if (notification && notification.parentNode) {
+          notification.parentNode.removeChild(notification)
+        }
+      })
+      
+      // 显示错误提示
+      const errorNotification = document.createElement('div')
+      errorNotification.innerHTML = `
+        <div style="position: fixed; top: 20px; right: 20px; background: #ef4444; color: white; padding: 8px 12px; border-radius: 6px; z-index: 10000; box-shadow: 0 2px 4px rgba(0,0,0,0.1); font-size: 14px;">
+          视频生成失败: ${error instanceof Error ? error.message : '未知错误'}
+        </div>
+      `
+      document.body.appendChild(errorNotification)
+      
+      setTimeout(() => {
+        if (document.body.contains(errorNotification)) {
+          document.body.removeChild(errorNotification)
+        }
+      }, 3000)
+    }
+  }, [fabricCanvas])
 
   // 清除框选状态
   const handleClearSelection = () => {
@@ -705,6 +1362,11 @@ export default function CanvasPage() {
   // 处理基于图片生成内容 - 直接调用生图接口并加载到画布
   const handleGenerateFromImage = async (imageObject: any, prompt: string, model: string, aspectRatio: string) => {
     let loadingImage: any = null
+    
+    // 定义内部函数，避免依赖问题
+    const getApiKeyForModel = (model: string): string => {
+      return process.env.NEXT_PUBLIC_API_KEY || ''
+    }
     
     try {
       if (!fabricCanvas || !selectedImage) return
@@ -770,28 +1432,52 @@ export default function CanvasPage() {
       
       // 检查是否为图片生成结果
       if (result.status === '2' && 'imageUrl' in result && result.imageUrl) {
-        // 生成成功，替换加载中的占位图片为实际图片
-        await replaceLoadingWithActualImage(loadingImage, result.imageUrl)
-        
-        // 记录生图结果到聊天记录
-        if (chatPanelRef.current && (chatPanelRef.current as any).logGenerateImageResult) {
-          (chatPanelRef.current as any).logGenerateImageResult(result.imageUrl, prompt)
-        }
-        
-        // 显示成功提示
-        const successNotification = document.createElement('div')
-        successNotification.innerHTML = `
-          <div style="position: fixed; top: 20px; right: 20px; background: #10b981; color: white; padding: 8px 12px; border-radius: 6px; z-index: 10000; box-shadow: 0 2px 4px rgba(0,0,0,0.1); font-size: 14px;">
-            图片生成成功！
-          </div>
-        `
-        document.body.appendChild(successNotification)
-        
-        setTimeout(() => {
-          if (document.body.contains(successNotification)) {
-            document.body.removeChild(successNotification)
+        try {
+          // 生成成功，替换加载中的占位图片为实际图片
+          await replaceLoadingWithActualImage(loadingImage, result.imageUrl)
+          
+          // 记录生图结果到聊天记录
+          if (chatPanelRef.current && (chatPanelRef.current as any).logGenerateImageResult) {
+            (chatPanelRef.current as any).logGenerateImageResult(result.imageUrl, prompt)
           }
-        }, 2000)
+          
+          // 显示成功提示
+          const successNotification = document.createElement('div')
+          successNotification.innerHTML = `
+            <div style="position: fixed; top: 20px; right: 20px; background: #10b981; color: white; padding: 8px 12px; border-radius: 6px; z-index: 10000; box-shadow: 0 2px 4px rgba(0,0,0,0.1); font-size: 14px;">
+              图片生成成功！
+            </div>
+          `
+          document.body.appendChild(successNotification)
+          
+          setTimeout(() => {
+            if (document.body.contains(successNotification)) {
+              document.body.removeChild(successNotification)
+            }
+          }, 2000)
+          
+        } catch (imageError) {
+          // 图片加载失败，移除加载中的占位图片
+          if (loadingImage && fabricCanvas) {
+            fabricCanvas.remove(loadingImage)
+            fabricCanvas.renderAll()
+          }
+          
+          // 显示图片加载失败提示
+          const errorNotification = document.createElement('div')
+          errorNotification.innerHTML = `
+            <div style="position: fixed; top: 20px; right: 20px; background: #f59e0b; color: white; padding: 8px 12px; border-radius: 6px; z-index: 10000; box-shadow: 0 2px 4px rgba(0,0,0,0.1); font-size: 14px;">
+              图片生成成功但加载失败: ${imageError instanceof Error ? imageError.message : '未知错误'}
+            </div>
+          `
+          document.body.appendChild(errorNotification)
+          
+          setTimeout(() => {
+            if (document.body.contains(errorNotification)) {
+              document.body.removeChild(errorNotification)
+            }
+          }, 3000)
+        }
         
       } else {
         // 生成失败，移除加载中的占位图片
@@ -860,60 +1546,43 @@ export default function CanvasPage() {
         return
       }
       
-      // 创建图片元素
-      const img = new Image()
-      img.crossOrigin = 'anonymous'
-      
-      img.onload = () => {
-        try {
-          // 创建Fabric图片对象
-          const fabricImg = new (window as any).fabric.Image(img, {
-            left: position.x,
-            top: position.y,
-            selectable: true,
-            hasControls: true,
-            cornerStyle: 'circle',
-            transparentCorners: false,
-            cornerColor: '#3b82f6',
-            cornerSize: 12,
-            rotatingPointOffset: 40
-          })
-          
-          // 设置合适的缩放比例
-          const maxSize = 400
-          const scale = Math.min(maxSize / img.width, maxSize / img.height, 1)
-          fabricImg.scale(scale)
-          
-          // 添加到画布
-          fabricCanvas.add(fabricImg)
-          fabricCanvas.setActiveObject(fabricImg)
-          fabricCanvas.renderAll()
-          
-          resolve(fabricImg)
-          
-        } catch (error) {
-          reject(error)
-        }
-      }
-      
-      img.onerror = (error) => {
-        reject(new Error('图片加载失败'))
-      }
-      
-      img.src = imageUrl
+      // 使用CORS代理安全加载图片
+      loadImageWithCors(imageUrl)
+        .then((img) => {
+          try {
+            // 创建Fabric图片对象
+            const fabricImg = new (window as any).fabric.Image(img, {
+              left: position.x,
+              top: position.y,
+              selectable: true,
+              hasControls: true,
+              cornerStyle: 'circle',
+              transparentCorners: false,
+              cornerColor: '#3b82f6',
+              cornerSize: 12,
+              rotatingPointOffset: 40
+            })
+            
+            // 设置合适的缩放比例
+            const maxSize = 400
+            const scale = Math.min(maxSize / img.width, maxSize / img.height, 1)
+            fabricImg.scale(scale)
+            
+            // 添加到画布
+            fabricCanvas.add(fabricImg)
+            fabricCanvas.setActiveObject(fabricImg)
+            fabricCanvas.renderAll()
+            
+            resolve(fabricImg)
+            
+          } catch (error) {
+            reject(error)
+          }
+        })
+        .catch((error) => {
+          reject(new Error(`图片加载失败: ${error.message}`))
+        })
     })
-  }
-  
-  // 根据模型获取API密钥
-  const getApiKeyForModel = (model: string): string => {
-    switch (model) {
-      case 'nano-banana':
-        return process.env.NEXT_PUBLIC_NANO_BANANA_API_KEY || ''
-      case 'seedream-4':
-        return process.env.NEXT_PUBLIC_SEEDREAM_API_KEY || ''
-      default:
-        return ''
-    }
   }
   
   // 根据宽高比获取对应的尺寸
@@ -1033,47 +1702,42 @@ export default function CanvasPage() {
       // 移除加载中图片
       fabricCanvas.remove(loadingImage)
       
-      // 创建实际图片元素
-      const img = new Image()
-      img.crossOrigin = 'anonymous'
-      
-      img.onload = () => {
-        try {
-          // 创建Fabric图片对象
-          const fabricImg = new (window as any).fabric.Image(img, {
-            left: position.x,
-            top: position.y,
-            selectable: true,
-            hasControls: true,
-            cornerStyle: 'circle',
-            transparentCorners: false,
-            cornerColor: '#3b82f6',
-            cornerSize: 12,
-            rotatingPointOffset: 40
-          })
-          
-          // 设置合适的缩放比例
-          const maxSize = 400
-          const scale = Math.min(maxSize / img.width, maxSize / img.height, 1)
-          fabricImg.scale(scale)
-          
-          // 添加到画布
-          fabricCanvas.add(fabricImg)
-          fabricCanvas.setActiveObject(fabricImg)
-          fabricCanvas.renderAll()
-          
-          resolve(fabricImg)
-          
-        } catch (error) {
-          reject(error)
-        }
-      }
-      
-      img.onerror = (error) => {
-        reject(new Error('实际图片加载失败'))
-      }
-      
-      img.src = actualImageUrl
+      // 使用CORS代理安全加载图片
+      loadImageWithCors(actualImageUrl)
+        .then((img) => {
+          try {
+            // 创建Fabric图片对象
+            const fabricImg = new (window as any).fabric.Image(img, {
+              left: position.x,
+              top: position.y,
+              selectable: true,
+              hasControls: true,
+              cornerStyle: 'circle',
+              transparentCorners: false,
+              cornerColor: '#3b82f6',
+              cornerSize: 12,
+              rotatingPointOffset: 40
+            })
+            
+            // 设置合适的缩放比例
+            const maxSize = 400
+            const scale = Math.min(maxSize / img.width, maxSize / img.height, 1)
+            fabricImg.scale(scale)
+            
+            // 添加到画布
+            fabricCanvas.add(fabricImg)
+            fabricCanvas.setActiveObject(fabricImg)
+            fabricCanvas.renderAll()
+            
+            resolve(fabricImg)
+            
+          } catch (error) {
+            reject(error)
+          }
+        })
+        .catch((error) => {
+          reject(new Error(`实际图片加载失败: ${error.message}`))
+        })
     })
   }
 

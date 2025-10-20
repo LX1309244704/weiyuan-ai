@@ -2,12 +2,15 @@ import { nanoBananaConfig, type ToImageDvo as NanoBananaDvo, type HumanDto as Na
 import { seedream4Config, type ToImageDvo as Seedream4Dvo, type HumanDto as Seedream4HumanDto } from './seedream-4';
 import { veo3Config, type ToVideoDvo as Veo3Dvo, type HumanDto as Veo3HumanDto } from './veo3';
 import { sora2Config, type ToVideoDvo as Sora2Dvo, type HumanDto as Sora2HumanDto } from './sora2';
+import { gpt5Config, type TextRequestDvo as Gpt5RequestDvo, type TextResponseDto as Gpt5ResponseDto } from './gpt5';
+import { deepseekConfig, type TextRequestDvo as DeepSeekRequestDvo, type TextResponseDto as DeepSeekResponseDto } from './deepseek';
+import { gemini25Config, type TextRequestDvo as Gemini25RequestDvo, type TextResponseDto as Gemini25ResponseDto } from './gemini2.5';
 
 // 统一的模型类型定义
 export type ModelType = 'image' | 'video' | 'text';
 export type ImageModel = 'nano-banana' | 'seedream-4';
-export type VideoModel = 'veo3' | 'sora2';
-export type TextModel = 'gpt-4' | 'claude-3'; // 预留文本模型
+export type VideoModel = 'veo3.1' | 'sora2';
+export type TextModel = 'gpt5' | 'deepseek' | 'gemini2.5';
 
 // 统一的请求参数接口
 export interface BaseRequestDvo {
@@ -27,7 +30,15 @@ export interface VideoRequestDvo extends BaseRequestDvo {
   duration?: string;
   resolution?: string;
   style?: string;
+  aspectRatio?: string;
   model: VideoModel;
+}
+
+export interface TextRequestDvo extends BaseRequestDvo {
+  maxTokens?: number;
+  temperature?: number;
+  topP?: number;
+  model: TextModel;
 }
 
 export interface BaseResponseDto {
@@ -43,6 +54,10 @@ export interface VideoResponseDto extends BaseResponseDto {
   videoUrl?: string;
 }
 
+export interface TextResponseDto extends BaseResponseDto {
+  text?: string;
+}
+
 // 模型配置映射
 export const modelConfigs = {
   // 图片生成模型
@@ -50,8 +65,13 @@ export const modelConfigs = {
   'seedream-4': seedream4Config,
   
   // 视频生成模型
-  'veo3': veo3Config,
+  'veo3.1': veo3Config,
   'sora2': sora2Config,
+  
+  // 文本生成模型
+  'gpt5': gpt5Config,
+  'deepseek': deepseekConfig,
+  'gemini2.5': gemini25Config,
 } as const;
 
 // 模型信息映射
@@ -70,8 +90,8 @@ export const modelInfo = {
     supportsImageInput: true,
     maxPromptLength: 1000
   },
-  'veo3': {
-    name: 'Veo3',
+  'veo3.1': {
+    name: 'Veo3.1',
     type: 'video' as const,
     description: '快速视频生成模型',
     supportsImageInput: true,
@@ -83,6 +103,27 @@ export const modelInfo = {
     description: '高级视频生成模型',
     supportsImageInput: true,
     maxPromptLength: 1000
+  },
+  'gpt5': {
+    name: 'GPT-5',
+    type: 'text' as const,
+    description: 'OpenAI最新文本生成模型',
+    supportsImageInput: false,
+    maxPromptLength: 4000
+  },
+  'deepseek': {
+    name: 'DeepSeek',
+    type: 'text' as const,
+    description: '深度求索文本生成模型',
+    supportsImageInput: false,
+    maxPromptLength: 4000
+  },
+  'gemini2.5': {
+    name: 'Gemini 2.5',
+    type: 'text' as const,
+    description: 'Google Gemini文本生成模型',
+    supportsImageInput: false,
+    maxPromptLength: 4000
   }
 } as const;
 
@@ -91,7 +132,7 @@ export class ModelService {
   /**
    * 创建生成任务
    */
-  static async createTask(request: ImageRequestDvo | VideoRequestDvo): Promise<string> {
+  static async createTask(request: ImageRequestDvo | VideoRequestDvo | TextRequestDvo): Promise<string> {
     const model = request.model;
     const config = modelConfigs[model];
     
@@ -123,7 +164,31 @@ export class ModelService {
         };
         return await config.createAsyncImage(toImageDvo as any);
       } else if (config.type === 'video') {
-        return await config.createVideo(request as any);
+        // 为视频模型构建正确的参数对象，确保aspectRatio正确传递
+        const videoRequest = request as VideoRequestDvo;
+        const toVideoDvo = {
+          prompt: videoRequest.prompt,
+          key: videoRequest.key,
+          taskId: videoRequest.taskId,
+          images: videoRequest.images,
+          duration: videoRequest.duration,
+          resolution: videoRequest.resolution,
+          style: videoRequest.style,
+          aspectRatio: videoRequest.aspectRatio // 确保aspectRatio参数传递
+        };
+        return await config.createVideo(toVideoDvo as any);
+      } else if (config.type === 'text') {
+        // 文本模型处理
+        const textRequest = request as TextRequestDvo;
+        const textDvo = {
+          prompt: textRequest.prompt,
+          key: textRequest.key,
+          taskId: textRequest.taskId,
+          maxTokens: textRequest.maxTokens,
+          temperature: textRequest.temperature,
+          topP: textRequest.topP
+        };
+        return await config.createTextGeneration(textDvo as any);
       } else {
         throw new Error(`不支持的模型类型`);
       }
@@ -135,7 +200,7 @@ export class ModelService {
   /**
    * 查询任务状态（支持状态循环查询）
    */
-  static async getTaskStatus(request: ImageRequestDvo | VideoRequestDvo): Promise<ImageResponseDto | VideoResponseDto> {
+  static async getTaskStatus(request: ImageRequestDvo | VideoRequestDvo | TextRequestDvo): Promise<ImageResponseDto | VideoResponseDto | TextResponseDto> {
     const model = request.model;
     const config = modelConfigs[model];
     
@@ -148,7 +213,7 @@ export class ModelService {
     }
     
     try {
-      // 循环查询直到出现最终状态（FAILURE或SUCCESS）
+      // 循环查询直到出现最终状态（SUCCESS或FAILURE）
       let result: any = null;
       let attempts = 0;
       const maxAttempts = 300; // 最多尝试5分钟（300秒）
@@ -158,6 +223,8 @@ export class ModelService {
           result = await config.getTask(request as any);
         } else if (config.type === 'video') {
           result = await config.getTask(request as any);
+        } else if (config.type === 'text') {
+          result = await config.getTask(request as any);
         } else {
           throw new Error(`不支持的模型类型`);
         }
@@ -165,7 +232,7 @@ export class ModelService {
         // 检查是否为最终状态（SUCCESS或FAILURE）
         // 对于Nano-Banana模型，result.status为'2'表示成功，'3'表示失败
         // '1'表示处理中状态，需要继续循环查询
-        if (result.status === '2' || result.status === '3') {
+        if (result && (result.status === '2' || result.status === '3')) {
           break;
         }
         
@@ -176,11 +243,21 @@ export class ModelService {
         }
       }
       
+      // 如果达到最大尝试次数仍未获得最终状态，返回超时错误
+      if (attempts >= maxAttempts && result && !(result.status === '2' || result.status === '3')) {
+        return {
+          status: '3',
+          error: '任务状态查询超时'
+        } as any;
+      }
+      
       // 返回标准化响应
       if (config.type === 'image') {
         return this.normalizeImageResponse(result);
-      } else {
+      } else if (config.type === 'video') {
         return this.normalizeVideoResponse(result);
+      } else {
+        return this.normalizeTextResponse(result);
       }
     } catch (error) {
       throw error;
@@ -255,6 +332,19 @@ export class ModelService {
     return {
       status: response.status || '3',
       videoUrl: response.videoUrl,
+      error: response.error
+    };
+  }
+  
+  // 标准化文本响应
+  private static normalizeTextResponse(response: any): TextResponseDto {
+    if (!response) {
+      return { status: '3', error: '无响应数据' };
+    }
+    
+    return {
+      status: response.status || '3',
+      text: response.text,
       error: response.error
     };
   }
