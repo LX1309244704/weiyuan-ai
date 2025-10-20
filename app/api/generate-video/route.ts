@@ -71,7 +71,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const taskId = searchParams.get('taskId')
     const model = searchParams.get('model')
-    const key = searchParams.get('key')
+    const key = searchParams.get('key') || searchParams.get('apiKey') // 支持两种参数名
 
     if (!taskId || !model || !key) {
       return NextResponse.json(
@@ -91,7 +91,8 @@ export async function GET(request: NextRequest) {
     const videoRequest = {
       taskId,
       model: model as any,
-      key
+      key,
+      prompt: 'video generation task' // 提供有效的prompt值
     }
 
     const result = await ModelService.getTaskStatus(videoRequest)

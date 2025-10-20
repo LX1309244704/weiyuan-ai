@@ -1,7 +1,7 @@
-import { nanoBananaConfig, type ToImageDvo as NanoBananaDvo, type HumanDto as NanoBananaHumanDto } from './nano-banana';
-import { seedream4Config, type ToImageDvo as Seedream4Dvo, type HumanDto as Seedream4HumanDto } from './seedream-4';
-import { veo3Config, type ToVideoDvo as Veo3Dvo, type HumanDto as Veo3HumanDto } from './veo3';
-import { sora2Config, type ToVideoDvo as Sora2Dvo, type HumanDto as Sora2HumanDto } from './sora2';
+import { nanoBananaConfig, type ToImageDvo as NanoBananaDvo, type ImageDto as NanoBananaHumanDto } from './nano-banana';
+import { seedream4Config, type ToImageDvo as Seedream4Dvo, type ImageDto as Seedream4HumanDto } from './seedream-4';
+import { veo3Config, type ToVideoDvo as Veo3Dvo, type VideoDto as Veo3HumanDto } from './veo3';
+import { sora2Config, type ToVideoDvo as Sora2Dvo, type VideoDto as Sora2HumanDto } from './sora2';
 import { gpt5Config, type TextRequestDvo as Gpt5RequestDvo, type TextResponseDto as Gpt5ResponseDto } from './gpt5';
 import { deepseekConfig, type TextRequestDvo as DeepSeekRequestDvo, type TextResponseDto as DeepSeekResponseDto } from './deepseek';
 import { gemini25Config, type TextRequestDvo as Gemini25RequestDvo, type TextResponseDto as Gemini25ResponseDto } from './gemini2.5';

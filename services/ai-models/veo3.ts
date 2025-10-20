@@ -10,7 +10,7 @@ interface ToVideoDvo {
   resolution?: string;
 }
 
-interface HumanDto {
+interface VideoDto {
   status: string;
   videoUrl?: string;
   error?: string;
@@ -60,15 +60,15 @@ export const veo3Config = {
   /**
    * 查询视频生成任务状态
    */
-  async getTask(toVideoDvo: ToVideoDvo): Promise<HumanDto | null> {
+  async getTask(toVideoDvo: ToVideoDvo): Promise<VideoDto | null> {
     // 使用环境变量中的API密钥
     const apiKey = process.env.NEXT_PUBLIC_API_KEY || toVideoDvo.key;
     
-    const humanDto: HumanDto = { status: '3' };
+    const VideoDto: VideoDto = { status: '3' };
     
     if (!toVideoDvo.taskId) {
-      humanDto.error = '任务ID不能为空';
-      return humanDto;
+      VideoDto.error = '任务ID不能为空';
+      return VideoDto;
     }
 
     const headers = {
@@ -86,22 +86,22 @@ export const veo3Config = {
         const taskData = result.data;
         
         if (taskData.status === 'SUCCESS') {
-          humanDto.status = '2';
+          VideoDto.status = '2';
           // 获取data.data数组中的第一个url
           const videoData = taskData.data?.data?.[0];
-          humanDto.videoUrl = videoData?.url;
-          return humanDto;
+          VideoDto.videoUrl = videoData?.url;
+          return VideoDto;
         } else if (taskData.status === 'FAILURE') {
-          humanDto.status = '3';
-          humanDto.error = taskData.fail_reason || '视频生成失败';
-          return humanDto;
+          VideoDto.status = '3';
+          VideoDto.error = taskData.fail_reason || '视频生成失败';
+          return VideoDto;
         } else if (taskData.status === 'IN_PROGRESS' || taskData.status === 'NOT_START') {
-          humanDto.status = '1';
-          return humanDto;
+          VideoDto.status = '1';
+          return VideoDto;
         }
       }
       
-      return humanDto;
+      return VideoDto;
     } catch (error) {
       throw error;
     }
@@ -133,4 +133,4 @@ export const veo3Config = {
   }
 };
 
-export type { ToVideoDvo, HumanDto };
+export type { ToVideoDvo, VideoDto };
