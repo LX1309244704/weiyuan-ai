@@ -26,7 +26,7 @@ const ImageSelectionPanel: React.FC<ImageSelectionPanelProps> = ({
   const [isMultipleSelection, setIsMultipleSelection] = useState(false)
   const [selectedModelType, setSelectedModelType] = useState<'image' | 'video'>('image')
   const [selectedImageModel, setSelectedImageModel] = useState('nano-banana')
-  const [selectedVideoModel, setSelectedVideoModel] = useState('veo3')
+  const [selectedVideoModel, setSelectedVideoModel] = useState('sora2')
   const [selectedAspectRatio, setSelectedAspectRatio] = useState('16:9')
   const [selectedVideoSeconds, setSelectedVideoSeconds] = useState('8')
   const [showModelDropdown, setShowModelDropdown] = useState(false)
@@ -539,7 +539,7 @@ const ImageSelectionPanel: React.FC<ImageSelectionPanelProps> = ({
               {showRatioDropdown && (
                 <div className="absolute bottom-full left-0 mb-1 w-16 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-600 z-10">
                   <div className="p-1">
-                    {['16:9', '9:16'].map((ratio) => (
+                    {(selectedModelType === 'image' ? ['1:1', '16:9', '9:16', '4:3', '3:4'] : ['16:9', '9:16']).map((ratio) => (
                       <button
                         key={ratio}
                         onClick={() => {
