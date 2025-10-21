@@ -562,6 +562,31 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
     }
   }
 
+  // 记录视频生成结果到聊天记录
+  const logGenerateVideoResult = (videoUrl: string, prompt: string) => {
+    const aiMessage: Message = {
+      id: `ai-video-result-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      type: 'ai',
+      content: `已根据提示词"${prompt}"生成视频`,
+      timestamp: new Date(),
+      videoData: videoUrl,
+    }
+
+    // 直接更新消息状态，不嵌套数据库操作
+    setMessages(prev => [...prev, aiMessage])
+    
+    // 异步保存到数据库
+    if (typeof window !== 'undefined') {
+      chatDB.addMessage({
+        type: aiMessage.type,
+        content: aiMessage.content,
+        timestamp: aiMessage.timestamp,
+        videoData: aiMessage.videoData
+      }, 'default').catch(error => {
+      })
+    }
+  }
+
   // 记录视频生成任务到聊天记录
   const logGenerateVideoTask = (prompt: string, model: string, duration: string, aspectRatio: string, imageData?: string) => {
     const settingsInfo = `[模型: ${model}, 时长: ${duration}, 比例: ${aspectRatio}]`
@@ -730,6 +755,7 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
     logGenerateImageTask,
     logGenerateImageResult,
     logGenerateVideoTask,
+    logGenerateVideoResult,
     handleAddToCanvas,
     handleAddVideoToCanvas,
     setSelectedModel: (model: ImageModel | VideoModel | TextModel) => {
@@ -740,7 +766,7 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
         setSelectedModelType(modelInfo.type);
       }
     }
-  }), [handleReceiveScreenshot, resetChat, logGenerateImageTask, logGenerateImageResult, logGenerateVideoTask, handleAddToCanvas, handleAddVideoToCanvas])
+  }), [handleReceiveScreenshot, resetChat, logGenerateImageTask, logGenerateImageResult, logGenerateVideoTask, logGenerateVideoResult, handleAddToCanvas, handleAddVideoToCanvas])
 
   // 使用useEffect监听onReceiveScreenshot的变化
   useEffect(() => {
