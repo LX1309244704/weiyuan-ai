@@ -12,7 +12,7 @@ interface SelectionData {
 interface SelectionPanelProps {
   selectedArea: SelectionData | null
   onGenerateImage: (prompt: string, model: string, position: { x: number; y: number }, screenshotData?: string, aspectRatio?: string) => void
-  onGenerateVideo: (prompt: string, model: string) => void
+  onGenerateVideo: (prompt: string, model: string, position: { x: number; y: number }, screenshotData?: string, aspectRatio?: string, duration?: string) => void
   onCaptureArea: () => Promise<string | null>
   onReceiveScreenshot?: (imageData: string, prompt: string) => void
   onClearSelection?: () => void
