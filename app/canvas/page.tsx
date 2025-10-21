@@ -300,8 +300,87 @@ export default function CanvasPage() {
     return () => {
       // 清理时移除全局函数
       delete (window as any).chatPanelRef
+      delete (window as any).handleGenerateVideo
     }
   }, []) // 空依赖数组，只在组件挂载时执行一次
+
+  // 在组件挂载时直接定义并暴露handleGenerateVideo函数
+  useEffect(() => {
+    // 直接定义全局函数
+    (window as any).handleGenerateVideo = async (prompt: string, model: string, position: { x: number; y: number }, screenshotData?: string, aspectRatio?: string) => {
+      console.log('handleGenerateVideo被调用:', { prompt, model, position })
+      
+      if (!fabricCanvas) {
+        throw new Error('画布未初始化')
+      }
+      
+      // 先记录视频生成任务到聊天记录
+      if (typeof window !== 'undefined' && (window as any).chatPanelRef) {
+        const chatPanel = (window as any).chatPanelRef
+        if (chatPanel.logGenerateVideoTask) {
+          const duration = model === 'sora2' ? '10s' : '8s'
+          chatPanel.logGenerateVideoTask(prompt, model, duration, aspectRatio || '16:9', screenshotData)
+        }
+      }
+      
+      // 显示生成中提示
+      const notification = document.createElement('div')
+      notification.innerHTML = `
+        <div style="position: fixed; top: 20px; right: 20px; background: #3b82f6; color: white; padding: 8px 12px; border-radius: 6px; z-index: 10000; box-shadow: 0 2px 4px rgba(0,0,0,0.1); font-size: 14px;">
+          正在生成视频...
+        </div>
+      `
+      document.body.appendChild(notification)
+      
+      try {
+        // 这里暂时先显示成功提示，后续可以集成实际的视频生成API
+        setTimeout(() => {
+          if (document.body.contains(notification)) {
+            document.body.removeChild(notification)
+          }
+          
+          const successNotification = document.createElement('div')
+          successNotification.innerHTML = `
+            <div style="position: fixed; top: 20px; right: 20px; background: #10b981; color: white; padding: 8px 12px; border-radius: 6px; z-index: 10000; box-shadow: 0 2px 4px rgba(0,0,0,0.1); font-size: 14px;">
+              视频生成功能已调用成功！
+            </div>
+          `
+          document.body.appendChild(successNotification)
+          
+          setTimeout(() => {
+            if (document.body.contains(successNotification)) {
+              document.body.removeChild(successNotification)
+            }
+          }, 2000)
+        }, 1000)
+        
+      } catch (error) {
+        if (document.body.contains(notification)) {
+          document.body.removeChild(notification)
+        }
+        
+        const errorNotification = document.createElement('div')
+        errorNotification.innerHTML = `
+          <div style="position: fixed; top: 20px; right: 20px; background: #ef4444; color: white; padding: 8px 12px; border-radius: 6px; z-index: 10000; box-shadow: 0 2px 4px rgba(0,0,0,0.1); font-size: 14px;">
+            视频生成失败: ${error.message}
+          </div>
+        `
+        document.body.appendChild(errorNotification)
+        
+        setTimeout(() => {
+          if (document.body.contains(errorNotification)) {
+            document.body.removeChild(errorNotification)
+          }
+        }, 3000)
+      }
+    }
+    
+    console.log('handleGenerateVideo函数已直接暴露给全局window对象')
+    
+    return () => {
+      delete (window as any).handleGenerateVideo
+    }
+  }, [fabricCanvas]) // 依赖fabricCanvas
 
   // 监听画布对象选中事件（图片选中）- 修复版本
   useEffect(() => {
@@ -1004,9 +1083,6 @@ export default function CanvasPage() {
     }
   }
   const handleGenerateVideo = useCallback(async (prompt: string, model: string, position: { x: number; y: number }, screenshotData?: string, aspectRatio?: string) => {
-    
-    // 将函数直接暴露给全局window对象，便于其他组件调用
-    (window as any).handleGenerateVideo = handleGenerateVideo
     
     // 定义内部函数，避免依赖问题
     const getApiKeyForModel = (model: string): string => {

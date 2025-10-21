@@ -327,13 +327,6 @@ export default function SelectionPanel({ selectedArea, onGenerateImage, onCaptur
           }
         }
       } else {
-        // 记录视频生成任务
-        if (typeof window !== 'undefined' && (window as any).chatPanelRef) {
-          const chatPanel = (window as any).chatPanelRef
-          if (chatPanel.logGenerateVideoTask) {
-            chatPanel.logGenerateVideoTask(prompt, model, selectedVideoModel === 'sora2' ? '10s' : '8s', selectedAspectRatio, screenshotData)
-          }
-        }
       }
       
       if (selectedModelType === 'image') {
