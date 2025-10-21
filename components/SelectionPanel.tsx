@@ -346,10 +346,10 @@ export default function SelectionPanel({ selectedArea, onGenerateImage, onCaptur
           
           // 调用画布页面的视频生成函数，传递正确的aspectRatio和duration参数
           // 只有Sora2模型支持aspectRatio参数，其他模型使用默认值
-          const aspectRatio = selectedVideoModel === 'sora2' ? selectedAspectRatio : '16:9'
+          const aspectRatio = model === 'sora2' ? selectedAspectRatio : '16:9'
           
           if (typeof window !== 'undefined' && (window as any).handleGenerateVideo) {
-            (window as any).handleGenerateVideo(prompt, model, videoPosition, screenshotData, aspectRatio, selectedVideoSeconds + 's')
+            (window as any).handleGenerateVideo(prompt, model, videoPosition, screenshotData, aspectRatio, selectedVideoSeconds)
           }
         }
       }

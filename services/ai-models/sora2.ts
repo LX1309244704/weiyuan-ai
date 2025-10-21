@@ -34,6 +34,13 @@ export const sora2Config = {
   
   // 创建视频生成任务
   async createVideo(toVideoDvo: ToVideoDvo): Promise<string> {
+    console.log('Sora2模型接收到参数:', { 
+      prompt: toVideoDvo.prompt,
+      aspectRatio: toVideoDvo.aspectRatio,
+      duration: toVideoDvo.duration,
+      imagesCount: toVideoDvo.images?.length || 0
+    })
+    
     const requestBody = {
       prompt: toVideoDvo.prompt,
       model: "sora-2",
@@ -45,6 +52,8 @@ export const sora2Config = {
         images: toVideoDvo.images
       })
     };
+    
+    console.log('Sora2模型发送给API的参数:', requestBody)
     
     const headers = {
       'Authorization': `Bearer ${process.env.NEXT_PUBLIC_API_KEY || toVideoDvo.key}`,

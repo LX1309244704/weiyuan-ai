@@ -296,8 +296,8 @@ export default function CanvasPage() {
     }
     
     // 直接定义全局视频生成函数
-    (window as any).handleGenerateVideo = async (prompt: string, model: string, position: { x: number; y: number }, screenshotData?: string, aspectRatio?: string) => {
-      console.log('handleGenerateVideo被调用:', { prompt, model, position })
+    (window as any).handleGenerateVideo = async (prompt: string, model: string, position: { x: number; y: number }, screenshotData?: string, aspectRatio?: string, duration?: string) => {
+      console.log('handleGenerateVideo被调用:', { prompt, model, position, aspectRatio, duration, screenshotData: screenshotData ? '有截图数据' : '无截图数据' })
       
       if (!fabricCanvas) {
         throw new Error('画布未初始化')
@@ -482,7 +482,7 @@ export default function CanvasPage() {
           model: model as any,
           prompt: prompt,
           key: getApiKeyForModel(model), // 后端期望的参数名是key，不是apiKey
-          duration: model === 'sora2' ? '10s' : '8s', // Sora2默认10秒，其他模型8秒
+          duration: duration || (model === 'sora2' ? '10s' : '8s'), // 使用传入的时长或默认值
           aspectRatio: aspectRatio || '16:9' // 使用传入的比例或默认16:9
         }
         

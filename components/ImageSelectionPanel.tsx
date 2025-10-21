@@ -635,7 +635,7 @@ const ImageSelectionPanel: React.FC<ImageSelectionPanelProps> = ({
                   ? customPrompt
                   : `基于此图片生成${selectedModelType === 'image' ? '图片' : '视频'}`
                 const model = selectedModelType === 'image' ? selectedImageModel : selectedVideoModel
-                const aspectRatio = selectedModelType === 'image' ? selectedAspectRatio : '16:9'
+                const aspectRatio = selectedAspectRatio
                 
                 // 生成任务会在canvas/page.tsx的handleGenerateFromImage函数中记录到聊天记录
                 // 这里不再重复记录，避免参数重复显示
@@ -658,7 +658,7 @@ const ImageSelectionPanel: React.FC<ImageSelectionPanelProps> = ({
                     if (typeof window !== 'undefined' && (window as any).handleGenerateVideo) {
                       console.log('调用视频生成函数:', { prompt, model, videoPosition, imageData, aspectRatio })
                       try {
-                        (window as any).handleGenerateVideo(prompt, model, videoPosition, imageData, aspectRatio)
+                        (window as any).handleGenerateVideo(prompt, model, videoPosition, imageData, aspectRatio, selectedVideoSeconds)
                       } catch (error) {
                         console.error('视频生成函数调用失败:', error)
                         // 显示错误提示
