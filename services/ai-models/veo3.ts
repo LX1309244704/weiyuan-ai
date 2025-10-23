@@ -11,6 +11,7 @@ interface ToVideoDvo {
 }
 
 interface VideoDto {
+interface VideoDto {
   status: string;
   videoUrl?: string;
   error?: string;
@@ -103,6 +104,8 @@ export const veo3Config = {
     if (!toVideoDvo.taskId) {
       VideoDto.error = '任务ID不能为空';
       return VideoDto;
+      VideoDto.error = '任务ID不能为空';
+      return VideoDto;
     }
 
     const headers = {
@@ -121,20 +124,29 @@ export const veo3Config = {
         
         if (taskData.status === 'SUCCESS') {
           VideoDto.status = '2';
+          VideoDto.status = '2';
           // 获取data.data数组中的第一个url
           const videoData = taskData.data?.data?.[0];
+          VideoDto.videoUrl = videoData?.url;
+          return VideoDto;
           VideoDto.videoUrl = videoData?.url;
           return VideoDto;
         } else if (taskData.status === 'FAILURE') {
           VideoDto.status = '3';
           VideoDto.error = taskData.fail_reason || '视频生成失败';
           return VideoDto;
+          VideoDto.status = '3';
+          VideoDto.error = taskData.fail_reason || '视频生成失败';
+          return VideoDto;
         } else if (taskData.status === 'IN_PROGRESS' || taskData.status === 'NOT_START') {
+          VideoDto.status = '1';
+          return VideoDto;
           VideoDto.status = '1';
           return VideoDto;
         }
       }
       
+      return VideoDto;
       return VideoDto;
     } catch (error) {
       throw error;
@@ -167,4 +179,5 @@ export const veo3Config = {
   }
 };
 
+export type { ToVideoDvo, VideoDto };
 export type { ToVideoDvo, VideoDto };

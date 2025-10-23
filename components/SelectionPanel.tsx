@@ -28,6 +28,7 @@ export default function SelectionPanel({ selectedArea, onGenerateImage, onCaptur
   const [selectedModelType, setSelectedModelType] = useState<'image' | 'video'>('image')
   const [selectedImageModel, setSelectedImageModel] = useState('nano-banana')
   const [selectedVideoModel, setSelectedVideoModel] = useState('sora2')
+  const [selectedVideoModel, setSelectedVideoModel] = useState('sora2')
   const [selectedAspectRatio, setSelectedAspectRatio] = useState('16:9')
   const [selectedVideoSeconds, setSelectedVideoSeconds] = useState('8')
   const [showModelDropdown, setShowModelDropdown] = useState(false)
@@ -325,13 +326,6 @@ export default function SelectionPanel({ selectedArea, onGenerateImage, onCaptur
           }
         }
       } else {
-        // 记录视频生成任务
-        if (typeof window !== 'undefined' && (window as any).chatPanelRef) {
-          const chatPanel = (window as any).chatPanelRef
-          if (chatPanel.logGenerateVideoTask) {
-            chatPanel.logGenerateVideoTask(prompt, model, selectedVideoModel === 'sora2' ? '10s' : '8s', selectedAspectRatio, screenshotData)
-          }
-        }
       }
       
       if (selectedModelType === 'image') {
@@ -349,9 +343,12 @@ export default function SelectionPanel({ selectedArea, onGenerateImage, onCaptur
           // 如果有截图数据，传递给视频生成
           const images = screenshotData ? [screenshotData] : []
           
-          // 调用画布页面的视频生成函数，传递正确的aspectRatio参数
+          // 调用画布页面的视频生成函数，传递正确的aspectRatio和duration参数
+          // 只有Sora2模型支持aspectRatio参数，其他模型使用默认值
+          const aspectRatio = model === 'sora2' ? selectedAspectRatio : '16:9'
+          
           if (typeof window !== 'undefined' && (window as any).handleGenerateVideo) {
-            (window as any).handleGenerateVideo(prompt, model, videoPosition, screenshotData, selectedAspectRatio)
+            (window as any).handleGenerateVideo(prompt, model, videoPosition, screenshotData, aspectRatio, selectedVideoSeconds)
           }
         }
       }
@@ -518,7 +515,7 @@ export default function SelectionPanel({ selectedArea, onGenerateImage, onCaptur
               {showRatioDropdown && (
                 <div className="absolute bottom-full left-0 mb-1 w-16 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-600 z-10">
                   <div className="p-1">
-                    {['16:9', '9:16'].map((ratio) => (
+                    {(selectedModelType === 'image' ? ['1:1', '16:9', '9:16', '4:3', '3:4'] : ['16:9', '9:16']).map((ratio) => (
                       <button
                         key={ratio}
                         onClick={() => {

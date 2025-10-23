@@ -11,6 +11,8 @@ export async function POST(request: NextRequest) {
       duration = '10s', 
       aspectRatio = '16:9'
     } = body
+    
+    console.log('视频生成API接收到参数:', { prompt, model, duration, aspectRatio, imagesCount: images.length })
 
     // 验证必填参数
     if (!prompt) {

@@ -67,6 +67,8 @@ export const sora2Config = {
       })
     };
     
+    console.log('Sora2模型发送给API的参数:', requestBody)
+    
     const headers = {
       'Authorization': `Bearer ${apiKey}`,
       'Content-Type': 'application/json',

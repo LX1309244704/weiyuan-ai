@@ -27,6 +27,7 @@ const ImageSelectionPanel: React.FC<ImageSelectionPanelProps> = ({
   const [selectedModelType, setSelectedModelType] = useState<'image' | 'video'>('image')
   const [selectedImageModel, setSelectedImageModel] = useState('nano-banana')
   const [selectedVideoModel, setSelectedVideoModel] = useState('sora2')
+  const [selectedVideoModel, setSelectedVideoModel] = useState('sora2')
   const [selectedAspectRatio, setSelectedAspectRatio] = useState('16:9')
   const [selectedVideoSeconds, setSelectedVideoSeconds] = useState('8')
   const [showModelDropdown, setShowModelDropdown] = useState(false)
@@ -613,7 +614,7 @@ const ImageSelectionPanel: React.FC<ImageSelectionPanelProps> = ({
                   ? customPrompt
                   : `基于此图片生成${selectedModelType === 'image' ? '图片' : '视频'}`
                 const model = selectedModelType === 'image' ? selectedImageModel : selectedVideoModel
-                const aspectRatio = selectedModelType === 'image' ? selectedAspectRatio : '16:9'
+                const aspectRatio = selectedAspectRatio
                 
                 // 生成任务会在canvas/page.tsx的handleGenerateFromImage函数中记录到聊天记录
                 // 这里不再重复记录，避免参数重复显示
@@ -634,7 +635,42 @@ const ImageSelectionPanel: React.FC<ImageSelectionPanelProps> = ({
                     
                     // 调用画布页面的视频生成函数
                     if (typeof window !== 'undefined' && (window as any).handleGenerateVideo) {
-                      (window as any).handleGenerateVideo(prompt, model, videoPosition, imageData, aspectRatio)
+                      console.log('调用视频生成函数:', { prompt, model, videoPosition, imageData, aspectRatio })
+                      try {
+                        (window as any).handleGenerateVideo(prompt, model, videoPosition, imageData, aspectRatio, selectedVideoSeconds)
+                      } catch (error) {
+                        console.error('视频生成函数调用失败:', error)
+                        // 显示错误提示
+                        const errorNotification = document.createElement('div')
+                        errorNotification.innerHTML = `
+                          <div style="position: fixed; top: 20px; right: 20px; background: #ef4444; color: white; padding: 8px 12px; border-radius: 6px; z-index: 10000; box-shadow: 0 2px 4px rgba(0,0,0,0.1); font-size: 14px;">
+                            视频生成失败: ${error.message}
+                          </div>
+                        `
+                        document.body.appendChild(errorNotification)
+                        
+                        setTimeout(() => {
+                          if (document.body.contains(errorNotification)) {
+                            document.body.removeChild(errorNotification)
+                          }
+                        }, 3000)
+                      }
+                    } else {
+                      console.error('handleGenerateVideo函数未找到')
+                      // 显示错误提示
+                      const errorNotification = document.createElement('div')
+                      errorNotification.innerHTML = `
+                        <div style="position: fixed; top: 20px; right: 20px; background: #ef4444; color: white; padding: 8px 12px; border-radius: 6px; z-index: 10000; box-shadow: 0 2px 4px rgba(0,0,0,0.1); font-size: 14px;">
+                          视频生成功能未初始化，请刷新页面重试
+                        </div>
+                      `
+                      document.body.appendChild(errorNotification)
+                      
+                      setTimeout(() => {
+                        if (document.body.contains(errorNotification)) {
+                          document.body.removeChild(errorNotification)
+                        }
+                      }, 3000)
                     }
                   }
                 }
