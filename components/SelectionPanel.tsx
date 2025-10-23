@@ -12,7 +12,7 @@ interface SelectionData {
 interface SelectionPanelProps {
   selectedArea: SelectionData | null
   onGenerateImage: (prompt: string, model: string, position: { x: number; y: number }, screenshotData?: string, aspectRatio?: string) => void
-  onGenerateVideo: (prompt: string, model: string) => void
+  onGenerateVideo: (prompt: string, model: string, position: { x: number; y: number }, screenshotData?: string, aspectRatio?: string) => Promise<void>
   onCaptureArea: () => Promise<string | null>
   onReceiveScreenshot?: (imageData: string, prompt: string) => void
   onClearSelection?: () => void
@@ -27,7 +27,7 @@ export default function SelectionPanel({ selectedArea, onGenerateImage, onCaptur
   const [showTooltip, setShowTooltip] = useState(false)
   const [selectedModelType, setSelectedModelType] = useState<'image' | 'video'>('image')
   const [selectedImageModel, setSelectedImageModel] = useState('nano-banana')
-  const [selectedVideoModel, setSelectedVideoModel] = useState('veo3')
+  const [selectedVideoModel, setSelectedVideoModel] = useState('sora2')
   const [selectedAspectRatio, setSelectedAspectRatio] = useState('16:9')
   const [selectedVideoSeconds, setSelectedVideoSeconds] = useState('8')
   const [showModelDropdown, setShowModelDropdown] = useState(false)
@@ -106,8 +106,6 @@ export default function SelectionPanel({ selectedArea, onGenerateImage, onCaptur
   useEffect(() => {
     if (selectedVideoModel === 'sora2') {
       setSelectedVideoSeconds('10');
-    } else if (selectedVideoModel === 'veo3.1') {
-      setSelectedVideoSeconds('8');
     }
   }, [selectedVideoModel])
 
@@ -474,26 +472,7 @@ export default function SelectionPanel({ selectedArea, onGenerateImage, onCaptur
                     </>
                   ) : (
                     <>
-                      <button
-                        onClick={() => {
-                          setSelectedVideoModel('veo3.1')
-                          setShowAspectDropdown(false)
-                          // 同步到ChatPanel
-                          if (typeof window !== 'undefined' && (window as any).chatPanelRef) {
-                            const chatPanel = (window as any).chatPanelRef
-                            if (chatPanel.setSelectedModel) {
-                              chatPanel.setSelectedModel('veo3.1')
-                            }
-                          }
-                        }}
-                        className={`w-full text-left px-2 py-1 text-xs rounded ${
-                          selectedVideoModel === 'veo3.1' 
-                            ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300' 
-                            : 'hover:bg-gray-100 dark:hover:bg-gray-700'
-                        }`}
-                      >
-                        Veo3.1
-                      </button>
+
                       <button
                         onClick={() => {
                           setSelectedVideoModel('sora2')

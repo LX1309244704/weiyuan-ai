@@ -47,15 +47,37 @@ export const useUserStore = create<UserState>()(
       },
       
       updatePoints: (points) => {
-        const currentUserInfo = get().userInfo
-        if (currentUserInfo) {
+        console.log('updatePoints被调用，传入点数:', points);
+        const currentUserInfo = get().userInfo;
+        console.log('当前用户信息:', currentUserInfo);
+        
+        // 如果没有用户信息，创建默认用户信息
+        if (!currentUserInfo) {
+          console.log('没有用户信息，创建默认用户信息并设置点数');
           set({
             userInfo: {
-              ...currentUserInfo,
-              points: Math.max(0, points)
+              id: 'test-user-default',
+              email: 'default@example.com',
+              username: '默认用户',
+              avatar: '/default-avatar.png',
+              points: points,
+              createdAt: new Date().toISOString()
             }
-          })
+          });
+          console.log('默认用户信息创建完成，点数:', points);
+          return;
         }
+        
+        // 如果有用户信息，更新点数
+        const updatedPoints = Math.max(0, points);
+        console.log('更新后的点数:', updatedPoints);
+        set({
+          userInfo: {
+            ...currentUserInfo,
+            points: updatedPoints
+          }
+        });
+        console.log('点数更新完成');
       },
       
       setUserInfo: (userInfo) => {
@@ -82,18 +104,42 @@ export const useUserStore = create<UserState>()(
   )
 )
 
-// 初始化用户信息（模拟数据）
-export const initializeUserInfo = (user: any) => {
+// 初始化用户信息
+export const initializeUserInfo = async (user: any) => {
   const userStore = useUserStore.getState()
   if (!userStore.userInfo && user) {
+    // 先设置基础用户信息，点数初始为0
     userStore.setUserInfo({
       id: user.id,
       email: user.email,
       username: user.username,
       avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.username}`,
-      points: 1000, // 初始点数
+      points: 0, // 初始设为0，稍后从API获取
       createdAt: user.createdAt
     })
+    
+    // 检查是否配置了API密钥（仅从localStorage）
+    let hasApiKey = false
+    try {
+      const savedConfig = localStorage.getItem('apiConfig')
+      if (savedConfig) {
+        const config = JSON.parse(savedConfig)
+        hasApiKey = !!config.apiKey
+      }
+    } catch (error) {
+      console.error('解析API配置失败:', error)
+    }
+    
+    // 如果配置了API密钥，尝试获取真实点数
+    if (hasApiKey) {
+      try {
+        // 动态导入以避免循环依赖
+        const { ApiService } = await import('../services/apiService');
+        await ApiService.initializeUserPoints();
+      } catch (error) {
+        console.error('初始化用户点数失败:', error);
+      }
+    }
   }
 }
 

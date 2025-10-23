@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { validateApiBaseUrl } from '../../utils/apiConfigValidator';
 
 // 请求参数接口
 interface TextRequestDvo {
@@ -22,14 +23,30 @@ interface TextResponseDto {
 export const gemini25Config = {
   name: 'Gemini 2.5',
   type: 'text' as const,
-  baseUrl: process.env.NEXT_PUBLIC_GEMINI_API_URL || 'https://generativelanguage.googleapis.com/v1beta',
+  baseUrl: '',
   defaultMaxTokens: 2048,
   defaultTemperature: 0.7,
   defaultTopP: 0.9,
   
   // 创建文本生成任务
   async createTextGeneration(request: TextRequestDvo): Promise<string> {
-    const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || request.key;
+    // 从localStorage获取用户配置的API地址和密钥
+    let apiBaseUrl = this.baseUrl;
+    let apiKey = request.key || '';
+    
+    try {
+      const savedConfig = localStorage.getItem('apiConfig');
+      if (savedConfig) {
+        const config = JSON.parse(savedConfig);
+        if (config.apiBaseUrl) apiBaseUrl = config.apiBaseUrl;
+        if (config.apiKey) apiKey = config.apiKey;
+      }
+    } catch (error) {
+      console.error('读取API配置失败:', error);
+    }
+    
+    // 验证API域名地址
+    validateApiBaseUrl(apiBaseUrl, 'Gemini');
     
     const requestBody = {
       contents: [
@@ -50,7 +67,7 @@ export const gemini25Config = {
     
     try {
       const response = await axios.post(
-        `${this.baseUrl}/models/gemini-2.5:generateContent?key=${apiKey}`,
+        `${apiBaseUrl}/models/gemini-2.5:generateContent?key=${apiKey}`,
         requestBody,
         {
           headers: {
@@ -58,7 +75,6 @@ export const gemini25Config = {
           }
         }
       );
-      
       // 提取生成的文本
       const generatedText = response.data.candidates[0]?.content?.parts[0]?.text || '';
       return generatedText;

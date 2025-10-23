@@ -46,6 +46,7 @@ import { useRouter } from 'next/navigation'
 import SaveProjectModal from './SaveProjectModal'
 import UserSettingsModal from './UserSettingsModal'
 import { historyDB, type HistoryRecord } from '../utils/historyDB'
+import { ApiService } from '../services/apiService'
 
 interface CanvasToolbarProps {
   canvas: any
@@ -79,6 +80,44 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
   const layerPanelRef = useRef<HTMLDivElement>(null)
   const historyPanelRef = useRef<HTMLDivElement>(null)
   const [copiedObject, setCopiedObject] = useState<any>(null)
+  const [isLoadingPoints, setIsLoadingPoints] = useState(false)
+
+  // 获取用户点数
+  const fetchUserPoints = useCallback(async () => {
+    // 从localStorage获取API配置
+    const savedConfig = localStorage.getItem('apiConfig');
+    let apiKey = '';
+    if (savedConfig) {
+      try {
+        const config = JSON.parse(savedConfig);
+        apiKey = config.apiKey || '';
+      } catch (error) {
+        console.error('解析API配置失败:', error);
+      }
+    }
+    if (!apiKey) return;
+    
+    setIsLoadingPoints(true);
+    try {
+      await ApiService.initializeUserPoints();
+    } catch (error) {
+      console.error('获取点数失败:', error);
+    } finally {
+      setIsLoadingPoints(false);
+    }
+  }, []);
+
+  // 组件挂载时获取点数，并设置定期更新
+  useEffect(() => {
+    fetchUserPoints();
+    
+    // 每30分钟自动更新一次点数
+    const interval = setInterval(fetchUserPoints, 30 * 60 * 1000);
+    
+    return () => clearInterval(interval);
+  }, [fetchUserPoints]);
+
+
 
   // 点击外部关闭形状选择卡片、层级面板和历史面板
   useEffect(() => {
@@ -2003,7 +2042,8 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
         }
       }, 3000)
       
-
+      // 保存成功后重新请求配额接口，更新用户点数
+      fetchUserPoints();
       
       // 关闭弹窗
       setShowSaveModal(false)
@@ -2203,6 +2243,13 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
     if (!canvas) return
     const activeObject = canvas.getActiveObject()
     if (activeObject) {
+      // 检查对象是否已经在最底层
+      const objects = canvas._objects || []
+      // 如果当前选中的对象已经是第一个元素(最底层)，则不执行操作
+      if (objects.indexOf(activeObject) === 0) {
+        return
+      }
+      
       saveCanvasState()
       
       try {
@@ -2241,6 +2288,13 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
     if (!canvas) return
     const activeObject = canvas.getActiveObject()
     if (activeObject) {
+      // 检查对象是否已经在最底层
+      const objects = canvas._objects || []
+      // 如果当前选中的对象已经是第一个元素(最底层)，则不执行操作
+      if (objects.indexOf(activeObject) === 0) {
+        return
+      }
+      
       saveCanvasState()
       
       try {
@@ -3120,7 +3174,7 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
         <Tooltip content="下载画板(JSON)" position="bottom">
           <button
             onClick={handleDownloadCanvas}
-            className="p-1 lg:p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"
+            className="p-1 lg:p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg hidden"
           >
             <Download className="h-4 w-4 lg:h-5 lg:w-5" />
           </button>
@@ -3145,18 +3199,31 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
             <Languages className="h-4 w-4 lg:h-5 lg:w-5" />
           </button>
         </Tooltip>
+        
+        {/* 刷新点数按钮 */}
+        <Tooltip content="刷新消耗点信息" position="bottom">
+          <button
+            onClick={fetchUserPoints}
+            disabled={isLoadingPoints}
+            className="p-1 lg:p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"
+          >
+            <RotateCw className="h-4 w-4 lg:h-5 lg:w-5" />
+          </button>
+        </Tooltip>
 
         {/* 用户信息胶囊 */}
           <div 
             className="flex items-center space-x-1 lg:space-x-2 bg-gray-100 dark:bg-gray-800 rounded-full px-2 lg:px-3 py-1 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors cursor-pointer"
             onClick={handleOpenApiSettings}
           >
-            {/* 消耗点数 */}
+            {/* 消耗点数显示 */}
             <div className="flex items-center space-x-1">
               <svg className="w-3 h-3 lg:w-4 lg:h-4 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
                 <path d="M10 2a8 8 0 100 16 8 8 0 000-16zm0 14a6 6 0 110-12 6 6 0 010 12zm-1-9a1 1 0 112 0v4a1 1 0 11-2 0V7zm1 8a1 1 0 100-2 1 1 0 000 2z"/>
               </svg>
-              <span className="text-xs lg:text-sm font-medium text-gray-700 dark:text-gray-300">{userInfo?.points || 0}</span>
+              <span className="text-xs lg:text-sm font-medium text-gray-700 dark:text-gray-300">
+                {userInfo?.points || 0}
+              </span>
               <span className="text-xs text-gray-500 dark:text-gray-400">点</span>
             </div>
             
@@ -3166,7 +3233,7 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
             {/* 用户头像 */}
             <div className="flex items-center">
               <img 
-                src={userInfo?.avatar || "/default-avatar.svg"} 
+                src={userInfo?.avatar || "/default-avatar.png"} 
                 alt={userInfo?.username || "用户"}
                 className="w-4 h-4 lg:w-6 lg:h-6 rounded-full"
               />

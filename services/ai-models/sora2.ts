@@ -1,10 +1,10 @@
 import axios from 'axios';
+import { validateApiBaseUrl } from '../../utils/apiConfigValidator';
 
 // 请求参数接口
 interface ToVideoDvo {
   prompt: string;
   images?: string[];
-  key: string;
   taskId?: string;
   duration?: string;
   resolution?: string;
@@ -24,22 +24,43 @@ interface VideoDto {
 export const sora2Config = {
   name: 'Sora2',
   type: 'video' as const,
-  baseUrl: process.env.NEXT_PUBLIC_API_BASE_URL || 'https://api.jmyps.com',
-  defaultDuration: '10s',
+  baseUrl: '',
+  defaultDuration: '10',
   defaultResolution: '1080p',
   defaultStyle: 'realistic',
-  supportedDurations: ['5s', '10s', '15s', '30s', '60s'],
+  supportedDurations: ['5', '10', '15', '30', '60'],
+  // 获取支持的视频时长（带单位，用于UI显示）
+  getSupportedDurationsWithUnit(): string[] {
+    return this.supportedDurations.map(d => `${d}s`);
+  },
   supportedResolutions: ['720p', '1080p', '2k', '4k'],
   supportedStyles: ['realistic', 'animated', 'cinematic', 'artistic', 'minimal'],
   
   // 创建视频生成任务
   async createVideo(toVideoDvo: ToVideoDvo): Promise<string> {
+    // 从localStorage获取用户配置的API地址和密钥
+    let apiBaseUrl = this.baseUrl;
+    let apiKey = '';
+    
+    try {
+      const savedConfig = localStorage.getItem('apiConfig');
+      if (savedConfig) {
+        const config = JSON.parse(savedConfig);
+        if (config.apiBaseUrl) apiBaseUrl = config.apiBaseUrl;
+        if (config.apiKey) apiKey = config.apiKey;
+      }
+    } catch (error) {
+      console.error('读取API配置失败:', error);
+    }
+    
+    // 验证API域名地址
+    validateApiBaseUrl(apiBaseUrl);
     const requestBody = {
       prompt: toVideoDvo.prompt,
       model: "sora-2",
       aspect_ratio: toVideoDvo.aspectRatio || "16:9",
       hd: true,
-      duration: toVideoDvo.duration || this.defaultDuration,
+      duration: (toVideoDvo.duration || this.defaultDuration).replace('s', ''),
       watermark: false,
       ...(toVideoDvo.images && toVideoDvo.images.length > 0 && {
         images: toVideoDvo.images
@@ -47,13 +68,13 @@ export const sora2Config = {
     };
     
     const headers = {
-      'Authorization': `Bearer ${process.env.NEXT_PUBLIC_API_KEY || toVideoDvo.key}`,
+      'Authorization': `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
       'X-Sora-Version': '2.0'
     };
     
     try {
-      const response = await axios.post(`${this.baseUrl}/v2/videos/generations`, requestBody, { headers });
+      const response = await axios.post(`${apiBaseUrl}/v2/videos/generations`, requestBody, { headers });
       
       return response.data.id || response.data.task_id;
     } catch (error) {
@@ -65,6 +86,24 @@ export const sora2Config = {
    * 查询视频生成任务状态
    */
   async getTask(toVideoDvo: ToVideoDvo): Promise<VideoDto | null> {
+    // 从localStorage获取用户配置的API地址和密钥
+    let apiBaseUrl = this.baseUrl;
+    let apiKey = '';
+    
+    try {
+      const savedConfig = localStorage.getItem('apiConfig');
+      if (savedConfig) {
+        const config = JSON.parse(savedConfig);
+        if (config.apiBaseUrl) apiBaseUrl = config.apiBaseUrl;
+        if (config.apiKey) apiKey = config.apiKey;
+      }
+    } catch (error) {
+      console.error('读取API配置失败:', error);
+    }
+    
+    // 验证API域名地址
+    validateApiBaseUrl(apiBaseUrl);
+    
     const VideoDto: VideoDto = { status: '3' };
     
     if (!toVideoDvo.taskId) {
@@ -73,13 +112,13 @@ export const sora2Config = {
     }
 
     const headers = {
-      'Authorization': `Bearer ${process.env.NEXT_PUBLIC_API_KEY || toVideoDvo.key}`,
+      'Authorization': `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
       'X-Sora-Version': '2.0'
     };
     
     try {
-      const response = await axios.get(`${this.baseUrl}/v2/videos/generations/${toVideoDvo.taskId}`, { headers });
+      const response = await axios.get(`${apiBaseUrl}/v2/videos/generations/${toVideoDvo.taskId}`, { headers });
       
       const result = response.data;
       
@@ -139,7 +178,7 @@ export const sora2Config = {
     return prompt && prompt.trim().length > 0 && prompt.trim().length <= 1000;
   },
 
-  // 获取支持的视频时长
+  // 获取支持的视频时长（不带单位，用于API调用）
   getSupportedDurations(): string[] {
     return this.supportedDurations;
   },

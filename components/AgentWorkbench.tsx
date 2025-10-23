@@ -148,7 +148,7 @@ const AgentWorkbench = ({ isOpen = true, onToggle }: AgentWorkbenchProps) => {
 
   const getModelType = (model: string): 'image' | 'video' | 'text' => {
     if (['nano-banana', 'seedream-4'].includes(model)) return 'image'
-    if (['veo3.1', 'sora2'].includes(model)) return 'video'
+    if (['sora2'].includes(model)) return 'video'
     return 'text'
   }
 
@@ -191,7 +191,6 @@ const AgentWorkbench = ({ isOpen = true, onToggle }: AgentWorkbenchProps) => {
     { id: 'gemini2.5', name: 'Gemini 2.5', type: 'text', description: 'Google文本模型' },
     { id: 'nano-banana', name: 'Nano-Banana', type: 'image', description: '快速图片生成' },
     { id: 'seedream-4', name: 'Seedream-4', type: 'image', description: '高质量图片生成' },
-    { id: 'veo3.1', name: 'Veo3.1', type: 'video', description: '快速视频生成' },
     { id: 'sora2', name: 'Sora2', type: 'video', description: '高级视频生成' }
   ]
 

@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { validateApiBaseUrl } from '../../utils/apiConfigValidator';
 import qs from 'qs';
 
 // 常量定义
@@ -13,7 +14,6 @@ const ApiConst = {
 interface ToImageDvo {
   prompt: string;
   images?: string[];
-  key: string;
   taskId?: string;
   size?: string;
   aspectRatio?: string;
@@ -30,15 +30,30 @@ interface ImageDto {
 export const nanoBananaConfig = {
   name: 'Nano-Banana',
   type: 'image' as const,
-  baseUrl: process.env.NEXT_PUBLIC_API_BASE_URL || 'https://api.jmyps.com',
+  baseUrl: '',
   defaultSize: '1024x1024',
   supportedSizes: ['1024x1024', '512x512', '256x256'],
   supportedAspectRatios: ['1:1', '16:9', '9:16', '4:3', '3:4'],
   
   // 创建异步图片生成任务
   async createAsyncImage(toImageDvo: ToImageDvo): Promise<string> {
-    // 使用环境变量中的API密钥
-    const apiKey = process.env.NEXT_PUBLIC_API_KEY || toImageDvo.key;
+    // 从localStorage获取用户配置的API地址和密钥
+    let apiBaseUrl = this.baseUrl;
+    let apiKey = '';
+    
+    try {
+      const savedConfig = localStorage.getItem('apiConfig');
+      if (savedConfig) {
+        const config = JSON.parse(savedConfig);
+        if (config.apiBaseUrl) apiBaseUrl = config.apiBaseUrl;
+        if (config.apiKey) apiKey = config.apiKey;
+      }
+    } catch (error) {
+      console.error('读取API配置失败:', error);
+    }
+    
+    // 验证API域名地址
+    validateApiBaseUrl(apiBaseUrl);
     
     // 根据宽高比获取对应的尺寸，优先使用aspectRatio
     const size = toImageDvo.aspectRatio 
@@ -60,7 +75,7 @@ export const nanoBananaConfig = {
     };
     
     // 构建带Query参数的URL
-    const url = `${this.baseUrl}/v1/images/generations`;
+    const url = `${apiBaseUrl}/v1/images/generations`;
     const urlWithParams = `${url}?${qs.stringify({ async: 'true' })}`;
     
     try {
@@ -76,8 +91,23 @@ export const nanoBananaConfig = {
    * 根据taskId查询结果
    */
   async getTask(toImageDvo: ToImageDvo): Promise<ImageDto | null> {
-    // 使用环境变量中的API密钥
-    const apiKey = process.env.NEXT_PUBLIC_API_KEY || toImageDvo.key;
+    // 从localStorage获取用户配置的API地址和密钥
+    let apiBaseUrl = this.baseUrl;
+    let apiKey = '';
+    
+    try {
+      const savedConfig = localStorage.getItem('apiConfig');
+      if (savedConfig) {
+        const config = JSON.parse(savedConfig);
+        if (config.apiBaseUrl) apiBaseUrl = config.apiBaseUrl;
+        if (config.apiKey) apiKey = config.apiKey;
+      }
+    } catch (error) {
+      console.error('读取API配置失败:', error);
+    }
+    
+    // 验证API域名地址
+    validateApiBaseUrl(apiBaseUrl);
     
     const ImageDto: ImageDto = { status: ApiConst.STRING_THREE };
     const headers = {
@@ -87,7 +117,7 @@ export const nanoBananaConfig = {
     
     try {
       const response = await axios.get(
-        `${this.baseUrl}/v1/images/tasks/${toImageDvo.taskId}`,
+        `${apiBaseUrl}/v1/images/tasks/${toImageDvo.taskId}`,
         { headers }
       );
       

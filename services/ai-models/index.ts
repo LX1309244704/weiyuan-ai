@@ -1,7 +1,7 @@
-import { nanoBananaConfig, type ToImageDvo as NanoBananaDvo, type HumanDto as NanoBananaHumanDto } from './nano-banana';
-import { seedream4Config, type ToImageDvo as Seedream4Dvo, type HumanDto as Seedream4HumanDto } from './seedream-4';
-import { veo3Config, type ToVideoDvo as Veo3Dvo, type HumanDto as Veo3HumanDto } from './veo3';
-import { sora2Config, type ToVideoDvo as Sora2Dvo, type HumanDto as Sora2HumanDto } from './sora2';
+import { nanoBananaConfig, type ToImageDvo as NanoBananaDvo } from './nano-banana';
+import { seedream4Config, type ToImageDvo as Seedream4Dvo } from './seedream-4';
+// import { veo3Config, type ToVideoDvo as Veo3Dvo } from './veo3';
+import { sora2Config, type ToVideoDvo as Sora2Dvo } from './sora2';
 import { gpt5Config, type TextRequestDvo as Gpt5RequestDvo, type TextResponseDto as Gpt5ResponseDto } from './gpt5';
 import { deepseekConfig, type TextRequestDvo as DeepSeekRequestDvo, type TextResponseDto as DeepSeekResponseDto } from './deepseek';
 import { gemini25Config, type TextRequestDvo as Gemini25RequestDvo, type TextResponseDto as Gemini25ResponseDto } from './gemini2.5';
@@ -9,13 +9,12 @@ import { gemini25Config, type TextRequestDvo as Gemini25RequestDvo, type TextRes
 // 统一的模型类型定义
 export type ModelType = 'image' | 'video' | 'text';
 export type ImageModel = 'nano-banana' | 'seedream-4';
-export type VideoModel = 'veo3.1' | 'sora2';
+export type VideoModel = 'sora2';
 export type TextModel = 'gpt5' | 'deepseek' | 'gemini2.5';
 
 // 统一的请求参数接口
 export interface BaseRequestDvo {
   prompt: string;
-  key: string;
   taskId?: string;
   images?: string[];
 }
@@ -65,7 +64,6 @@ export const modelConfigs = {
   'seedream-4': seedream4Config,
   
   // 视频生成模型
-  'veo3.1': veo3Config,
   'sora2': sora2Config,
   
   // 文本生成模型
@@ -90,13 +88,13 @@ export const modelInfo = {
     supportsImageInput: true,
     maxPromptLength: 1000
   },
-  'veo3.1': {
-    name: 'Veo3.1',
-    type: 'video' as const,
-    description: '快速视频生成模型',
-    supportsImageInput: true,
-    maxPromptLength: 500
-  },
+  // 'veo3.1': {
+  //   name: 'Veo3.1',
+  //   type: 'video' as const,
+  //   description: '快速视频生成模型',
+  //   supportsImageInput: true,
+  //   maxPromptLength: 500
+  // },
   'sora2': {
     name: 'Sora2',
     type: 'video' as const,
@@ -140,11 +138,6 @@ export class ModelService {
       throw new Error(`不支持的模型: ${model}`);
     }
     
-    // 验证API密钥
-    if (!config.validateApiKey(request.key)) {
-      throw new Error('无效的API密钥');
-    }
-    
     // 验证提示词
     if (!config.validatePrompt(request.prompt)) {
       throw new Error('无效的提示词');
@@ -156,7 +149,6 @@ export class ModelService {
         const imageRequest = request as ImageRequestDvo;
         const toImageDvo = {
           prompt: imageRequest.prompt,
-          key: imageRequest.key,
           taskId: imageRequest.taskId,
           images: imageRequest.images,
           size: imageRequest.size,
@@ -168,7 +160,6 @@ export class ModelService {
         const videoRequest = request as VideoRequestDvo;
         const toVideoDvo = {
           prompt: videoRequest.prompt,
-          key: videoRequest.key,
           taskId: videoRequest.taskId,
           images: videoRequest.images,
           duration: videoRequest.duration,
@@ -182,7 +173,6 @@ export class ModelService {
         const textRequest = request as TextRequestDvo;
         const textDvo = {
           prompt: textRequest.prompt,
-          key: textRequest.key,
           taskId: textRequest.taskId,
           maxTokens: textRequest.maxTokens,
           temperature: textRequest.temperature,
@@ -216,7 +206,7 @@ export class ModelService {
       // 循环查询直到出现最终状态（SUCCESS或FAILURE）
       let result: any = null;
       let attempts = 0;
-      const maxAttempts = 300; // 最多尝试5分钟（300秒）
+      const maxAttempts = 600; // 最多尝试5分钟（300秒）
       
       while (attempts < maxAttempts) {
         if (config.type === 'image') {
@@ -236,10 +226,10 @@ export class ModelService {
           break;
         }
         
-        // 如果不是最终状态，等待1秒后继续查询
+        // 如果不是最终状态，等待5秒后继续查询
         attempts++;
         if (attempts < maxAttempts) {
-          await new Promise(resolve => setTimeout(resolve, 1000)); // 等待1秒
+          await new Promise(resolve => setTimeout(resolve, 5000)); // 等待5秒
         }
       }
       

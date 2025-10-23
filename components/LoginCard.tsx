@@ -12,11 +12,28 @@ interface LoginCardProps {
 export default function LoginCard({ onClose }: LoginCardProps) {
   const [isLogin, setIsLogin] = useState(true)
   const [showPassword, setShowPassword] = useState(false)
+  const [hasApiKey, setHasApiKey] = useState(false)
   const [formData, setFormData] = useState({
     email: '',
     password: '',
     username: ''
   })
+  
+  const checkIfApiKeyExists = () => {
+    try {
+      const savedConfig = localStorage.getItem('apiConfig');
+      if (savedConfig) {
+        const config = JSON.parse(savedConfig);
+        if (config.apiKey) {
+          setHasApiKey(true);
+          return true;
+        }
+      }
+    } catch (error) {
+      console.error('解析API配置失败:', error);
+    }
+    return false;
+  }
   
   const { login, register, isLoading } = useAuthStore()
 
@@ -40,9 +57,21 @@ export default function LoginCard({ onClose }: LoginCardProps) {
           email: user.email,
           username: user.username,
           avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.username}`,
-          points: 1000,
+          points: 0, // 初始设为0，稍后从API获取真实点数
           createdAt: user.createdAt || new Date().toISOString()
         })
+        
+        // 尝试从API获取真实点数
+        try {
+          if (checkIfApiKeyExists()) {
+            const { ApiService } = await import('../services/apiService')
+            await ApiService.initializeUserPoints().catch(err => {
+              console.error('获取真实点数失败:', err)
+            })
+          }
+        } catch (error) {
+          console.error('获取真实点数失败:', error);
+        }
       }
       
       // 等待状态完全更新后再跳转

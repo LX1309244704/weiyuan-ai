@@ -26,7 +26,7 @@ const ImageSelectionPanel: React.FC<ImageSelectionPanelProps> = ({
   const [isMultipleSelection, setIsMultipleSelection] = useState(false)
   const [selectedModelType, setSelectedModelType] = useState<'image' | 'video'>('image')
   const [selectedImageModel, setSelectedImageModel] = useState('nano-banana')
-  const [selectedVideoModel, setSelectedVideoModel] = useState('veo3')
+  const [selectedVideoModel, setSelectedVideoModel] = useState('sora2')
   const [selectedAspectRatio, setSelectedAspectRatio] = useState('16:9')
   const [selectedVideoSeconds, setSelectedVideoSeconds] = useState('8')
   const [showModelDropdown, setShowModelDropdown] = useState(false)
@@ -284,8 +284,6 @@ const ImageSelectionPanel: React.FC<ImageSelectionPanelProps> = ({
   useEffect(() => {
     if (selectedVideoModel === 'sora2') {
       setSelectedVideoSeconds('10');
-    } else if (selectedVideoModel === 'veo3.1') {
-      setSelectedVideoSeconds('8');
     }
   }, [selectedVideoModel])
 
@@ -410,11 +408,7 @@ const ImageSelectionPanel: React.FC<ImageSelectionPanelProps> = ({
             </button>
             <button
               onClick={() => setSelectedModelType('video')}
-              className={`p-1 rounded-lg transition-colors ${
-                selectedModelType === 'video' 
-                  ? 'bg-white dark:bg-gray-600 shadow-sm text-gray-700 dark:text-gray-300' 
-                  : 'text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
-              }`}
+              className={`p-1 rounded-lg transition-colors ${selectedModelType === 'video' ? 'bg-white dark:bg-gray-600 shadow-sm text-gray-700 dark:text-gray-300' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'}`}
               title="视频生成"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -474,26 +468,7 @@ const ImageSelectionPanel: React.FC<ImageSelectionPanelProps> = ({
                     </>
                   ) : (
                     <>
-                      <button
-                        onClick={() => {
-                          setSelectedVideoModel('veo3.1')
-                          setShowAspectDropdown(false)
-                          // 同步到ChatPanel
-                          if (typeof window !== 'undefined' && (window as any).chatPanelRef) {
-                            const chatPanel = (window as any).chatPanelRef
-                            if (chatPanel.setSelectedModel) {
-                              chatPanel.setSelectedModel('veo3.1')
-                            }
-                          }
-                        }}
-                        className={`w-full text-left px-2 py-1 text-xs rounded ${
-                          selectedVideoModel === 'veo3.1' 
-                            ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300' 
-                            : 'hover:bg-gray-100 dark:hover:bg-gray-700'
-                        }`}
-                      >
-                        Veo3.1
-                      </button>
+
                       <button
                         onClick={() => {
                           setSelectedVideoModel('sora2')
@@ -539,7 +514,10 @@ const ImageSelectionPanel: React.FC<ImageSelectionPanelProps> = ({
               {showRatioDropdown && (
                 <div className="absolute bottom-full left-0 mb-1 w-16 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-600 z-10">
                   <div className="p-1">
-                    {['16:9', '9:16'].map((ratio) => (
+                    {(selectedModelType === 'image' 
+                      ? ['16:9', '9:16', '4:3', '3:4', '1:1'] 
+                      : ['16:9', '9:16'] 
+                    ).map((ratio) => (
                       <button
                         key={ratio}
                         onClick={() => {

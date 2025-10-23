@@ -16,77 +16,56 @@ interface ApiConfig {
 export default function UserSettingsModal({ isOpen, onClose }: UserSettingsModalProps) {
   const [apiConfig, setApiConfig] = useState<ApiConfig>({
     apiKey: '',
-    apiBaseUrl: 'https://api.jmyps.com/v1'
+    apiBaseUrl: 'https://api.jmyps.com'
   })
 
   const [isLoading, setIsLoading] = useState(false)
   const [message, setMessage] = useState('')
 
-  // 从.env.local加载配置
+  // 从localStorage加载配置
   useEffect(() => {
     if (isOpen) {
-      loadConfigFromEnv()
+      loadConfigFromStorage()
     }
   }, [isOpen])
 
-  const loadConfigFromEnv = async () => {
+  const loadConfigFromStorage = () => {
     try {
-      // 从API端点加载.env.local内容
-      const response = await fetch('/api/load-env')
-      if (response.ok) {
-        const data = await response.json()
-        const config: ApiConfig = {
-          apiKey: data.apiKey || '',
-          apiBaseUrl: data.apiBaseUrl || 'https://api.jmyps.com/v1'
-        }
-        setApiConfig(config)
-      }
+      // 从localStorage加载配置
+      const savedConfig = localStorage.getItem('apiConfig')
+      const config: ApiConfig = savedConfig 
+        ? JSON.parse(savedConfig)
+        : {
+            apiKey: '',
+            apiBaseUrl: 'https://api.jmyps.com'
+          }
+      setApiConfig(config)
     } catch (error) {
+      console.error('加载配置失败:', error)
       // 使用默认配置
       const config: ApiConfig = {
         apiKey: '',
-        apiBaseUrl: 'https://api.jmyps.com/v1'
+        apiBaseUrl: 'https://api.jmyps.com'
       }
       setApiConfig(config)
     }
   }
 
-  const handleSave = async () => {
+  const handleSave = () => {
     setIsLoading(true)
     setMessage('')
 
     try {
-      // 构建.env.local文件内容
-      const envContent = `# AI模型API配置
-# 请妥善保管您的API密钥
-
-# API密钥
-NEXT_PUBLIC_API_KEY=${apiConfig.apiKey}
-
-# API基础地址
-NEXT_PUBLIC_API_BASE_URL=${apiConfig.apiBaseUrl}
-
-# 调试模式
-# NEXT_PUBLIC_DEBUG_MODE=false`
-
-      // 保存到.env.local文件
-      const response = await fetch('/api/save-env', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ content: envContent })
-      })
-
-      if (response.ok) {
-        setMessage('配置保存成功！应用需要重启才能生效。')
-        setTimeout(() => {
-          onClose()
-        }, 2000)
-      } else {
-        const errorData = await response.json()
-        throw new Error(errorData.error || '保存失败')
-      }
+      // 保存到localStorage
+      localStorage.setItem('apiConfig', JSON.stringify(apiConfig))
+      
+      // 通知其他组件配置已更新
+      window.dispatchEvent(new CustomEvent('apiConfigUpdated', { detail: apiConfig }))
+      
+      setMessage('配置保存成功！立即生效。')
+      setTimeout(() => {
+        onClose()
+      }, 2000)
     } catch (error) {
       setMessage(`保存失败: ${error instanceof Error ? error.message : '未知错误'}`)
     } finally {
@@ -134,7 +113,7 @@ NEXT_PUBLIC_API_BASE_URL=${apiConfig.apiBaseUrl}
               value={apiConfig.apiBaseUrl}
               onChange={(e) => handleInputChange('apiBaseUrl', e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-              placeholder="https://api.jmyps.com/v1"
+              placeholder="https://api.jmyps.com"
             />
           </div>
 

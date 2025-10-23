@@ -9,8 +9,7 @@ export async function POST(request: NextRequest) {
       model = 'sora2', 
       images = [], 
       duration = '10s', 
-      aspectRatio = '16:9',
-      key 
+      aspectRatio = '16:9'
     } = body
 
     // 验证必填参数
@@ -21,15 +20,8 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    if (!key) {
-      return NextResponse.json(
-        { error: 'API密钥不能为空' },
-        { status: 400 }
-      )
-    }
-
     // 验证模型类型
-    if (!['sora2', 'veo3.1'].includes(model)) {
+    if (model !== 'sora2') {
       return NextResponse.json(
         { error: `不支持的视频生成模型: ${model}` },
         { status: 400 }
@@ -40,7 +32,6 @@ export async function POST(request: NextRequest) {
     const videoRequest = {
       prompt,
       model: model as any,
-      key,
       duration,
       aspectRatio,
       images: images.filter((img: string) => img && img.trim().length > 0)
@@ -71,17 +62,16 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const taskId = searchParams.get('taskId')
     const model = searchParams.get('model')
-    const key = searchParams.get('key')
 
-    if (!taskId || !model || !key) {
+    if (!taskId || !model) {
       return NextResponse.json(
-        { error: '任务ID、模型和API密钥不能为空' },
+        { error: '任务ID和模型不能为空' },
         { status: 400 }
       )
     }
 
     // 验证模型类型
-    if (!['sora2', 'veo3.1'].includes(model)) {
+    if (model !== 'sora2') {
       return NextResponse.json(
         { error: `不支持的视频生成模型: ${model}` },
         { status: 400 }
@@ -91,7 +81,7 @@ export async function GET(request: NextRequest) {
     const videoRequest = {
       taskId,
       model: model as any,
-      key
+      prompt: '' // 添加空的prompt属性以满足类型要求
     }
 
     const result = await ModelService.getTaskStatus(videoRequest)

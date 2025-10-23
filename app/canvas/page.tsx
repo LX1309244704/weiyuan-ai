@@ -856,7 +856,18 @@ export default function CanvasPage() {
     
     // 定义内部函数，避免依赖问题
     const getApiKeyForModel = (model: string): string => {
-      return process.env.NEXT_PUBLIC_API_KEY || ''
+      try {
+        // 首先从localStorage获取API密钥
+        const savedConfig = localStorage.getItem('apiConfig')
+        if (savedConfig) {
+          const config = JSON.parse(savedConfig)
+          return config.apiKey || ''
+        }
+      } catch (error) {
+        console.error('读取API密钥失败:', error)
+      }
+      // 只从localStorage获取，不再使用环境变量
+      return ''
     }
     
     try {
@@ -875,7 +886,6 @@ export default function CanvasPage() {
       const request: any = {
         model: model as any,
         prompt: prompt,
-        key: getApiKeyForModel(model),
         size: getSizeByAspectRatio(aspectRatio || '1:1'), // 根据比例计算正确尺寸
         aspectRatio: aspectRatio || '1:1' // 使用传入的比例或默认比例
       }
@@ -1010,7 +1020,18 @@ export default function CanvasPage() {
     
     // 定义内部函数，避免依赖问题
     const getApiKeyForModel = (model: string): string => {
-      return process.env.NEXT_PUBLIC_API_KEY || ''
+      try {
+        // 首先从localStorage获取API密钥
+        const savedConfig = localStorage.getItem('apiConfig')
+        if (savedConfig) {
+          const config = JSON.parse(savedConfig)
+          return config.apiKey || ''
+        }
+      } catch (error) {
+        console.error('读取API密钥失败:', error)
+      }
+      // 只从localStorage获取，不再使用环境变量
+      return ''
     }
     
     const addLoadingVideoPlaceholder = async (position: { x: number; y: number }): Promise<any> => {
@@ -1157,8 +1178,7 @@ export default function CanvasPage() {
       const request: any = {
         model: model as any,
         prompt: prompt,
-        apiKey: getApiKeyForModel(model),
-        duration: model === 'sora2' ? '10s' : '8s', // Sora2默认10秒，其他模型8秒
+        duration: model === 'sora2' ? '10' : '8', // Sora2默认10秒，其他模型8秒
         aspectRatio: aspectRatio || '16:9' // 使用传入的比例或默认16:9
       }
       
@@ -1365,7 +1385,18 @@ export default function CanvasPage() {
     
     // 定义内部函数，避免依赖问题
     const getApiKeyForModel = (model: string): string => {
-      return process.env.NEXT_PUBLIC_API_KEY || ''
+      try {
+        // 首先从localStorage获取API密钥
+        const savedConfig = localStorage.getItem('apiConfig')
+        if (savedConfig) {
+          const config = JSON.parse(savedConfig)
+          return config.apiKey || ''
+        }
+      } catch (error) {
+        console.error('读取API密钥失败:', error)
+      }
+      // 只从localStorage获取，不再使用环境变量
+      return ''
     }
     
     try {
@@ -1850,6 +1881,14 @@ export default function CanvasPage() {
     if (!fabricCanvas) return
     const activeObject = fabricCanvas.getActiveObject()
     if (activeObject) {
+      // 检查对象是否已经在最底层
+      const objects = fabricCanvas._objects || []
+      // 如果当前选中的对象已经是第一个元素(最底层)，则不执行操作
+      if (objects.indexOf(activeObject) === 0) {
+        handleCloseContextMenu()
+        return
+      }
+      
       try {
         if (fabricCanvas.sendToBack) {
           fabricCanvas.sendToBack(activeObject)
@@ -1886,6 +1925,14 @@ export default function CanvasPage() {
     if (!fabricCanvas) return
     const activeObject = fabricCanvas.getActiveObject()
     if (activeObject) {
+      // 检查对象是否已经在最底层
+      const objects = fabricCanvas._objects || []
+      // 如果当前选中的对象已经是第一个元素(最底层)，则不执行操作
+      if (objects.indexOf(activeObject) === 0) {
+        handleCloseContextMenu()
+        return
+      }
+      
       try {
         if (fabricCanvas.sendBackwards) {
           fabricCanvas.sendBackwards(activeObject)

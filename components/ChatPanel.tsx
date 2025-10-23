@@ -82,6 +82,39 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
     document.addEventListener('mouseup', handleResizeEnd, { once: true })
   }
 
+  // 监听模型类型变化，设置对应类型的默认模型
+  useEffect(() => {
+    if (selectedModelType === 'video') {
+      setSelectedModel('sora2' as VideoModel);
+    } else if (selectedModelType === 'image') {
+      // 保持图片默认模型不变
+      if (!['nano-banana', 'seedream-4'].includes(selectedModel as string)) {
+        setSelectedModel('nano-banana' as ImageModel);
+      }
+    } else if (selectedModelType === 'text') {
+      // 保持文本默认模型不变
+      if (!['gpt5', 'deepseek', 'gemini2.5'].includes(selectedModel as string)) {
+        setSelectedModel('gpt5' as TextModel);
+      }
+    }
+  }, [selectedModelType])
+
+  // 监听API配置更新事件
+  useEffect(() => {
+    const handleApiConfigUpdated = (event: CustomEvent) => {
+      // 配置已更新，不需要额外操作，因为getApiKeyForModel会在每次请求时重新读取localStorage
+      console.log('API配置已更新:', event.detail);
+    };
+
+    // 添加事件监听器
+    window.addEventListener('apiConfigUpdated', handleApiConfigUpdated as EventListener);
+    
+    return () => {
+      // 清理事件监听器
+      window.removeEventListener('apiConfigUpdated', handleApiConfigUpdated as EventListener);
+    };
+  }, []);
+
   // 清理事件监听器
   useEffect(() => {
     return () => {
@@ -208,9 +241,7 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
       ? `[模型: ${selectedModel}]`
       : selectedModel === 'sora2'
         ? `[模型: ${selectedModel}, 比例: ${selectedAspectRatio}, 时长: ${selectedDuration}]`
-        : selectedModel === 'veo3.1'
-          ? `[模型: ${selectedModel}, 时长: ${selectedDuration}]`
-          : `[模型: ${selectedModel}, 比例: ${selectedAspectRatio}]`
+        : `[模型: ${selectedModel}, 比例: ${selectedAspectRatio}]`
     
     const imageCountText = uploadedImagePreviews.length > 1 ? `${uploadedImagePreviews.length}张图片` : '一张图片'
     const messageContent = inputText ? `${inputText} ${settingsInfo}` : `我上传了${imageCountText} ${settingsInfo}`
@@ -247,8 +278,18 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
 
     // 根据模型获取API密钥
     const getApiKeyForModel = (model: string): string => {
-      // 统一使用通用的API密钥
-      return process.env.NEXT_PUBLIC_API_KEY || ''
+      try {
+        // 从localStorage获取API密钥
+        const savedConfig = localStorage.getItem('apiConfig')
+        if (savedConfig) {
+          const config = JSON.parse(savedConfig)
+          return config.apiKey || ''
+        }
+      } catch (error) {
+        console.error('读取API密钥失败:', error)
+      }
+      // 只从localStorage获取，不再使用环境变量
+      return ''
     }
 
     try {
@@ -270,7 +311,7 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
       } else if (modelInfo?.type === 'video') {
         // 视频模型请求
         request.images = imageData ? [imageData] : undefined
-        request.duration = selectedModel === 'sora2' ? selectedDuration : undefined
+        request.duration = selectedModel === 'sora2' ? selectedDuration.replace('s', '') : undefined
         request.aspectRatio = selectedModel === 'sora2' ? selectedAspectRatio : undefined
       } else if (modelInfo?.type === 'text') {
         // 文本模型请求 - 添加文本生成参数
@@ -304,8 +345,8 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
   // 轮询任务状态
   const pollTaskStatus = async (taskId: string, request: any) => {
     let attempts = 0
-    const maxAttempts = 30 // 最多尝试30次
-    const pollInterval = 3000 // 3秒轮询一次
+    const maxAttempts = 100 // 最多尝试100次
+    const pollInterval = 5000 // 5秒轮询一次
     let lastStatus = '' // 记录上一次的状态
 
     // 使用简单的循环而不是复杂的定时器
@@ -762,8 +803,6 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
   useEffect(() => {
     if (selectedModel === 'sora2') {
       setSelectedDuration('10s');
-    } else if (selectedModel === 'veo3.1') {
-      setSelectedDuration('8s');
     }
   }, [selectedModel])
 
@@ -790,8 +829,20 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
     setIsGenerating(true)
     
     try {
-      // 获取API密钥
-      const apiKey = process.env.NEXT_PUBLIC_API_KEY || ''
+      // 从localStorage获取API密钥
+      let apiKey = ''
+      try {
+        const savedConfig = localStorage.getItem('apiConfig')
+        if (savedConfig) {
+          const config = JSON.parse(savedConfig)
+          apiKey = config.apiKey || ''
+        }
+      } catch (error) {
+        console.error('读取API密钥失败:', error)
+      }
+      
+      // 只使用localStorage中的配置，不再使用环境变量
+      apiKey = apiKey || ''
       
       if (!apiKey) {
         throw new Error('API密钥未配置')
@@ -802,7 +853,7 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
         prompt,
         model: selectedModel,
         images,
-        duration: selectedDuration,
+        duration: selectedDuration.replace('s', ''),
         aspectRatio: selectedAspectRatio,
         apiKey
       }
@@ -857,7 +908,7 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
   // 轮询视频任务状态
   const pollVideoTaskStatus = async (taskId: string, apiKey: string) => {
     const maxAttempts = 60 // 最大轮询次数
-    const interval = 5000 // 5秒轮询一次
+    const interval = 10000 // 5秒轮询一次
     
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       try {
@@ -1030,9 +1081,10 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
                   />
                   {message.type === 'ai' && (
                     <div className="flex space-x-2 mt-2">
+                      {/* 隐藏下载图片按钮 */}
                       <button
                         onClick={() => handleDownload(message.imageData!, 'ai-generated.png')}
-                        className="flex items-center space-x-1 text-xs text-blue-600 hover:text-blue-800"
+                        className="hidden flex items-center space-x-1 text-xs text-blue-600 hover:text-blue-800"
                       >
                         <Download className="h-3 w-3" />
                         <span>下载图片</span>
@@ -1060,9 +1112,10 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
                   />
                   {message.type === 'ai' && (
                     <div className="flex space-x-2 mt-2">
+                      {/* 隐藏下载视频按钮 */}
                       <button
                         onClick={() => handleDownload(message.videoData!, 'ai-generated.mp4')}
-                        className="flex items-center space-x-1 text-xs text-blue-600 hover:text-blue-800"
+                        className="hidden flex items-center space-x-1 text-xs text-blue-600 hover:text-blue-800"
                       >
                         <Download className="h-3 w-3" />
                         <span>下载视频</span>
@@ -1187,11 +1240,7 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
               </button>
               <button
                 onClick={() => setSelectedModelType('video')}
-                className={`p-1.5 rounded-lg transition-colors ${
-                  selectedModelType === 'video' 
-                    ? 'bg-white dark:bg-gray-600 shadow-sm text-gray-700 dark:text-gray-300' 
-                    : 'text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
-                }`}
+                className={`p-1.5 rounded-lg transition-colors ${selectedModelType === 'video' ? 'bg-white dark:bg-gray-600 shadow-sm text-gray-700 dark:text-gray-300' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'}`}
                 title="视频生成"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1200,7 +1249,7 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
               </button>
               <button
                 onClick={() => setSelectedModelType('text')}
-                className={`p-1.5 rounded-lg transition-colors ${
+                className={`hidden p-1.5 rounded-lg transition-colors ${
                   selectedModelType === 'text' 
                     ? 'bg-white dark:bg-gray-600 shadow-sm text-gray-700 dark:text-gray-300' 
                     : 'text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
@@ -1257,8 +1306,8 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
               )}
             </div>
 
-            {/* 比例选择 - 下拉菜单方式（对veo3.1模型隐藏） */}
-            {selectedModel !== 'veo3.1' && (
+            {/* 比例选择 - 下拉菜单方式 */}
+            {true && (
               <div className="relative" ref={aspectRatioRef}>
                 <div className="flex items-center bg-gray-100 dark:bg-gray-700 rounded-lg p-1.5">
                   <button
@@ -1298,7 +1347,7 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
             )}
 
             {/* 时长选择 - 对视频模型显示 */}
-            {(selectedModel === 'sora2' || selectedModel === 'veo3.1') && (
+            {selectedModel === 'sora2' && (
               <div className="relative" ref={durationRef}>
                 <div className="flex items-center bg-gray-100 dark:bg-gray-700 rounded-lg p-1.5">
                   <button
@@ -1366,7 +1415,7 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
           />
           <button
             onClick={handleSendMessage}
-            disabled={!inputText.trim() || isGenerating}
+            disabled={!inputText.trim()}
             className="btn-primary p-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Send className="h-4 w-4" />

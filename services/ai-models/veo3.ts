@@ -1,16 +1,16 @@
 import axios from 'axios';
+import { validateApiBaseUrl } from '../../utils/apiConfigValidator';
 
 // 请求参数接口
 interface ToVideoDvo {
   prompt: string;
   images?: string[];
-  key: string;
   taskId?: string;
   duration?: string;
   resolution?: string;
 }
 
-interface HumanDto {
+interface VideoDto {
   status: string;
   videoUrl?: string;
   error?: string;
@@ -22,21 +22,40 @@ interface HumanDto {
 export const veo3Config = {
   name: 'Veo3.1',
   type: 'video' as const,
-  baseUrl: process.env.NEXT_PUBLIC_VEO_API_BASE_URL || 'https://api.veo.ai/v1',
-  defaultDuration: '8s',
+  baseUrl: process.env.NEXT_PUBLIC_VEO_API_BASE_URL || '',
+  defaultDuration: '8',
   defaultResolution: '720p',
-  supportedDurations: ['8s'],
+  supportedDurations: ['8'],
+  // 获取支持的视频时长（带单位，用于UI显示）
+  getSupportedDurationsWithUnit(): string[] {
+    return this.supportedDurations.map(d => `${d}s`);
+  },
   supportedResolutions: ['720p', '1080p'],
   
   // 创建视频生成任务
   async createVideo(toVideoDvo: ToVideoDvo): Promise<string> {
-    // 使用环境变量中的API密钥
-    const apiKey = process.env.NEXT_PUBLIC_API_KEY || toVideoDvo.key;
+    // 从localStorage获取用户配置的API地址和密钥
+    let apiBaseUrl = this.baseUrl;
+    let apiKey = '';
+    
+    try {
+      const savedConfig = localStorage.getItem('apiConfig');
+      if (savedConfig) {
+        const config = JSON.parse(savedConfig);
+        if (config.apiBaseUrl) apiBaseUrl = config.apiBaseUrl;
+        if (config.apiKey) apiKey = config.apiKey;
+      }
+    } catch (error) {
+      console.error('读取API配置失败:', error);
+    }
+    
+    // 验证API域名地址
+    validateApiBaseUrl(apiBaseUrl, 'Veo');
     
     const requestBody = {
       model: "veo-3.1",
       prompt: toVideoDvo.prompt,
-      duration: toVideoDvo.duration || this.defaultDuration,
+      duration: (toVideoDvo.duration || this.defaultDuration).replace('s', ''),
       resolution: toVideoDvo.resolution || this.defaultResolution,
       num_videos: 1,
       ...(toVideoDvo.images && toVideoDvo.images.length > 0 && {
@@ -50,7 +69,7 @@ export const veo3Config = {
     };
     
     try {
-      const response = await axios.post(`${this.baseUrl}/videos/generations`, requestBody, { headers });
+      const response = await axios.post(`${apiBaseUrl}/videos/generations`, requestBody, { headers });
       return response.data.id || response.data.task_id;
     } catch (error) {
       throw error;
@@ -60,15 +79,30 @@ export const veo3Config = {
   /**
    * 查询视频生成任务状态
    */
-  async getTask(toVideoDvo: ToVideoDvo): Promise<HumanDto | null> {
-    // 使用环境变量中的API密钥
-    const apiKey = process.env.NEXT_PUBLIC_API_KEY || toVideoDvo.key;
+  async getTask(toVideoDvo: ToVideoDvo): Promise<VideoDto | null> {
+    // 从localStorage获取用户配置的API地址和密钥
+    let apiBaseUrl = this.baseUrl;
+    let apiKey = '';
     
-    const humanDto: HumanDto = { status: '3' };
+    try {
+      const savedConfig = localStorage.getItem('apiConfig');
+      if (savedConfig) {
+        const config = JSON.parse(savedConfig);
+        if (config.apiBaseUrl) apiBaseUrl = config.apiBaseUrl;
+        if (config.apiKey) apiKey = config.apiKey;
+      }
+    } catch (error) {
+      console.error('读取API配置失败:', error);
+    }
+    
+    // 验证API域名地址
+    validateApiBaseUrl(apiBaseUrl, 'Veo');
+    
+    const VideoDto: VideoDto = { status: '3' };
     
     if (!toVideoDvo.taskId) {
-      humanDto.error = '任务ID不能为空';
-      return humanDto;
+      VideoDto.error = '任务ID不能为空';
+      return VideoDto;
     }
 
     const headers = {
@@ -77,7 +111,7 @@ export const veo3Config = {
     };
     
     try {
-      const response = await axios.get(`${this.baseUrl}/videos/tasks/${toVideoDvo.taskId}`, { headers });
+      const response = await axios.get(`${apiBaseUrl}/videos/tasks/${toVideoDvo.taskId}`, { headers });
       
       const result = response.data;
       
@@ -86,22 +120,22 @@ export const veo3Config = {
         const taskData = result.data;
         
         if (taskData.status === 'SUCCESS') {
-          humanDto.status = '2';
+          VideoDto.status = '2';
           // 获取data.data数组中的第一个url
           const videoData = taskData.data?.data?.[0];
-          humanDto.videoUrl = videoData?.url;
-          return humanDto;
+          VideoDto.videoUrl = videoData?.url;
+          return VideoDto;
         } else if (taskData.status === 'FAILURE') {
-          humanDto.status = '3';
-          humanDto.error = taskData.fail_reason || '视频生成失败';
-          return humanDto;
+          VideoDto.status = '3';
+          VideoDto.error = taskData.fail_reason || '视频生成失败';
+          return VideoDto;
         } else if (taskData.status === 'IN_PROGRESS' || taskData.status === 'NOT_START') {
-          humanDto.status = '1';
-          return humanDto;
+          VideoDto.status = '1';
+          return VideoDto;
         }
       }
       
-      return humanDto;
+      return VideoDto;
     } catch (error) {
       throw error;
     }
@@ -117,7 +151,7 @@ export const veo3Config = {
     return prompt && prompt.trim().length > 0 && prompt.trim().length <= 500;
   },
 
-  // 获取支持的视频时长
+  // 获取支持的视频时长（不带单位，用于API调用）
   getSupportedDurations(): string[] {
     return this.supportedDurations;
   },
@@ -133,4 +167,4 @@ export const veo3Config = {
   }
 };
 
-export type { ToVideoDvo, HumanDto };
+export type { ToVideoDvo, VideoDto };
