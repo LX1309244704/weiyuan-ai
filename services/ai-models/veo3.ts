@@ -11,7 +11,6 @@ interface ToVideoDvo {
 }
 
 interface VideoDto {
-interface VideoDto {
   status: string;
   videoUrl?: string;
   error?: string;
@@ -179,5 +178,4 @@ export const veo3Config = {
   }
 };
 
-export type { ToVideoDvo, VideoDto };
 export type { ToVideoDvo, VideoDto };
