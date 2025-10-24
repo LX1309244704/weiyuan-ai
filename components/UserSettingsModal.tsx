@@ -12,7 +12,7 @@ interface UserSettingsModalProps {
 export default function UserSettingsModal({ isOpen, onClose }: UserSettingsModalProps) {
   const [apiConfig, setApiConfig] = useState<ApiConfig>({
     apiKey: '',
-    apiBaseUrl: 'https://api.weiyuan.ai/v1',
+    apiBaseUrl: 'https://api.jmyps.com',
     provider: 'weiyuan' as ApiProvider
   })
 
@@ -34,7 +34,7 @@ export default function UserSettingsModal({ isOpen, onClose }: UserSettingsModal
       // 使用默认配置
       const config: ApiConfig = {
         apiKey: '',
-        apiBaseUrl: 'https://api.weiyuan.ai/v1',
+        apiBaseUrl: 'https://api.jmyps.com',
         provider: 'weiyuan' as ApiProvider
       }
       setApiConfig(config)
@@ -138,7 +138,7 @@ export default function UserSettingsModal({ isOpen, onClose }: UserSettingsModal
               value={apiConfig.apiBaseUrl}
               onChange={(e) => handleInputChange('apiBaseUrl', e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-              placeholder="https://api.weiyuan.ai/v1"
+              placeholder="https://api.jmyps.com"
             />
           </div>
 

@@ -6,6 +6,7 @@ import { gpt5Config, type TextRequestDvo as Gpt5RequestDvo, type TextResponseDto
 import { deepseekConfig, type TextRequestDvo as DeepSeekRequestDvo, type TextResponseDto as DeepSeekResponseDto } from './weiyuan/deepseek';
 import { gemini25Config, type TextRequestDvo as Gemini25RequestDvo, type TextResponseDto as Gemini25ResponseDto } from './weiyuan/gemini2.5';
 import { ApiKeyCache } from '@/utils/apiKeyCache';
+import { handleApiError, isTokenError, getUserFriendlyErrorMessage } from '@/utils/errorHandler';
 
 // 统一的模型类型定义
 export type ModelType = 'image' | 'video' | 'text';
@@ -140,9 +141,10 @@ export class ModelService {
       throw new Error(`不支持的模型: ${model}`);
     }
     
-    // 验证API密钥
-    if (!config.validateApiKey(request.key)) {
-      throw new Error('无效的API密钥');
+    // 验证API密钥 - 从缓存中获取
+    const apiKey = ApiKeyCache.getApiKey();
+    if (!config.validateApiKey(apiKey)) {
+      throw new Error('无效的API密钥，请检查API密钥配置');
     }
     
     // 验证提示词
@@ -205,7 +207,11 @@ export class ModelService {
       
       return result;
     } catch (error) {
-      throw error;
+      // 恢复原始基础地址
+      config.baseUrl = originalBaseUrl;
+      
+      // 处理API错误，特别是令牌错误
+      handleApiError(error);
     }
   }
   
@@ -231,27 +237,40 @@ export class ModelService {
       const maxAttempts = 300; // 最多尝试5分钟（300秒）
       
       while (attempts < maxAttempts) {
-        if (config.type === 'image') {
-          result = await config.getTask(request as any);
-        } else if (config.type === 'video') {
-          result = await config.getTask(request as any);
-        } else if (config.type === 'text') {
-          result = await config.getTask(request as any);
-        } else {
-          throw new Error(`不支持的模型类型`);
-        }
-        
-        // 检查是否为最终状态（SUCCESS或FAILURE）
-        // 对于Nano-Banana模型，result.status为'2'表示成功，'3'表示失败
-        // '1'表示处理中状态，需要继续循环查询
-        if (result && (result.status === '2' || result.status === '3')) {
-          break;
-        }
-        
-        // 如果不是最终状态，等待1秒后继续查询
-        attempts++;
-        if (attempts < maxAttempts) {
-          await new Promise(resolve => setTimeout(resolve, 1000)); // 等待1秒
+        try {
+          if (config.type === 'image') {
+            result = await config.getTask(request as any);
+          } else if (config.type === 'video') {
+            result = await config.getTask(request as any);
+          } else if (config.type === 'text') {
+            result = await config.getTask(request as any);
+          } else {
+            throw new Error(`不支持的模型类型`);
+          }
+          
+          // 检查是否为最终状态（SUCCESS或FAILURE）
+          // 对于Nano-Banana模型，result.status为'2'表示成功，'3'表示失败
+          // '1'表示处理中状态，需要继续循环查询
+          if (result && (result.status === '2' || result.status === '3')) {
+            break;
+          }
+          
+          // 如果不是最终状态，等待3秒后继续查询
+          attempts++;
+          if (attempts < maxAttempts) {
+            await new Promise(resolve => setTimeout(resolve, 3000)); // 等待3秒
+          }
+        } catch (error) {
+          // 如果是令牌错误，立即抛出
+          if (isTokenError(error)) {
+            handleApiError(error);
+          }
+          
+          // 其他错误继续重试
+          attempts++;
+          if (attempts < maxAttempts) {
+            await new Promise(resolve => setTimeout(resolve, 3000)); // 等待3秒
+          }
         }
       }
       
@@ -272,7 +291,7 @@ export class ModelService {
         return this.normalizeTextResponse(result);
       }
     } catch (error) {
-      throw error;
+      handleApiError(error);
     }
   }
   

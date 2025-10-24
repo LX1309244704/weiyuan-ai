@@ -451,9 +451,9 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
         return false
       }
 
-      // 检查文件大小（限制为5MB）
-      if (file.size > 5 * 1024 * 1024) {
-        alert(`图片 ${file.name} 大小超过5MB，已跳过`)
+      // 检查文件大小（限制增加到50MB以支持原图上传）
+      if (file.size > 50 * 1024 * 1024) {
+        alert(`图片 ${file.name} 大小超过50MB，已跳过`)
         return false
       }
 
@@ -462,15 +462,26 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
 
     if (validFiles.length === 0) return
 
-    // 读取所有有效文件
+    // 读取所有有效文件，保持原图质量
     validFiles.forEach(file => {
       const reader = new FileReader()
       reader.onload = (e) => {
-        const imageData = e.target?.result as string
-        // 将上传的图片添加到预览列表
-        setUploadedImagePreviews(prev => [...prev, imageData])
+        // 使用ArrayBuffer读取原始文件数据，避免压缩
+        const arrayBuffer = e.target?.result as ArrayBuffer
+        if (arrayBuffer) {
+          // 将ArrayBuffer转换为Base64，保持原始质量
+          const uint8Array = new Uint8Array(arrayBuffer)
+          let binary = ''
+          for (let i = 0; i < uint8Array.byteLength; i++) {
+            binary += String.fromCharCode(uint8Array[i])
+          }
+          const imageData = 'data:' + file.type + ';base64,' + btoa(binary)
+          
+          // 将上传的图片添加到预览列表
+          setUploadedImagePreviews(prev => [...prev, imageData])
+        }
       }
-      reader.readAsDataURL(file)
+      reader.readAsArrayBuffer(file)
     })
     
     // 重置文件输入，允许重复上传同一文件
