@@ -242,8 +242,7 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
         type: userMessage.type,
         content: userMessage.content,
         timestamp: userMessage.timestamp,
-        imageData: userMessage.imageData,
-        multipleImages: userMessage.multipleImages
+        imageData: userMessage.imageData
       }, 'default').catch(error => {
       })
     }
@@ -554,8 +553,7 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
         type: userMessage.type,
         content: userMessage.content,
         timestamp: userMessage.timestamp,
-        imageData: userMessage.imageData,
-        multipleImages: userMessage.multipleImages
+        imageData: userMessage.imageData
       }, 'default').catch(error => {
       })
     }
@@ -643,8 +641,7 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
         type: userMessage.type,
         content: userMessage.content,
         timestamp: userMessage.timestamp,
-        imageData: userMessage.imageData,
-        multipleImages: userMessage.multipleImages
+        imageData: userMessage.imageData
       }, 'default').catch(error => {
       })
     }

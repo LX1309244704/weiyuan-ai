@@ -152,17 +152,17 @@ export class ModelService {
       throw new Error('无效的提示词');
     }
     
+    // 动态设置基础地址
+    const currentProvider = ApiKeyCache.getApiProvider();
+    const baseUrl = ApiKeyCache.getBaseUrlByProvider(currentProvider);
+    
+    // 临时修改配置的基础地址
+    const originalBaseUrl = config.baseUrl;
+    config.baseUrl = baseUrl;
+    
+    let result: string;
+    
     try {
-      // 动态设置基础地址
-      const currentProvider = ApiKeyCache.getApiProvider();
-      const baseUrl = ApiKeyCache.getBaseUrlByProvider(currentProvider);
-      
-      // 临时修改配置的基础地址
-      const originalBaseUrl = config.baseUrl;
-      config.baseUrl = baseUrl;
-      
-      let result: string;
-      
       if (config.type === 'image') {
         // 为图片模型构建正确的参数对象，确保aspectRatio正确传递
         const imageRequest = request as ImageRequestDvo;

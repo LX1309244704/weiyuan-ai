@@ -4,6 +4,12 @@ import { useState, useEffect } from 'react'
 import { X, Save, Settings } from 'lucide-react'
 import { ApiKeyCache, type ApiProvider } from '@/utils/apiKeyCache'
 
+interface ApiConfig {
+  apiKey: string;
+  apiBaseUrl: string;
+  provider: ApiProvider;
+}
+
 interface UserSettingsModalProps {
   isOpen: boolean
   onClose: () => void
