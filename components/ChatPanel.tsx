@@ -253,6 +253,8 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
     if (contentEditableDiv) {
       contentEditableDiv.textContent = ''
     }
+    
+    // 设置生成状态以显示三个点动画
     setIsGenerating(true)
 
     // 根据模型获取API密钥
@@ -1446,7 +1448,7 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
           />
           <button
             onClick={handleSendMessage}
-            disabled={!inputText.trim() || isGenerating}
+            disabled={!inputText.trim()}
             className="btn-primary p-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Send className="h-4 w-4" />
