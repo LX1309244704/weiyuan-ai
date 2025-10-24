@@ -1,10 +1,11 @@
-import { nanoBananaConfig, type ToImageDvo as NanoBananaDvo, type ImageDto as NanoBananaHumanDto } from './nano-banana';
-import { seedream4Config, type ToImageDvo as Seedream4Dvo, type ImageDto as Seedream4HumanDto } from './seedream-4';
-import { veo3Config, type ToVideoDvo as Veo3Dvo, type VideoDto as Veo3HumanDto } from './veo3';
-import { sora2Config, type ToVideoDvo as Sora2Dvo, type VideoDto as Sora2HumanDto } from './sora2';
-import { gpt5Config, type TextRequestDvo as Gpt5RequestDvo, type TextResponseDto as Gpt5ResponseDto } from './gpt5';
-import { deepseekConfig, type TextRequestDvo as DeepSeekRequestDvo, type TextResponseDto as DeepSeekResponseDto } from './deepseek';
-import { gemini25Config, type TextRequestDvo as Gemini25RequestDvo, type TextResponseDto as Gemini25ResponseDto } from './gemini2.5';
+import { nanoBananaConfig, type ToImageDvo as NanoBananaDvo, type ImageDto as NanoBananaHumanDto } from './weiyuan/nano-banana';
+import { seedream4Config, type ToImageDvo as Seedream4Dvo, type ImageDto as Seedream4HumanDto } from './weiyuan/seedream-4';
+import { veo3Config, type ToVideoDvo as Veo3Dvo, type VideoDto as Veo3HumanDto } from './weiyuan/veo3';
+import { sora2Config, type ToVideoDvo as Sora2Dvo, type VideoDto as Sora2HumanDto } from './weiyuan/sora2';
+import { gpt5Config, type TextRequestDvo as Gpt5RequestDvo, type TextResponseDto as Gpt5ResponseDto } from './weiyuan/gpt5';
+import { deepseekConfig, type TextRequestDvo as DeepSeekRequestDvo, type TextResponseDto as DeepSeekResponseDto } from './weiyuan/deepseek';
+import { gemini25Config, type TextRequestDvo as Gemini25RequestDvo, type TextResponseDto as Gemini25ResponseDto } from './weiyuan/gemini2.5';
+import { ApiKeyCache } from '@/utils/apiKeyCache';
 
 // 统一的模型类型定义
 export type ModelType = 'image' | 'video' | 'text';
@@ -15,7 +16,6 @@ export type TextModel = 'gpt5' | 'deepseek' | 'gemini2.5';
 // 统一的请求参数接口
 export interface BaseRequestDvo {
   prompt: string;
-  key: string;
   taskId?: string;
   images?: string[];
 }
@@ -151,24 +151,32 @@ export class ModelService {
     }
     
     try {
+      // 动态设置基础地址
+      const currentProvider = ApiKeyCache.getApiProvider();
+      const baseUrl = ApiKeyCache.getBaseUrlByProvider(currentProvider);
+      
+      // 临时修改配置的基础地址
+      const originalBaseUrl = config.baseUrl;
+      config.baseUrl = baseUrl;
+      
+      let result: string;
+      
       if (config.type === 'image') {
         // 为图片模型构建正确的参数对象，确保aspectRatio正确传递
         const imageRequest = request as ImageRequestDvo;
         const toImageDvo = {
           prompt: imageRequest.prompt,
-          key: imageRequest.key,
           taskId: imageRequest.taskId,
           images: imageRequest.images,
           size: imageRequest.size,
           aspectRatio: imageRequest.aspectRatio // 确保aspectRatio参数传递
         };
-        return await config.createAsyncImage(toImageDvo as any);
+        result = await config.createAsyncImage(toImageDvo as any);
       } else if (config.type === 'video') {
         // 为视频模型构建正确的参数对象，确保aspectRatio正确传递
         const videoRequest = request as VideoRequestDvo;
         const toVideoDvo = {
           prompt: videoRequest.prompt,
-          key: videoRequest.key,
           taskId: videoRequest.taskId,
           images: videoRequest.images,
           duration: videoRequest.duration,
@@ -176,22 +184,26 @@ export class ModelService {
           style: videoRequest.style,
           aspectRatio: videoRequest.aspectRatio // 确保aspectRatio参数传递
         };
-        return await config.createVideo(toVideoDvo as any);
+        result = await config.createVideo(toVideoDvo as any);
       } else if (config.type === 'text') {
         // 文本模型处理
         const textRequest = request as TextRequestDvo;
         const textDvo = {
           prompt: textRequest.prompt,
-          key: textRequest.key,
           taskId: textRequest.taskId,
           maxTokens: textRequest.maxTokens,
           temperature: textRequest.temperature,
           topP: textRequest.topP
         };
-        return await config.createTextGeneration(textDvo as any);
+        result = await config.createTextGeneration(textDvo as any);
       } else {
         throw new Error(`不支持的模型类型`);
       }
+      
+      // 恢复原始基础地址
+      config.baseUrl = originalBaseUrl;
+      
+      return result;
     } catch (error) {
       throw error;
     }

@@ -1,10 +1,10 @@
 import axios from 'axios';
+import { ApiKeyCache } from '@/utils/apiKeyCache';
 
 // 请求参数接口
 interface ToVideoDvo {
   prompt: string;
   images?: string[];
-  key: string;
   taskId?: string;
   duration?: string;
   resolution?: string;
@@ -24,8 +24,8 @@ interface VideoDto {
 export const sora2Config = {
   name: 'Sora2',
   type: 'video' as const,
-  baseUrl: process.env.NEXT_PUBLIC_API_BASE_URL || 'https://api.jmyps.com',
-  defaultDuration: '10s',
+  baseUrl: ApiKeyCache.getApiBaseUrl(),
+  defaultDuration: '10',
   defaultResolution: '1080p',
   defaultStyle: 'realistic',
   supportedDurations: ['5s', '10s', '15s', '30s', '60s'],
@@ -56,7 +56,7 @@ export const sora2Config = {
     console.log('Sora2模型发送给API的参数:', requestBody)
     
     const headers = {
-      'Authorization': `Bearer ${process.env.NEXT_PUBLIC_API_KEY || toVideoDvo.key}`,
+      'Authorization': `Bearer ${ApiKeyCache.getApiKey()}`,
       'Content-Type': 'application/json',
       'X-Sora-Version': '2.0'
     };
@@ -82,7 +82,7 @@ export const sora2Config = {
     }
 
     const headers = {
-      'Authorization': `Bearer ${process.env.NEXT_PUBLIC_API_KEY || toVideoDvo.key}`,
+      'Authorization': `Bearer ${ApiKeyCache.getApiKey()}`,
       'Content-Type': 'application/json',
       'X-Sora-Version': '2.0'
     };

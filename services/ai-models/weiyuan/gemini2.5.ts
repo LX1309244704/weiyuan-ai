@@ -1,9 +1,9 @@
 import axios from 'axios';
+import { ApiKeyCache } from '@/utils/apiKeyCache';
 
 // 请求参数接口
 interface TextRequestDvo {
   prompt: string;
-  key: string;
   taskId?: string;
   maxTokens?: number;
   temperature?: number;
@@ -17,54 +17,57 @@ interface TextResponseDto {
 }
 
 /**
- * DeepSeek 文本生成模型配置
+ * Gemini 2.5 文本生成模型配置
  */
-export const deepseekConfig = {
-  name: 'DeepSeek',
+export const gemini25Config = {
+  name: 'Gemini 2.5',
   type: 'text' as const,
-  baseUrl: process.env.NEXT_PUBLIC_DEEPSEEK_API_URL || 'https://api.deepseek.com/v1',
+  baseUrl: ApiKeyCache.getApiBaseUrl(),
   defaultMaxTokens: 2048,
   defaultTemperature: 0.7,
   defaultTopP: 0.9,
   
   // 创建文本生成任务
   async createTextGeneration(request: TextRequestDvo): Promise<string> {
-    const apiKey = process.env.NEXT_PUBLIC_DEEPSEEK_API_KEY || request.key;
+    const apiKey = ApiKeyCache.getApiKey();
     
     const requestBody = {
-      model: 'deepseek-chat',
-      messages: [
+      contents: [
         {
-          role: 'user',
-          content: request.prompt
+          parts: [
+            {
+              text: request.prompt
+            }
+          ]
         }
       ],
-      max_tokens: request.maxTokens || this.defaultMaxTokens,
-      temperature: request.temperature || this.defaultTemperature,
-      top_p: request.topP || this.defaultTopP,
-      stream: false
-    };
-    
-    const headers = {
-      'Authorization': `Bearer ${apiKey}`,
-      'Content-Type': 'application/json'
+      generationConfig: {
+        maxOutputTokens: request.maxTokens || this.defaultMaxTokens,
+        temperature: request.temperature || this.defaultTemperature,
+        topP: request.topP || this.defaultTopP
+      }
     };
     
     try {
       const response = await axios.post(
-        `${this.baseUrl}/chat/completions`,
+        `${this.baseUrl}/models/gemini-2.5:generateContent?key=${apiKey}`,
         requestBody,
-        { headers }
+        {
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        }
       );
       
-      // 直接返回生成的文本
-      return response.data.choices[0].message.content;
+      // 提取生成的文本
+      const generatedText = response.data.candidates[0]?.content?.parts[0]?.text || '';
+      return generatedText;
     } catch (error) {
       throw error;
     }
   },
 
-  // 查询任务状态（DeepSeek是同步的，直接返回结果）
+  // 查询任务状态（Gemini是同步的，直接返回结果）
   async getTask(request: TextRequestDvo): Promise<TextResponseDto> {
     return {
       status: '2',
@@ -86,7 +89,7 @@ export const deepseekConfig = {
   getSupportedParameters() {
     return {
       maxTokens: { min: 1, max: 8192, default: 2048 },
-      temperature: { min: 0, max: 2, default: 0.7 },
+      temperature: { min: 0, max: 1, default: 0.7 },
       topP: { min: 0, max: 1, default: 0.9 }
     };
   }

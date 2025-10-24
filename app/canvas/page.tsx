@@ -12,6 +12,7 @@ import { loadImageWithCors } from '../../utils/corsProxy'
 import TextPropertiesPanel from '../../components/TextPropertiesPanel'
 import { useUserStore } from '@/stores/userStore'
 import { ModelService } from '@/services/ai-models'
+import { ApiKeyCache } from '@/utils/apiKeyCache'
 
 type SelectionData = {
   rect: any
@@ -334,7 +335,7 @@ export default function CanvasPage() {
       
       // 定义内部函数，避免依赖问题
       const getApiKeyForModel = (model: string): string => {
-        return process.env.NEXT_PUBLIC_API_KEY || ''
+        return ApiKeyCache.getApiKey()
       }
       
       const addLoadingVideoPlaceholder = async (position: { x: number; y: number }): Promise<any> => {
@@ -1208,7 +1209,7 @@ export default function CanvasPage() {
     
     // 定义内部函数，避免依赖问题
     const getApiKeyForModel = (model: string): string => {
-      return process.env.NEXT_PUBLIC_API_KEY || ''
+      return ApiKeyCache.getApiKey()
     }
     
     try {
@@ -1359,7 +1360,7 @@ export default function CanvasPage() {
     
     // 定义内部函数，避免依赖问题
     const getApiKeyForModel = (model: string): string => {
-      return process.env.NEXT_PUBLIC_API_KEY || ''
+      return ApiKeyCache.getApiKey()
     }
     
     // URL转Base64辅助函数
@@ -1871,7 +1872,7 @@ export default function CanvasPage() {
     
     // 定义内部函数，避免依赖问题
     const getApiKeyForModel = (model: string): string => {
-      return process.env.NEXT_PUBLIC_API_KEY || ''
+      return ApiKeyCache.getApiKey()
     }
     
     try {
@@ -2393,6 +2394,28 @@ export default function CanvasPage() {
     const activeObject = fabricCanvas.getActiveObject()
     if (activeObject) {
       try {
+        // 检查当前对象是否已经在最底层（不能移到白板背景之下）
+        const objects = fabricCanvas.getObjects()
+        const currentIndex = objects.indexOf(activeObject)
+        
+        // 如果已经在最底层（索引为0），则不允许再下移
+        if (currentIndex <= 0) {
+          // 显示提示信息
+          const notification = document.createElement('div')
+          notification.innerHTML = `
+            <div style="position: fixed; top: 20px; right: 20px; background: #f59e0b; color: white; padding: 8px 12px; border-radius: 6px; z-index: 10000; box-shadow: 0 2px 4px rgba(0,0,0,0.1); font-size: 14px;">
+              已在最底层，无法继续下移
+            </div>
+          `
+          document.body.appendChild(notification)
+          setTimeout(() => {
+            if (document.body.contains(notification)) {
+              document.body.removeChild(notification)
+            }
+          }, 2000)
+          return
+        }
+        
         if (fabricCanvas.sendBackwards) {
           fabricCanvas.sendBackwards(activeObject)
         } else {
@@ -2408,15 +2431,15 @@ export default function CanvasPage() {
 
   return (
     <div className="w-full h-screen bg-gray-50 dark:bg-gray-900 relative" onClick={handleCloseContextMenu}>
-      {/* 画布区域 - 铺满整个屏幕 */}
-      <div className="absolute inset-0" onContextMenu={handleContextMenu}>
+      {/* 画布区域 - 铺满整个屏幕，始终处于最底层 */}
+      <div className="absolute inset-0 z-0" onContextMenu={handleContextMenu}>
         <div className="bg-white dark:bg-gray-800 w-full h-full">
           <canvas ref={canvasRef} />
         </div>
       </div>
 
       {/* 顶部工具栏 - 悬浮在画板上方 */}
-      <div className="absolute top-0 left-0 right-0 z-20">
+      <div className="absolute top-0 left-0 right-0 z-30">
         <CanvasToolbar
           canvas={fabricCanvas}
           onCaptureArea={handleCaptureArea}
@@ -2465,7 +2488,7 @@ export default function CanvasPage() {
         onClearSelection={() => setSelectedImage(null)}
       />
 
-      {/* 右键菜单 */}
+      {/* 右键菜单 - 最高层级 */}
       {contextMenu.visible && (
         <div 
           className="fixed bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50"

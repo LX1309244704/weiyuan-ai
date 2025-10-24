@@ -24,15 +24,13 @@ const ImageSelectionPanel: React.FC<ImageSelectionPanelProps> = ({
   const [showTooltip, setShowTooltip] = useState(false)
   const [canvasScale, setCanvasScale] = useState(1)
   const [isMultipleSelection, setIsMultipleSelection] = useState(false)
-  const [selectedModelType, setSelectedModelType] = useState<'image' | 'video'>('image')
+  const [selectedModelType, setSelectedModelType] = useState<'image'>('image')
   const [selectedImageModel, setSelectedImageModel] = useState('nano-banana')
-  const [selectedVideoModel, setSelectedVideoModel] = useState('sora2')
   const [selectedAspectRatio, setSelectedAspectRatio] = useState('16:9')
-  const [selectedVideoSeconds, setSelectedVideoSeconds] = useState('8')
   const [showModelDropdown, setShowModelDropdown] = useState(false)
   const [showAspectDropdown, setShowAspectDropdown] = useState(false)
   const [showRatioDropdown, setShowRatioDropdown] = useState(false)
-  const [showSecondsDropdown, setShowSecondsDropdown] = useState(false)
+
   const [customPrompt, setCustomPrompt] = useState('')
   const [textareaHeight, setTextareaHeight] = useState('32px')
 
@@ -280,14 +278,7 @@ const ImageSelectionPanel: React.FC<ImageSelectionPanelProps> = ({
     setPanelPosition({ left: panelLeft, top: panelTop })
   }, [addButtonPosition, canvasScale])
 
-  // 监听视频模型变化，重置时长设置
-  useEffect(() => {
-    if (selectedVideoModel === 'sora2') {
-      setSelectedVideoSeconds('10');
-    } else if (selectedVideoModel === 'veo3.1') {
-      setSelectedVideoSeconds('8');
-    }
-  }, [selectedVideoModel])
+
 
   if (!selectedImage || !canvas || isMultipleSelection) return null
   
@@ -393,35 +384,6 @@ const ImageSelectionPanel: React.FC<ImageSelectionPanelProps> = ({
         }}
       >
         <div className="flex items-center justify-end space-x-2">
-          {/* 1. 图标左右切换 - 模型类型切换 */}
-          <div className="flex items-center bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
-            <button
-              onClick={() => setSelectedModelType('image')}
-              className={`p-1 rounded-lg transition-colors ${
-                selectedModelType === 'image' 
-                  ? 'bg-white dark:bg-gray-600 shadow-sm text-gray-700 dark:text-gray-300' 
-                  : 'text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
-              }`}
-              title="图片生成"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
-            </button>
-            <button
-              onClick={() => setSelectedModelType('video')}
-              className={`p-1 rounded-lg transition-colors ${
-                selectedModelType === 'video' 
-                  ? 'bg-white dark:bg-gray-600 shadow-sm text-gray-700 dark:text-gray-300' 
-                  : 'text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
-              }`}
-              title="视频生成"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-              </svg>
-            </button>
-          </div>
 
           {/* 2. 模型选择 */}
           <div className="relative">
@@ -431,8 +393,7 @@ const ImageSelectionPanel: React.FC<ImageSelectionPanelProps> = ({
                 className="flex items-center space-x-1 p-1 text-gray-700 dark:text-gray-300 rounded-lg text-xs hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
               >
                 <span>
-                  {ModelService.getModelInfo(selectedModelType === 'image' ? selectedImageModel : selectedVideoModel)?.name || 
-                   (selectedModelType === 'image' ? selectedImageModel : selectedVideoModel)}
+                  {ModelService.getModelInfo(selectedImageModel)?.name || selectedImageModel}
                 </span>
                 <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -443,86 +404,39 @@ const ImageSelectionPanel: React.FC<ImageSelectionPanelProps> = ({
             {showAspectDropdown && (
               <div className="absolute bottom-full left-0 mb-1 w-20 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-600 z-10">
                 <div className="p-1">
-                  {selectedModelType === 'image' ? (
-                    <>
-                      <button
-                        onClick={() => {
-                          setSelectedImageModel('seedream-4')
-                          setShowAspectDropdown(false)
-                        }}
-                        className={`w-full text-left px-2 py-1 text-xs rounded ${
-                          selectedImageModel === 'seedream-4' 
-                            ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300' 
-                            : 'hover:bg-gray-100 dark:hover:bg-gray-700'
-                        }`}
-                      >
-                        Seedream-4
-                      </button>
-                      <button
-                        onClick={() => {
-                          setSelectedImageModel('nano-banana')
-                          setShowAspectDropdown(false)
-                        }}
-                        className={`w-full text-left px-2 py-1 text-xs rounded ${
-                          selectedImageModel === 'nano-banana' 
-                            ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300' 
-                            : 'hover:bg-gray-100 dark:hover:bg-gray-700'
-                        }`}
-                      >
-                        Nano-Banana
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <button
-                        onClick={() => {
-                          setSelectedVideoModel('veo3.1')
-                          setShowAspectDropdown(false)
-                          // 同步到ChatPanel
-                          if (typeof window !== 'undefined' && (window as any).chatPanelRef) {
-                            const chatPanel = (window as any).chatPanelRef
-                            if (chatPanel.setSelectedModel) {
-                              chatPanel.setSelectedModel('veo3.1')
-                            }
-                          }
-                        }}
-                        className={`w-full text-left px-2 py-1 text-xs rounded ${
-                          selectedVideoModel === 'veo3.1' 
-                            ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300' 
-                            : 'hover:bg-gray-100 dark:hover:bg-gray-700'
-                        }`}
-                      >
-                        Veo3.1
-                      </button>
-                      <button
-                        onClick={() => {
-                          setSelectedVideoModel('sora2')
-                          setShowAspectDropdown(false)
-                          // 同步到ChatPanel
-                          if (typeof window !== 'undefined' && (window as any).chatPanelRef) {
-                            const chatPanel = (window as any).chatPanelRef
-                            if (chatPanel.setSelectedModel) {
-                              chatPanel.setSelectedModel('sora2')
-                            }
-                          }
-                        }}
-                        className={`w-full text-left px-2 py-1 text-xs rounded ${
-                          selectedVideoModel === 'sora2' 
-                            ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300' 
-                            : 'hover:bg-gray-100 dark:hover:bg-gray-700'
-                        }`}
-                      >
-                        Sora2
-                      </button>
-                    </>
-                  )}
+                  <button
+                    onClick={() => {
+                      setSelectedImageModel('seedream-4')
+                      setShowAspectDropdown(false)
+                    }}
+                    className={`w-full text-left px-2 py-1 text-xs rounded ${
+                      selectedImageModel === 'seedream-4' 
+                        ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300' 
+                        : 'hover:bg-gray-100 dark:hover:bg-gray-700'
+                    }`}
+                  >
+                    Seedream-4
+                  </button>
+                  <button
+                    onClick={() => {
+                      setSelectedImageModel('nano-banana')
+                      setShowAspectDropdown(false)
+                    }}
+                    className={`w-full text-left px-2 py-1 text-xs rounded ${
+                      selectedImageModel === 'nano-banana' 
+                        ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300' 
+                        : 'hover:bg-gray-100 dark:hover:bg-gray-700'
+                    }`}
+                  >
+                    Nano-Banana
+                  </button>
                 </div>
               </div>
             )}
           </div>
 
-          {/* 3. 比例选择 - 对图片模型和Sora2视频模型显示 */}
-          {(selectedModelType === 'image' || (selectedModelType === 'video' && selectedVideoModel === 'sora2')) && (
+          {/* 3. 比例选择 - 仅对图片模型显示 */}
+          {selectedModelType === 'image' && (
             <div className="relative">
               <div className="flex items-center bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
                 <button
@@ -561,47 +475,7 @@ const ImageSelectionPanel: React.FC<ImageSelectionPanelProps> = ({
             </div>
           )}
 
-          {/* 4. 时长选择 - 对视频模型显示 */}
-          {selectedModelType === 'video' && (
-            <div className="relative">
-              <div className="flex items-center bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
-                <button
-                  onClick={() => setShowSecondsDropdown(!showSecondsDropdown)}
-                  className="flex items-center space-x-1 p-1 text-gray-700 dark:text-gray-300 rounded-lg text-xs hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-                >
-                  <span>
-                    {selectedVideoModel === 'sora2' ? `${selectedVideoSeconds}s` : `${selectedVideoSeconds}s`}
-                  </span>
-                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                </button>
-              </div>
-              
-              {showSecondsDropdown && (
-                <div className="absolute bottom-full left-0 mb-1 w-16 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-600 z-10">
-                  <div className="p-1">
-                    {(selectedVideoModel === 'sora2' ? ['10', '15'] : ['8']).map((seconds) => (
-                      <button
-                        key={seconds}
-                        onClick={() => {
-                          setSelectedVideoSeconds(seconds)
-                          setShowSecondsDropdown(false)
-                        }}
-                        className={`w-full text-left px-2 py-1 text-xs rounded ${
-                          selectedVideoSeconds === seconds 
-                            ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300' 
-                            : 'hover:bg-gray-100 dark:hover:bg-gray-700'
-                        }`}
-                      >
-                        {seconds}s
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
+
 
           {/* 4. 输入框 */}
           <textarea

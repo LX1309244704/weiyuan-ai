@@ -1,5 +1,6 @@
 import axios from 'axios';
 import qs from 'qs';
+import { ApiKeyCache } from '@/utils/apiKeyCache';
 
 // 常量定义
 const SUCCESS_CODE = '0';
@@ -13,7 +14,6 @@ const ApiConst = {
 interface ToImageDvo {
   prompt: string;
   images?: string[];
-  key: string;
   taskId?: string;
   size?: string;
   aspectRatio?: string;
@@ -30,15 +30,15 @@ interface ImageDto {
 export const seedream4Config = {
   name: 'doubao-seedream-4-0-250828',
   type: 'image' as const,
-  baseUrl: process.env.NEXT_PUBLIC_API_BASE_URL || 'https://api.jmyps.com',
+  baseUrl: ApiKeyCache.getApiBaseUrl(),
   defaultSize: '1024x1024',
   supportedSizes: ['1024x1024', '512x512', '256x256'],
   supportedAspectRatios: ['1:1', '16:9', '9:16', '4:3', '3:4'],
   
   // 创建异步图片生成任务
   async createAsyncImage(toImageDvo: ToImageDvo): Promise<string> {
-    // 使用环境变量中的API密钥
-    const apiKey = process.env.NEXT_PUBLIC_API_KEY || toImageDvo.key;
+    // 直接从缓存获取API密钥
+    const apiKey = ApiKeyCache.getApiKey();
     
     // 根据宽高比获取对应的尺寸，优先使用aspectRatio
     const size = toImageDvo.aspectRatio 
@@ -76,8 +76,8 @@ export const seedream4Config = {
    * 根据taskId查询结果
    */
   async getTask(toImageDvo: ToImageDvo): Promise<ImageDto | null> {
-    // 使用环境变量中的API密钥
-    const apiKey = process.env.NEXT_PUBLIC_API_KEY || toImageDvo.key;
+    // 直接从缓存获取API密钥
+    const apiKey = ApiKeyCache.getApiKey();
     
     const ImageDto: ImageDto = { status: ApiConst.STRING_THREE };
     const headers = {

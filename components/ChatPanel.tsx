@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, forwardRef, useImperativeHandle, useCallba
 import { Send, Image as ImageIcon, Video, Download, X, MessageSquare, ChevronLeft, Settings, Monitor, Film, Type, Trash2 } from 'lucide-react'
 import { ModelService, type ImageModel, type VideoModel, type TextModel } from '@/services/ai-models'
 import { chatDB } from '@/utils/chatDB'
+import { ApiKeyCache } from '@/utils/apiKeyCache'
 
 interface Message {
   id: string
@@ -11,6 +12,7 @@ interface Message {
   content: string
   timestamp: Date
   imageData?: string
+  multipleImages?: string[]
   videoData?: string
 }
 
@@ -191,14 +193,21 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
     if (!inputText.trim() && !screenshotPreview && uploadedImagePreviews.length === 0) return
 
     let imageData: string | undefined
+    let multipleImages: string[] = []
     
     // 优先使用截图预览，其次使用上传图片预览
     if (screenshotPreview) {
       imageData = screenshotPreview
       setScreenshotPreview(null)
     } else if (uploadedImagePreviews.length > 0) {
-      // 如果有多张图片，只发送第一张（或可以根据需求调整）
-      imageData = uploadedImagePreviews[0]
+      // 支持多张图片上传
+      if (uploadedImagePreviews.length === 1) {
+        imageData = uploadedImagePreviews[0]
+      } else {
+        // 多张图片时，使用第一张作为主图，其余作为参考图
+        imageData = uploadedImagePreviews[0]
+        multipleImages = uploadedImagePreviews.slice(1)
+      }
       setUploadedImagePreviews([])
     }
 
@@ -221,6 +230,7 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
       content: messageContent,
       timestamp: new Date(),
       imageData,
+      multipleImages: multipleImages.length > 0 ? multipleImages : undefined,
     }
 
     // 直接更新消息状态，不嵌套数据库操作
@@ -232,7 +242,8 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
         type: userMessage.type,
         content: userMessage.content,
         timestamp: userMessage.timestamp,
-        imageData: userMessage.imageData
+        imageData: userMessage.imageData,
+        multipleImages: userMessage.multipleImages
       }, 'default').catch(error => {
       })
     }
@@ -247,8 +258,8 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
 
     // 根据模型获取API密钥
     const getApiKeyForModel = (model: string): string => {
-      // 统一使用通用的API密钥
-      return process.env.NEXT_PUBLIC_API_KEY || ''
+      // 统一使用缓存中的API密钥
+      return ApiKeyCache.getApiKey()
     }
 
     try {
@@ -257,19 +268,20 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
       let request: any = {
         model: selectedModel,
         prompt: inputText,
-        key: getApiKeyForModel(selectedModel), // 从环境变量获取API密钥
       }
 
       if (modelInfo?.type === 'image') {
-        // 图片模型请求
-        request.images = imageData ? [imageData] : undefined
+        // 图片模型请求 - 支持多张图片
+        const allImages = imageData ? [imageData, ...multipleImages] : multipleImages
+        request.images = allImages.length > 0 ? allImages : undefined
         request.size = selectedAspectRatio === '16:9' ? '1024x576' : 
                       selectedAspectRatio === '9:16' ? '576x1024' : 
                       selectedAspectRatio === '4:3' ? '1024x768' : 
                       selectedAspectRatio === '3:4' ? '768x1024' : '1024x1024'
       } else if (modelInfo?.type === 'video') {
-        // 视频模型请求
-        request.images = imageData ? [imageData] : undefined
+        // 视频模型请求 - 支持多张图片
+        const allImages = imageData ? [imageData, ...multipleImages] : multipleImages
+        request.images = allImages.length > 0 ? allImages : undefined
         request.duration = selectedModel === 'sora2' ? selectedDuration : undefined
         request.aspectRatio = selectedModel === 'sora2' ? selectedAspectRatio : undefined
       } else if (modelInfo?.type === 'text') {
@@ -531,7 +543,8 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
         type: userMessage.type,
         content: userMessage.content,
         timestamp: userMessage.timestamp,
-        imageData: userMessage.imageData
+        imageData: userMessage.imageData,
+        multipleImages: userMessage.multipleImages
       }, 'default').catch(error => {
       })
     }
@@ -619,7 +632,8 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
         type: userMessage.type,
         content: userMessage.content,
         timestamp: userMessage.timestamp,
-        imageData: userMessage.imageData
+        imageData: userMessage.imageData,
+        multipleImages: userMessage.multipleImages
       }, 'default').catch(error => {
       })
     }
@@ -699,6 +713,15 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
     link.download = filename
     link.href = fileData
     link.click()
+  }
+
+  // 将图片添加到聊天
+  const handleAddToChat = (imageData: string) => {
+    // 将图片添加到上传图片预览列表
+    setUploadedImagePreviews(prev => [...prev, imageData])
+    
+    // 显示成功提示
+    showNotification('图片已添加到聊天输入区域', 'success')
   }
 
   // 将视频添加到画板 - 切换到箭头工具模式
@@ -817,10 +840,10 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
     
     try {
       // 获取API密钥
-      const apiKey = process.env.NEXT_PUBLIC_API_KEY || ''
+      const apiKey = ApiKeyCache.getApiKey()
       
       if (!apiKey) {
-        throw new Error('API密钥未配置')
+        throw new Error('API密钥未配置，请先设置API密钥')
       }
 
       // 准备请求参数
@@ -830,7 +853,7 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
         images,
         duration: selectedDuration,
         aspectRatio: selectedAspectRatio,
-        apiKey
+        key: apiKey
       }
 
       // 调用视频生成API
@@ -1047,21 +1070,44 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
               <p className="text-sm" data-message-content="true">{message.content}</p>
 
               
-              {message.imageData && (
+              {(message.imageData || message.multipleImages) && (
                 <div className="mt-2" data-ai-generated={message.type === 'ai' ? 'true' : 'false'}>
-                  <img 
-                    src={message.imageData} 
-                    alt={message.type === 'ai' ? 'AI生成图片' : '截图'} 
-                    className="rounded border border-gray-200 dark:border-gray-600 max-w-full"
-                  />
-                  {message.type === 'ai' && (
+                  {/* 显示主图片 */}
+                  {message.imageData && (
+                    <img 
+                      src={message.imageData} 
+                      alt={message.type === 'ai' ? 'AI生成图片' : '主图片'} 
+                      className="rounded border border-gray-200 dark:border-gray-600 max-w-full"
+                    />
+                  )}
+                  
+                  {/* 显示多张参考图片 */}
+                  {message.multipleImages && message.multipleImages.length > 0 && (
+                    <div className="mt-2">
+                      <p className="text-xs text-gray-500 mb-1">参考图片:</p>
+                      <div className="flex flex-wrap gap-2">
+                        {message.multipleImages.map((img, index) => (
+                          <img 
+                            key={index}
+                            src={img} 
+                            alt={`参考图片 ${index + 1}`} 
+                            className="rounded border border-gray-200 dark:border-gray-600 max-w-32 max-h-32 object-cover"
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {message.type === 'ai' && message.imageData && (
                     <div className="flex space-x-2 mt-2">
                       <button
-                        onClick={() => handleDownload(message.imageData!, 'ai-generated.png')}
+                        onClick={() => handleAddToChat(message.imageData!)}
                         className="flex items-center space-x-1 text-xs text-blue-600 hover:text-blue-800"
                       >
-                        <Download className="h-3 w-3" />
-                        <span>下载图片</span>
+                        <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                        </svg>
+                        <span>添加到聊天</span>
                       </button>
                       <button
                         onClick={() => handleAddToCanvas(message.imageData!)}

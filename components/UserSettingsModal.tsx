@@ -2,50 +2,40 @@
 
 import { useState, useEffect } from 'react'
 import { X, Save, Settings } from 'lucide-react'
+import { ApiKeyCache, type ApiProvider } from '@/utils/apiKeyCache'
 
 interface UserSettingsModalProps {
   isOpen: boolean
   onClose: () => void
 }
 
-interface ApiConfig {
-  apiKey: string
-  apiBaseUrl: string
-}
-
 export default function UserSettingsModal({ isOpen, onClose }: UserSettingsModalProps) {
   const [apiConfig, setApiConfig] = useState<ApiConfig>({
     apiKey: '',
-    apiBaseUrl: 'https://api.jmyps.com/v1'
+    apiBaseUrl: 'https://api.weiyuan.ai/v1',
+    provider: 'weiyuan' as ApiProvider
   })
 
   const [isLoading, setIsLoading] = useState(false)
   const [message, setMessage] = useState('')
 
-  // 从.env.local加载配置
+  // 从缓存加载配置
   useEffect(() => {
     if (isOpen) {
-      loadConfigFromEnv()
+      loadConfigFromCache()
     }
   }, [isOpen])
 
-  const loadConfigFromEnv = async () => {
+  const loadConfigFromCache = () => {
     try {
-      // 从API端点加载.env.local内容
-      const response = await fetch('/api/load-env')
-      if (response.ok) {
-        const data = await response.json()
-        const config: ApiConfig = {
-          apiKey: data.apiKey || '',
-          apiBaseUrl: data.apiBaseUrl || 'https://api.jmyps.com/v1'
-        }
-        setApiConfig(config)
-      }
+      const config = ApiKeyCache.getApiConfig()
+      setApiConfig(config)
     } catch (error) {
       // 使用默认配置
       const config: ApiConfig = {
         apiKey: '',
-        apiBaseUrl: 'https://api.jmyps.com/v1'
+        apiBaseUrl: 'https://api.weiyuan.ai/v1',
+        provider: 'weiyuan' as ApiProvider
       }
       setApiConfig(config)
     }
@@ -56,36 +46,16 @@ export default function UserSettingsModal({ isOpen, onClose }: UserSettingsModal
     setMessage('')
 
     try {
-      // 构建.env.local文件内容
-      const envContent = `# AI模型API配置
-# 请妥善保管您的API密钥
-
-# API密钥
-NEXT_PUBLIC_API_KEY=${apiConfig.apiKey}
-
-# API基础地址
-NEXT_PUBLIC_API_BASE_URL=${apiConfig.apiBaseUrl}
-
-# 调试模式
-# NEXT_PUBLIC_DEBUG_MODE=false`
-
-      // 保存到.env.local文件
-      const response = await fetch('/api/save-env', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ content: envContent })
-      })
-
-      if (response.ok) {
-        setMessage('配置保存成功！应用需要重启才能生效。')
+      // 保存到缓存
+      const success = ApiKeyCache.saveApiConfig(apiConfig)
+      
+      if (success) {
+        setMessage('API配置保存成功！')
         setTimeout(() => {
           onClose()
         }, 2000)
       } else {
-        const errorData = await response.json()
-        throw new Error(errorData.error || '保存失败')
+        throw new Error('保存到缓存失败')
       }
     } catch (error) {
       setMessage(`保存失败: ${error instanceof Error ? error.message : '未知错误'}`)
@@ -100,6 +70,19 @@ NEXT_PUBLIC_API_BASE_URL=${apiConfig.apiBaseUrl}
       [key]: value
     }))
   }
+
+  // 处理供应商选择变化
+  const handleProviderChange = (provider: ApiProvider) => {
+    const baseUrl = ApiKeyCache.getBaseUrlByProvider(provider)
+    setApiConfig(prev => ({
+      ...prev,
+      provider,
+      apiBaseUrl: baseUrl
+    }))
+  }
+
+  // 获取支持的供应商列表
+  const supportedProviders = ApiKeyCache.getSupportedProviders()
 
   if (!isOpen) return null
 
@@ -124,6 +107,27 @@ NEXT_PUBLIC_API_BASE_URL=${apiConfig.apiBaseUrl}
 
         {/* 内容 */}
         <div className="p-6 space-y-4">
+          {/* 模型供应商选择 */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              模型供应商
+            </label>
+            <select
+              value={apiConfig.provider}
+              onChange={(e) => handleProviderChange(e.target.value as ApiProvider)}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+            >
+              {supportedProviders.map(provider => {
+                const config = ApiKeyCache.getProviderConfig(provider)
+                return (
+                  <option key={provider} value={provider}>
+                    {config.name} - {config.description}
+                  </option>
+                )
+              })}
+            </select>
+          </div>
+
           {/* API基础地址 */}
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -134,7 +138,7 @@ NEXT_PUBLIC_API_BASE_URL=${apiConfig.apiBaseUrl}
               value={apiConfig.apiBaseUrl}
               onChange={(e) => handleInputChange('apiBaseUrl', e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-              placeholder="https://api.jmyps.com/v1"
+              placeholder="https://api.weiyuan.ai/v1"
             />
           </div>
 

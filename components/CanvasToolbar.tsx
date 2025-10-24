@@ -3004,14 +3004,12 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
                 <div className="flex justify-between items-center mb-3">
                   <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100">历史记录</h4>
                   <div className="flex items-center space-x-2">
-                    <Tooltip content="清空历史记录" position="top">
-                      <button
-                        onClick={clearHistory}
-                        className="text-xs text-red-500 hover:text-red-700 dark:hover:text-red-400 px-2 py-1 border border-red-300 dark:border-red-600 rounded"
-                      >
-                        清空
-                      </button>
-                    </Tooltip>
+                    <button
+                      onClick={clearHistory}
+                      className="text-xs text-red-500 hover:text-red-700 dark:hover:text-red-400 px-2 py-1 border border-red-300 dark:border-red-600 rounded"
+                    >
+                      清空
+                    </button>
                     <button 
                       onClick={() => setShowHistoryPanel(false)}
                       className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-400"

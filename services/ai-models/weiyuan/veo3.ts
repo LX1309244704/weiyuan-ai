@@ -1,10 +1,10 @@
 import axios from 'axios';
+import { ApiKeyCache } from '@/utils/apiKeyCache';
 
 // 请求参数接口
 interface ToVideoDvo {
   prompt: string;
   images?: string[];
-  key: string;
   taskId?: string;
   duration?: string;
   resolution?: string;
@@ -22,7 +22,7 @@ interface VideoDto {
 export const veo3Config = {
   name: 'Veo3.1',
   type: 'video' as const,
-  baseUrl: process.env.NEXT_PUBLIC_VEO_API_BASE_URL || 'https://api.veo.ai/v1',
+  baseUrl: ApiKeyCache.getApiBaseUrl(),
   defaultDuration: '8s',
   defaultResolution: '720p',
   supportedDurations: ['8s'],
@@ -30,8 +30,8 @@ export const veo3Config = {
   
   // 创建视频生成任务
   async createVideo(toVideoDvo: ToVideoDvo): Promise<string> {
-    // 使用环境变量中的API密钥
-    const apiKey = process.env.NEXT_PUBLIC_API_KEY || toVideoDvo.key;
+    // 直接从缓存获取API密钥
+    const apiKey = ApiKeyCache.getApiKey();
     
     const requestBody = {
       model: "veo-3.1",
@@ -61,8 +61,8 @@ export const veo3Config = {
    * 查询视频生成任务状态
    */
   async getTask(toVideoDvo: ToVideoDvo): Promise<VideoDto | null> {
-    // 使用环境变量中的API密钥
-    const apiKey = process.env.NEXT_PUBLIC_API_KEY || toVideoDvo.key;
+    // 直接从缓存获取API密钥
+    const apiKey = ApiKeyCache.getApiKey();
     
     const VideoDto: VideoDto = { status: '3' };
     

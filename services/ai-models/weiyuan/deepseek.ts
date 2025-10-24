@@ -1,9 +1,9 @@
 import axios from 'axios';
+import { ApiKeyCache } from '@/utils/apiKeyCache';
 
 // 请求参数接口
 interface TextRequestDvo {
   prompt: string;
-  key: string;
   taskId?: string;
   maxTokens?: number;
   temperature?: number;
@@ -17,57 +17,54 @@ interface TextResponseDto {
 }
 
 /**
- * Gemini 2.5 文本生成模型配置
+ * DeepSeek 文本生成模型配置
  */
-export const gemini25Config = {
-  name: 'Gemini 2.5',
+export const deepseekConfig = {
+  name: 'DeepSeek',
   type: 'text' as const,
-  baseUrl: process.env.NEXT_PUBLIC_GEMINI_API_URL || 'https://generativelanguage.googleapis.com/v1beta',
+  baseUrl: ApiKeyCache.getApiBaseUrl(),
   defaultMaxTokens: 2048,
   defaultTemperature: 0.7,
   defaultTopP: 0.9,
   
   // 创建文本生成任务
   async createTextGeneration(request: TextRequestDvo): Promise<string> {
-    const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || request.key;
+    const apiKey = ApiKeyCache.getApiKey();
     
     const requestBody = {
-      contents: [
+      model: 'deepseek-chat',
+      messages: [
         {
-          parts: [
-            {
-              text: request.prompt
-            }
-          ]
+          role: 'user',
+          content: request.prompt
         }
       ],
-      generationConfig: {
-        maxOutputTokens: request.maxTokens || this.defaultMaxTokens,
-        temperature: request.temperature || this.defaultTemperature,
-        topP: request.topP || this.defaultTopP
-      }
+      max_tokens: request.maxTokens || this.defaultMaxTokens,
+      temperature: request.temperature || this.defaultTemperature,
+      top_p: request.topP || this.defaultTopP,
+      stream: false
+    };
+    
+    const headers = {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json'
     };
     
     try {
       const response = await axios.post(
-        `${this.baseUrl}/models/gemini-2.5:generateContent?key=${apiKey}`,
+        `${this.baseUrl}/chat/completions`,
         requestBody,
-        {
-          headers: {
-            'Content-Type': 'application/json'
-          }
-        }
+        { headers }
       );
       
-      // 提取生成的文本
-      const generatedText = response.data.candidates[0]?.content?.parts[0]?.text || '';
-      return generatedText;
+      // 直接返回生成的文本
+      return response.data.choices[0].message.content;
     } catch (error) {
       throw error;
     }
   },
 
-  // 查询任务状态（Gemini是同步的，直接返回结果）
+  // 查询任务状态（DeepSeek是同步的，直接返回结果）
   async getTask(request: TextRequestDvo): Promise<TextResponseDto> {
     return {
       status: '2',
@@ -89,7 +86,7 @@ export const gemini25Config = {
   getSupportedParameters() {
     return {
       maxTokens: { min: 1, max: 8192, default: 2048 },
-      temperature: { min: 0, max: 1, default: 0.7 },
+      temperature: { min: 0, max: 2, default: 0.7 },
       topP: { min: 0, max: 1, default: 0.9 }
     };
   }

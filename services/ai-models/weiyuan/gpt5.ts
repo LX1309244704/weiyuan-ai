@@ -1,9 +1,9 @@
 import axios from 'axios';
+import { ApiKeyCache } from '@/utils/apiKeyCache';
 
 // 请求参数接口
 interface TextRequestDvo {
   prompt: string;
-  key: string;
   taskId?: string;
   maxTokens?: number;
   temperature?: number;
@@ -22,14 +22,14 @@ interface TextResponseDto {
 export const gpt5Config = {
   name: 'GPT-5',
   type: 'text' as const,
-  baseUrl: process.env.NEXT_PUBLIC_OPENAI_API_URL || 'https://api.openai.com/v1',
+  baseUrl: ApiKeyCache.getApiBaseUrl(),
   defaultMaxTokens: 2048,
   defaultTemperature: 0.7,
   defaultTopP: 0.9,
   
   // 创建文本生成任务
   async createTextGeneration(request: TextRequestDvo): Promise<string> {
-    const apiKey = process.env.NEXT_PUBLIC_OPENAI_API_KEY || request.key;
+    const apiKey = ApiKeyCache.getApiKey();
     
     const requestBody = {
       model: 'gpt-5',
