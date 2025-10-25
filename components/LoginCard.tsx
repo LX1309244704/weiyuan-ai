@@ -22,23 +22,17 @@ export default function LoginCard({ onClose }: LoginCardProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    console.log('登录表单提交:', formData)
     
     try {
       if (isLogin) {
-        console.log('执行登录操作')
         await login(formData.email, formData.password)
       } else {
-        console.log('执行注册操作')
         await register(formData.email, formData.password, formData.username)
       }
-      
-      console.log('登录成功，准备跳转')
       
       // 初始化用户信息
       const { user } = useAuthStore.getState()
       if (user) {
-        console.log('初始化用户信息:', user)
         // 直接设置用户信息，避免循环依赖
         const userStore = useUserStore.getState()
         userStore.setUserInfo({
@@ -53,12 +47,10 @@ export default function LoginCard({ onClose }: LoginCardProps) {
       
       // 等待状态完全更新后再跳转
       setTimeout(() => {
-        console.log('执行跳转到用户页面')
         // 使用replace而不是push，避免浏览器历史记录问题
         window.location.replace('/user')
       }, 300)
     } catch (error) {
-      console.error('登录失败:', error)
       // 登录失败时保持登录卡片打开
     }
   }

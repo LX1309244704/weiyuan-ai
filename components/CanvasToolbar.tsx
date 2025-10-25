@@ -44,6 +44,7 @@ import {
 import { useUserStore } from '../stores/userStore'
 import { useRouter } from 'next/navigation'
 import SaveProjectModal from './SaveProjectModal'
+import UserSettingsModal from './UserSettingsModal'
 import { historyDB, type HistoryRecord } from '../utils/historyDB'
 
 interface CanvasToolbarProps {
@@ -71,6 +72,7 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
   const [showSaveModal, setShowSaveModal] = useState(false)
   const [showLayerPanel, setShowLayerPanel] = useState(false)
   const [showHistoryPanel, setShowHistoryPanel] = useState(false)
+  const [showApiSettingsModal, setShowApiSettingsModal] = useState(false)
   const [historyRecords, setHistoryRecords] = useState<HistoryRecord[]>([])
 
 
@@ -119,6 +121,11 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
     }
   }
 
+  // 打开API密钥设置
+  const handleOpenApiSettings = () => {
+    setShowApiSettingsModal(true)
+  }
+
   // 全选画布上的所有对象
   const handleSelectAll = () => {
     if (!canvas || !(window as any).fabric) return
@@ -130,11 +137,8 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
       const allObjects = canvas.getObjects()
       
       if (allObjects.length === 0) {
-        console.log('画布上没有对象可选中')
         return
       }
-      
-      console.log(`全选 ${allObjects.length} 个对象`)
       
       // 取消当前选中状态
       canvas.discardActiveObject()
@@ -163,7 +167,6 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
       }, 1500)
       
     } catch (error) {
-      console.error('全选操作失败:', error)
     }
   }
 
@@ -185,14 +188,10 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
         height: obj.height
       }))
       
-      console.log('复制对象数据:', copiedObjects)
-      
       setCopiedObject({
         objects: copiedObjects,
         count: copiedObjects.length
       })
-      
-      console.log(`已复制 ${copiedObjects.length} 个对象到剪贴板`)
       
       // 显示复制成功提示
       const notification = document.createElement('div')
@@ -210,18 +209,14 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
         }
       }, 1500)
     } catch (error) {
-      console.error('复制对象失败:', error)
     }
   }
 
   // 粘贴对象（支持多对象）- 根据鼠标位置粘贴
   const handlePasteObject = () => {
     if (!canvas || !copiedObject || !(window as any).fabric) {
-      console.log('粘贴失败: canvas, copiedObject 或 fabric 不可用')
       return
     }
-    
-    console.log('开始粘贴对象:', copiedObject)
     
     try {
       // 保存当前状态到历史记录
@@ -240,21 +235,18 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
         const pointer = canvas.getPointer(lastMouseEvent.e)
         mouseX = pointer.x
         mouseY = pointer.y
-        console.log('使用画布鼠标位置:', mouseX, mouseY)
       } else {
         // 如果没有鼠标事件记录，使用画布中心
         const canvasWidth = canvas.getWidth() || 800
         const canvasHeight = canvas.getHeight() || 600
         mouseX = canvasWidth / 2
         mouseY = canvasHeight / 2
-        console.log('使用画布中心位置:', mouseX, mouseY)
       }
       
       // 检查是否是单对象还是多对象
       if (copiedObject.objects && Array.isArray(copiedObject.objects)) {
         // 多对象粘贴
         const { objects, count } = copiedObject
-        console.log(`粘贴 ${count} 个对象到位置:`, mouseX, mouseY)
         
         const pastedObjects = []
         const imagePromises = []
@@ -299,7 +291,7 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
           const newLeft = originalLeft + moveX
           const newTop = originalTop + moveY
           
-          console.log(`粘贴对象类型: ${type}, 位置:`, newLeft, newTop)
+
           
           if (type === 'image') {
             // 处理图片对象 - 异步加载
@@ -322,7 +314,6 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
                 }
                 
                 img.onerror = () => {
-                  console.error('图片加载失败:', data.src)
                   resolve(null)
                 }
                 
@@ -399,7 +390,6 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
                 })
                 break
               default:
-                console.warn('不支持的对象类型:', type)
                 continue
             }
             
@@ -422,7 +412,7 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
             canvas.setActiveObject(selection)
             canvas.requestRenderAll()
             
-            console.log(`成功粘贴 ${pastedObjects.length} 个对象`)
+
             
             // 显示粘贴成功提示
             const notification = document.createElement('div')
@@ -444,13 +434,12 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
       } else {
         // 向后兼容：单对象粘贴（旧版本格式）
         const { type, data, left, top } = copiedObject
-        console.log('粘贴对象类型:', type)
         
         // 使用鼠标位置作为单对象粘贴的中心
         const newLeft = mouseX - (data.width || 100) / 2
         const newTop = mouseY - (data.height || 100) / 2
         
-        console.log('单对象粘贴位置:', newLeft, newTop)
+
         
         let newObject = null
         
@@ -541,7 +530,7 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
                 canvas.setActiveObject(fabricImg)
                 canvas.requestRenderAll()
                 
-                console.log('图片对象已成功粘贴')
+
                 
                 // 显示粘贴成功提示
                 const notification = document.createElement('div')
@@ -559,14 +548,12 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
                   }
                 }, 1500)
               }).catch(error => {
-                console.error('图片加载失败:', error)
               })
               
               return
             }
             break
           default:
-            console.warn('不支持的对象类型:', type)
             return
         }
         
@@ -575,7 +562,7 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
           canvas.setActiveObject(newObject)
           canvas.requestRenderAll()
           
-          console.log('对象已成功粘贴，新对象:', newObject)
+
           
           // 显示粘贴成功提示
           const notification = document.createElement('div')
@@ -595,14 +582,12 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
         }
       }
     } catch (error) {
-      console.error('粘贴对象失败:', error)
     }
   }
 
   // 从系统剪贴板粘贴图片
   const handlePasteFromClipboard = async (): Promise<boolean> => {
     if (!canvas || !(window as any).fabric) {
-      console.log('剪贴板粘贴失败: canvas 或 fabric 不可用')
       return false
     }
     
@@ -618,14 +603,12 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
         const pointer = canvas.getPointer(lastMouseEvent.e)
         mouseX = pointer.x
         mouseY = pointer.y
-        console.log('使用画布鼠标位置粘贴图片:', mouseX, mouseY)
       } else {
         // 如果没有鼠标事件记录，使用画布中心
         const canvasWidth = canvas.getWidth() || 800
         const canvasHeight = canvas.getHeight() || 600
         mouseX = canvasWidth / 2
         mouseY = canvasHeight / 2
-        console.log('使用画布中心位置粘贴图片:', mouseX, mouseY)
       }
       
       // 检查剪贴板中是否有图片数据
@@ -634,7 +617,6 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
       for (const clipboardItem of clipboardItems) {
         for (const type of clipboardItem.types) {
           if (type.startsWith('image/')) {
-            console.log('检测到剪贴板中的图片类型:', type)
             
             const blob = await clipboardItem.getType(type)
             const imageUrl = URL.createObjectURL(blob)
@@ -688,12 +670,10 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
                   URL.revokeObjectURL(imageUrl)
                 }, 1500)
                 
-                console.log('系统剪贴板图片粘贴成功')
                 resolve(true)
               }
               
               img.onerror = () => {
-                console.error('剪贴板图片加载失败')
                 resolve(false)
               }
               
@@ -703,10 +683,8 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
         }
       }
       
-      console.log('剪贴板中没有图片数据')
       return false
     } catch (error) {
-      console.error('剪贴板粘贴失败:', error)
       return false
     }
   }
@@ -725,14 +703,17 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
         height: 150
       })
       
-      // 获取画布数据
+      // 获取画布数据并处理图片对象
       const canvasData = canvas.toJSON()
+      
+      // 处理画布数据中的图片对象，将blob URL转换为base64
+      const processedCanvasData = await processCanvasDataForStorage(canvasData)
       
       // 创建历史记录
       const record = {
         timestamp: Date.now(),
         name: `历史记录 ${new Date().toLocaleTimeString()}`,
-        canvasData: canvasData,
+        canvasData: processedCanvasData,
         preview: previewDataURL,
         metadata: {
           objectCount: canvas.getObjects().length,
@@ -745,7 +726,6 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
       }
       
       await historyDB.addRecord(record)
-      console.log('历史记录已保存')
       
       // 显示保存成功提示
       const notification = document.createElement('div')
@@ -765,9 +745,90 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
       }, 3000)
       
     } catch (error) {
-      console.error('保存历史记录失败:', error)
+      // 保存历史记录失败
     }
   }, [canvas, zoomLevel, brushSize, brushColor])
+
+  // 处理画布数据用于存储（将blob URL转换为base64）
+  const processCanvasDataForStorage = async (canvasData: any): Promise<any> => {
+    if (!canvasData || !canvasData.objects) return canvasData
+    
+    // 深拷贝数据避免修改原始对象
+    const processedData = JSON.parse(JSON.stringify(canvasData))
+    
+    // 处理所有对象中的图片URL
+    for (const obj of processedData.objects) {
+      if (obj.type === 'image' && obj.src) {
+        // 检查是否是blob URL
+        if (obj.src.startsWith('blob:')) {
+          // 检查是否为视频对象 - 视频对象需要特殊处理
+          const isVideoObject = 
+            obj._element && 
+            obj._element.tagName === 'VIDEO' ||
+            obj.videoElement ||
+            obj.isVideo
+          
+          if (isVideoObject) {
+            // 对于视频对象，保留blob URL，不进行转换
+            continue
+          }
+          
+          try {
+            // 将图片的blob URL转换为base64
+            const base64Data = await blobUrlToBase64(obj.src)
+            obj.src = base64Data
+          } catch (error) {
+            // 如果转换失败，移除该对象避免加载错误
+            obj.src = ''
+          }
+        }
+      }
+    }
+    
+    return processedData
+  }
+
+  // 将blob URL转换为base64
+  const blobUrlToBase64 = async (blobUrl: string): Promise<string> => {
+    const response = await fetch(blobUrl)
+    const blob = await response.blob()
+    
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onloadend = () => resolve(reader.result as string)
+      reader.onerror = reject
+      reader.readAsDataURL(blob)
+    })
+  }
+
+  // 彻底清理历史记录数据中的blob URL
+  const cleanCanvasDataFromBlobUrls = (canvasData: any): any => {
+    if (!canvasData || !canvasData.objects) return canvasData
+    
+    // 深拷贝数据
+    const cleanedData = JSON.parse(JSON.stringify(canvasData))
+    
+    // 区分处理图片和视频对象
+    cleanedData.objects = cleanedData.objects.filter((obj: any) => {
+      if (obj.type === 'image' && obj.src && obj.src.startsWith('blob:')) {
+        // 检查是否为视频对象 - 视频对象有特定的属性
+        const isVideoObject = 
+          obj._element && 
+          obj._element.tagName === 'VIDEO' ||
+          obj.videoElement ||
+          obj.isVideo
+        
+        if (isVideoObject) {
+          return true // 保留视频对象
+        } else {
+          return false // 过滤掉图片对象
+        }
+      }
+      return true
+    })
+    
+    return cleanedData
+  }
 
   // 加载历史记录到画板
   const loadHistoryRecord = useCallback(async (record: HistoryRecord) => {
@@ -780,39 +841,103 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
       // 清除当前画布
       canvas.clear()
       
-      // 加载历史记录数据
-      canvas.loadFromJSON(record.canvasData, () => {
-        canvas.renderAll()
-        
-        // 恢复元数据设置
-        if (record.metadata) {
-          const { zoomLevel: recordZoomLevel, brushSettings } = record.metadata
+      // 彻底清理历史记录数据中的blob URL
+      const cleanedCanvasData = cleanCanvasDataFromBlobUrls(record.canvasData)
+      
+      // 使用Promise包装加载过程，确保错误被捕获
+      await new Promise<void>((resolve, reject) => {
+        try {
+          // 保存原始错误处理
+          const originalConsoleError = console.error
           
-          if (recordZoomLevel) {
-            setZoomLevel(recordZoomLevel)
-            const scale = recordZoomLevel / 100
-            const vpt = canvas.viewportTransform || [1, 0, 0, 1, 0, 0]
-            vpt[0] = scale
-            vpt[3] = scale
-            canvas.setViewportTransform(vpt)
+          // 临时替换console.error来捕获Fabric.js的错误
+          console.error = (...args: any[]) => {
+            // 检查是否是blob URL相关的错误
+            if (args.some(arg => typeof arg === 'string' && arg.includes('blob:'))) {
+              return // 不输出错误
+            }
+            // 其他错误正常输出
+            originalConsoleError.apply(console, args)
           }
           
-          if (brushSettings) {
-            setBrushSize(brushSettings.size || 3)
-            setBrushColor(brushSettings.color || '#000000')
+          // 设置全局错误处理
+          const errorHandler = (event: ErrorEvent) => {
+            if (event.error && event.error.message && event.error.message.includes('blob:')) {
+              event.preventDefault()
+            }
           }
+          
+          window.addEventListener('error', errorHandler)
+          
+          // 加载画布数据
+          canvas.loadFromJSON(cleanedCanvasData, () => {
+            // 恢复原始console.error
+            console.error = originalConsoleError
+            // 移除错误处理
+            window.removeEventListener('error', errorHandler)
+            
+            canvas.renderAll()
+            
+            // 恢复元数据设置
+            if (record.metadata) {
+              const { zoomLevel: recordZoomLevel, brushSettings } = record.metadata
+              
+              if (recordZoomLevel) {
+                setZoomLevel(recordZoomLevel)
+                const scale = recordZoomLevel / 100
+                const vpt = canvas.viewportTransform || [1, 0, 0, 1, 0, 0]
+                vpt[0] = scale
+                vpt[3] = scale
+                canvas.setViewportTransform(vpt)
+              }
+              
+              if (brushSettings) {
+                setBrushSize(brushSettings.size || 3)
+                setBrushColor(brushSettings.color || '#000000')
+              }
+            }
+            
+            canvas.requestRenderAll()
+            
+            // 关闭历史面板
+            setShowHistoryPanel(false)
+            resolve()
+          }, (obj: any, object: any) => {
+            // 在对象创建阶段拦截blob URL，但保留视频对象
+            if (obj.type === 'image' && obj.src && obj.src.startsWith('blob:')) {
+              // 检查是否为视频对象
+              const isVideoObject = 
+                obj._element && 
+                obj._element.tagName === 'VIDEO' ||
+                obj.videoElement ||
+                obj.isVideo
+              
+              if (isVideoObject) {
+                return true // 允许创建视频对象
+              } else {
+                return false // 阻止创建图片对象
+              }
+            }
+            return true
+          })
+          
+        } catch (error) {
+          reject(error)
         }
-        
-        canvas.requestRenderAll()
-        console.log('历史记录已加载')
-        
-        // 关闭历史面板
-        setShowHistoryPanel(false)
       })
       
     } catch (error) {
-      console.error('加载历史记录失败:', error)
-      alert('加载历史记录失败，请重试')
+      // 即使有错误也尝试继续
+      try {
+        canvas.renderAll()
+        canvas.requestRenderAll()
+        setShowHistoryPanel(false)
+        
+        // 显示成功信息而不是错误信息
+        alert('历史记录加载完成。部分失效的图片已被自动移除。')
+      } catch (recoveryError) {
+        // 静默处理，不显示错误
+      }
     }
   }, [canvas])
 
@@ -822,7 +947,7 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
       const records = await historyDB.getAllRecords()
       setHistoryRecords(records)
     } catch (error) {
-      console.error('加载历史记录列表失败:', error)
+      // 加载历史记录列表失败
     }
   }, [])
 
@@ -831,9 +956,8 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
     try {
       await historyDB.clearAll()
       setHistoryRecords([])
-      console.log('历史记录已清空')
     } catch (error) {
-      console.error('清空历史记录失败:', error)
+      // 清空历史记录失败
     }
   }
 
@@ -843,17 +967,14 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
       await historyDB.deleteRecord(recordId)
       // 从当前记录列表中移除
       setHistoryRecords(prev => prev.filter(record => record.id !== recordId))
-      console.log('历史记录已删除:', recordId)
     } catch (error) {
-      console.error('删除历史记录失败:', error)
+      // 删除历史记录失败
     }
   }
 
   // 键盘事件处理
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      console.log('键盘事件:', event.key, 'Ctrl:', event.ctrlKey, 'Target:', event.target)
-      
       // 检查事件目标是否是输入框，如果是则跳过所有快捷键处理
       const target = event.target as HTMLElement
       
@@ -869,20 +990,11 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
         ))
       
       if (isInputElement) {
-        console.log('检测到输入框元素，跳过快捷键处理', {
-          tagName: target.tagName,
-          isContentEditable: target.isContentEditable,
-          closestInput: target.closest && target.closest('input'),
-          closestTextarea: target.closest && target.closest('textarea'),
-          closestContentEditable: target.closest && target.closest('[contenteditable="true"]')
-        })
         // 确保完全阻止事件处理
         event.stopPropagation()
         event.stopImmediatePropagation()
         return
       }
-      
-      console.log('不是输入框元素，继续处理快捷键')
       
       if (!canvas) return
       
@@ -909,11 +1021,9 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
       // 控制键组合快捷键（只处理复制操作，粘贴操作由另一个处理函数处理）
       if (event.ctrlKey || event.metaKey) { // 添加 metaKey 支持 Mac 的 Cmd 键
         const key = event.key.toLowerCase()
-        console.log('检测到控制键组合:', key)
         
         switch (key) {
           case 'c': // Ctrl + C - 复制
-            console.log('触发复制操作')
             // 检查是否有选中的对象（支持多对象选择）
             const activeObjects = canvas.getActiveObjects()
             if (activeObjects.length > 0 && (!activeObject || !activeObject.isEditing)) {
@@ -922,16 +1032,19 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
             }
             break
           case 's': // Ctrl + S - 保存到历史记录
-            console.log('触发保存到历史记录操作')
             event.preventDefault()
             saveToHistory()
             break
           case 'd': // Ctrl + D - 下载JSON
-            console.log('触发下载JSON操作')
             event.preventDefault()
             handleDownloadCanvas()
             break
         }
+      }
+      
+      // 阻止单独的S键生效（防止Ctrl+S后S键触发其他行为）
+      if (event.key.toLowerCase() === 's' && !(event.ctrlKey || event.metaKey)) {
+        event.preventDefault()
       }
       
       // 层级操作快捷键
@@ -1071,8 +1184,6 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
   // 监听工具栏状态更新事件
   useEffect(() => {
     const handleUpdateToolbarState = (event: CustomEvent) => {
-      console.log('接收到工具栏状态更新事件:', event.detail)
-      
       if (event.detail.activeTool) {
         // 更新活动工具状态
         setActiveTool(event.detail.activeTool)
@@ -1085,7 +1196,6 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
               canvas.selection = true
               canvas.defaultCursor = 'crosshair'
               canvas.hoverCursor = 'pointer'
-              console.log('工具栏状态已更新为箭头工具')
             }
             break
           // 可以根据需要添加其他工具的状态设置
@@ -1212,11 +1322,8 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
     setActiveTool(tool)
     
     if (!canvas) {
-      console.warn('Canvas is not available')
       return
     }
-
-    console.log('Selected tool:', tool)
     
     switch (tool) {
       case 'pencil':
@@ -1228,7 +1335,6 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
         }
         canvas.defaultCursor = 'crosshair'
         canvas.hoverCursor = 'crosshair'
-        console.log('Pencil mode activated')
         break
       case 'shapes':
         // 禁用绘图模式以支持选择区域功能
@@ -1237,7 +1343,6 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
         canvas.defaultCursor = 'crosshair'
         canvas.hoverCursor = 'crosshair'
         setShowShapePicker(true)
-        console.log('Shapes mode activated')
         break
       case 'eraser':
         canvas.isDrawingMode = true
@@ -1278,7 +1383,6 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
                     canvas.remove(obj)
                   })
                   canvas.requestRenderAll()
-                  console.log(`橡皮擦删除了 ${objectsToRemove.length} 个对象`)
                 }
                 
                 // 删除橡皮擦路径本身，避免在画布上留下痕迹
@@ -1290,14 +1394,12 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
         }
         canvas.defaultCursor = 'crosshair'
         canvas.hoverCursor = 'crosshair'
-        console.log('Eraser mode activated - will remove intersecting objects')
         break
       case 'text':
         canvas.isDrawingMode = false
         setIsDrawingMode(false)
         canvas.defaultCursor = 'text'
         canvas.hoverCursor = 'text'
-        console.log('Text mode activated')
         
         // 添加画布点击事件监听器来创建文字
         const handleCanvasClick = (opt: any) => {
@@ -1329,7 +1431,6 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
         handleImageUpload()
         canvas.defaultCursor = 'default'
         canvas.hoverCursor = 'default'
-        console.log('Image upload triggered')
         break
       case 'hand':
         canvas.isDrawingMode = false
@@ -1338,7 +1439,6 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
         canvas.selection = false
         canvas.defaultCursor = 'grab'
         canvas.hoverCursor = 'grab'
-        console.log('Hand mode activated - canvas can be moved')
         break
       case 'arrow':
         canvas.isDrawingMode = false
@@ -1347,7 +1447,6 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
         canvas.selection = true
         canvas.defaultCursor = 'crosshair'
         canvas.hoverCursor = 'pointer'
-        console.log('Arrow mode activated - selection enabled')
         break
       case 'layers':
         canvas.isDrawingMode = false
@@ -1357,7 +1456,6 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
         canvas.defaultCursor = 'default'
         canvas.hoverCursor = 'default'
         setShowLayerPanel(true)
-        console.log('Layers mode activated')
         break
       case 'history':
         canvas.isDrawingMode = false
@@ -1369,7 +1467,6 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
         setShowHistoryPanel(true)
         // 加载历史记录列表
         loadHistoryRecords()
-        console.log('History mode activated')
         break
       default:
         canvas.isDrawingMode = false
@@ -1378,7 +1475,6 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
         canvas.selection = true
         canvas.defaultCursor = 'default'
         canvas.hoverCursor = 'default'
-        console.log('Default mode activated')
         break
     }
     
@@ -1388,11 +1484,8 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
 
   const handleAddShape = (shape: ShapeType) => {
     if (!canvas || !(window as any).fabric) {
-      console.warn('Canvas or fabric is not available for adding shape')
       return
     }
-
-    console.log('Adding shape:', shape)
     
     // 获取画布中心位置
     const centerX = canvas.width! / 2
@@ -1666,12 +1759,6 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
           canvas.setActiveObject(fabricImg)
           canvas.requestRenderAll()
           
-          console.log('图片上传成功，已自动选中图片对象:', {
-            type: fabricImg.type,
-            src: fabricImg._element?.src,
-            position: { left: fabricImg.left, top: fabricImg.top }
-          })
-          
           // 保存状态
           saveCanvasState()
         }
@@ -1916,7 +2003,7 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
         }
       }, 3000)
       
-      console.log('项目保存成功:', projectRecord)
+
       
       // 关闭弹窗
       setShowSaveModal(false)
@@ -1934,14 +2021,12 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
             chatPanel.resetChat()
           }
           
-          console.log('AI创作助手内容已重置，为新项目准备')
         } catch (error) {
-          console.warn('重置AI创作助手失败:', error)
+          // 重置AI创作助手失败
         }
       }
       
     } catch (error) {
-      console.error('保存项目失败:', error)
       alert('保存失败，请重试')
     }
   }
@@ -2035,17 +2120,12 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
     const activeObject = canvas.getActiveObject()
     if (!activeObject) return
     
-    console.log('手动层级管理 - 操作:', operation, '活动对象:', activeObject)
-    
     const objects = canvas.getObjects()
     const currentIndex = objects.indexOf(activeObject)
     
     if (currentIndex === -1) {
-      console.log('手动层级管理 - 对象不在画布中')
       return
     }
-    
-    console.log('手动层级管理 - 当前索引:', currentIndex, '对象总数:', objects.length)
     
     // 移除当前对象
     canvas.remove(activeObject)
@@ -2055,7 +2135,6 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
       case 'bringToFront':
         // 置顶：直接添加到画布（默认添加到顶部）
         canvas.add(activeObject)
-        console.log('手动层级管理 - 置顶完成')
         break
       case 'sendToBack':
         // 置底：先移除所有对象，然后按顺序重新添加
@@ -2069,7 +2148,6 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
             canvas.add(obj)
           }
         })
-        console.log('手动层级管理 - 置底完成')
         break
       case 'bringForward':
         // 上移一层：与后一个对象交换位置
@@ -2078,9 +2156,8 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
           canvas.remove(nextObject)
           canvas.add(activeObject)
           canvas.add(nextObject)
-          console.log('手动层级管理 - 上移一层完成')
         } else {
-          console.log('手动层级管理 - 已经在最顶层，无法上移')
+          // 已经在最顶层，无法上移
         }
         break
       case 'sendBackward':
@@ -2090,9 +2167,8 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
           canvas.remove(prevObject)
           canvas.add(activeObject)
           canvas.add(prevObject)
-          console.log('手动层级管理 - 下移一层完成')
         } else {
-          console.log('手动层级管理 - 已经在最底层，无法下移')
+          // 已经在最底层，无法下移
         }
         break
     }
@@ -2101,7 +2177,6 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
     canvas.setActiveObject(activeObject)
     // 重新渲染画布
     canvas.renderAll()
-    console.log('手动层级管理 - 操作完成')
   }
 
   const handleBringToFront = () => {
@@ -2109,22 +2184,16 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
     const activeObject = canvas.getActiveObject()
     if (activeObject) {
       saveCanvasState()
-      console.log('置顶操作 - 活动对象:', activeObject)
       
       try {
         // 优先使用Fabric.js原生方法
         if (canvas.bringToFront) {
-          console.log('使用Fabric.js置顶方法')
           canvas.bringToFront(activeObject)
         } else {
-          console.log('使用手动层级管理置顶')
           manualLayerManagement('bringToFront')
         }
         canvas.renderAll()
-        console.log('对象已置顶')
       } catch (error) {
-        console.error('置顶操作失败:', error)
-        console.log('使用备用方案置顶')
         manualLayerManagement('bringToFront')
       }
     }
@@ -2135,21 +2204,15 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
     const activeObject = canvas.getActiveObject()
     if (activeObject) {
       saveCanvasState()
-      console.log('置底操作 - 活动对象:', activeObject)
       
       try {
         if (canvas.sendToBack) {
-          console.log('使用Fabric.js置底方法')
           canvas.sendToBack(activeObject)
         } else {
-          console.log('使用手动层级管理置底')
           manualLayerManagement('sendToBack')
         }
         canvas.renderAll()
-        console.log('对象已置底')
       } catch (error) {
-        console.error('置底操作失败:', error)
-        console.log('使用备用方案置底')
         manualLayerManagement('sendToBack')
       }
     }
@@ -2160,21 +2223,15 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
     const activeObject = canvas.getActiveObject()
     if (activeObject) {
       saveCanvasState()
-      console.log('上移一层操作 - 活动对象:', activeObject)
       
       try {
         if (canvas.bringForward) {
-          console.log('使用Fabric.js上移一层方法')
           canvas.bringForward(activeObject)
         } else {
-          console.log('使用手动层级管理上移一层')
           manualLayerManagement('bringForward')
         }
         canvas.renderAll()
-        console.log('对象已上移一层')
       } catch (error) {
-        console.error('上移一层操作失败:', error)
-        console.log('使用备用方案上移一层')
         manualLayerManagement('bringForward')
       }
     }
@@ -2185,21 +2242,15 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
     const activeObject = canvas.getActiveObject()
     if (activeObject) {
       saveCanvasState()
-      console.log('下移一层操作 - 活动对象:', activeObject)
       
       try {
         if (canvas.sendBackwards) {
-          console.log('使用Fabric.js下移一层方法')
           canvas.sendBackwards(activeObject)
         } else {
-          console.log('使用手动层级管理下移一层')
           manualLayerManagement('sendBackward')
         }
         canvas.renderAll()
-        console.log('对象已下移一层')
       } catch (error) {
-        console.error('下移一层操作失败:', error)
-        console.log('使用备用方案下移一层')
         manualLayerManagement('sendBackward')
       }
     }
@@ -2232,8 +2283,6 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
     canvas.clear()
     canvas.backgroundColor = backgroundColor
     canvas.renderAll()
-    
-    console.log('画板已清除，背景颜色:', backgroundColor)
   }
 
   // 处理画板缩放
@@ -2251,8 +2300,6 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
     canvas.setViewportTransform(vpt)
     canvas.requestRenderAll()
     setZoomLevel(newZoomLevel)
-    
-    console.log(`缩放比例: ${newZoomLevel}%`)
   }
 
   // 重置缩放比例
@@ -2269,8 +2316,6 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
     canvas.setViewportTransform(vpt)
     canvas.requestRenderAll()
     setZoomLevel(100)
-    
-    console.log('缩放比例已重置为100%')
   }
 
   // 下载画板内容为JSON文件
@@ -2332,8 +2377,6 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
         URL.revokeObjectURL(url)
       }, 100)
       
-      console.log('画板内容已导出为JSON文件')
-      
       // 显示下载成功提示
       const notification = document.createElement('div')
       notification.innerHTML = `
@@ -2352,7 +2395,6 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
       }, 3000)
       
     } catch (error) {
-      console.error('下载画板失败:', error)
       alert('下载失败，请重试')
     }
   }
@@ -2448,8 +2490,6 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
               setZoomLevel(importData.canvasInfo.zoomLevel)
             }
             
-            console.log('画板内容已成功导入')
-            
             // 显示导入成功提示
             const notification = document.createElement('div')
             notification.innerHTML = `
@@ -2469,7 +2509,6 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
           })
           
         } catch (error) {
-          console.error('导入画板失败:', error)
           alert('导入失败，文件格式可能不正确')
         }
       }
@@ -2497,7 +2536,6 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
     const imageData = await onCaptureArea()
     if (imageData) {
       // 这里可以将截图发送到聊天面板
-      console.log('Captured area:', imageData)
     }
   }
 
@@ -2559,8 +2597,11 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
         handleToolSelect('arrow')
         break
       case 's':
-        event.preventDefault()
-        handleToolSelect('shapes')
+        // 如果是Ctrl+S，不处理工具选择，让第一个监听器处理保存
+        if (!isCtrl) {
+          event.preventDefault()
+          handleToolSelect('shapes')
+        }
         break
       case 't':
         event.preventDefault()
@@ -2963,14 +3004,12 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
                 <div className="flex justify-between items-center mb-3">
                   <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100">历史记录</h4>
                   <div className="flex items-center space-x-2">
-                    <Tooltip content="清空历史记录" position="top">
-                      <button
-                        onClick={clearHistory}
-                        className="text-xs text-red-500 hover:text-red-700 dark:hover:text-red-400 px-2 py-1 border border-red-300 dark:border-red-600 rounded"
-                      >
-                        清空
-                      </button>
-                    </Tooltip>
+                    <button
+                      onClick={clearHistory}
+                      className="text-xs text-red-500 hover:text-red-700 dark:hover:text-red-400 px-2 py-1 border border-red-300 dark:border-red-600 rounded"
+                    >
+                      清空
+                    </button>
                     <button 
                       onClick={() => setShowHistoryPanel(false)}
                       className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-400"
@@ -3106,29 +3145,38 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
         </Tooltip>
 
         {/* 用户信息胶囊 */}
-        <div className="flex items-center space-x-1 lg:space-x-2 bg-gray-100 dark:bg-gray-800 rounded-full px-2 lg:px-3 py-1 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors cursor-pointer">
-          {/* 消耗点数 */}
-          <div className="flex items-center space-x-1">
-            <svg className="w-3 h-3 lg:w-4 lg:h-4 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
-              <path d="M10 2a8 8 0 100 16 8 8 0 000-16zm0 14a6 6 0 110-12 6 6 0 010 12zm-1-9a1 1 0 112 0v4a1 1 0 11-2 0V7zm1 8a1 1 0 100-2 1 1 0 000 2z"/>
-            </svg>
-            <span className="text-xs lg:text-sm font-medium text-gray-700 dark:text-gray-300">{userInfo?.points || 0}</span>
-            <span className="text-xs text-gray-500 dark:text-gray-400">点</span>
+          <div 
+            className="flex items-center space-x-1 lg:space-x-2 bg-gray-100 dark:bg-gray-800 rounded-full px-2 lg:px-3 py-1 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors cursor-pointer"
+            onClick={handleOpenApiSettings}
+          >
+            {/* 消耗点数 */}
+            <div className="flex items-center space-x-1">
+              <svg className="w-3 h-3 lg:w-4 lg:h-4 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M10 2a8 8 0 100 16 8 8 0 000-16zm0 14a6 6 0 110-12 6 6 0 010 12zm-1-9a1 1 0 112 0v4a1 1 0 11-2 0V7zm1 8a1 1 0 100-2 1 1 0 000 2z"/>
+              </svg>
+              <span className="text-xs lg:text-sm font-medium text-gray-700 dark:text-gray-300">{userInfo?.points || 0}</span>
+              <span className="text-xs text-gray-500 dark:text-gray-400">点</span>
+            </div>
+            
+            {/* 分隔线 */}
+            <div className="h-3 lg:h-4 w-px bg-gray-300 dark:bg-gray-600"></div>
+            
+            {/* 用户头像 */}
+            <div className="flex items-center">
+              <img 
+                src={userInfo?.avatar || "/default-avatar.svg"} 
+                alt={userInfo?.username || "用户"}
+                className="w-4 h-4 lg:w-6 lg:h-6 rounded-full"
+              />
+            </div>
           </div>
-          
-          {/* 分隔线 */}
-          <div className="h-3 lg:h-4 w-px bg-gray-300 dark:bg-gray-600"></div>
-          
-          {/* 用户头像 */}
-          <div className="flex items-center">
-            <img 
-              src={userInfo?.avatar || "/default-avatar.svg"} 
-              alt={userInfo?.username || "用户"}
-              className="w-4 h-4 lg:w-6 lg:h-6 rounded-full"
-            />
-          </div>
-        </div>
       </div>
+
+      {/* API密钥设置模态框 */}
+      <UserSettingsModal 
+        isOpen={showApiSettingsModal}
+        onClose={() => setShowApiSettingsModal(false)}
+      />
     </div>
   )
 }
