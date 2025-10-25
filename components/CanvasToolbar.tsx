@@ -3062,7 +3062,6 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
                             )}
                           </div>
                         </div>
-                        <Tooltip content="删除此记录" position="top">
                           <button
                             onClick={(e) => {
                               e.stopPropagation()
@@ -3072,7 +3071,6 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
                           >
                             <Trash2 className="h-3 w-3" />
                           </button>
-                        </Tooltip>
                       </div>
                     ))
                   )}

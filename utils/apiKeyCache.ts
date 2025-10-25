@@ -22,8 +22,12 @@ const PROVIDER_CONFIGS: Record<ApiProvider, { baseUrl: string; name: string; des
     baseUrl: 'https://api.jmyps.com',
     name: '微元API',
     description: '微元AI平台提供的API服务'
+  },
+  openrouter: {
+    baseUrl: 'https://openrouter.ai/api/v1',
+    name: 'OpenRouter',
+    description: 'OpenRouter AI模型聚合平台'
   }
-
 };
 
 export class ApiKeyCache {
