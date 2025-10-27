@@ -25,7 +25,6 @@ export const useAuthStore = create<AuthState>()(
       isLoading: false,
 
       login: async (email: string, password: string) => {
-        console.log('开始登录流程:', email)
         set({ isLoading: true })
         
         // 模拟登录API调用
@@ -40,7 +39,6 @@ export const useAuthStore = create<AuthState>()(
             createdAt: new Date().toISOString()
           }
           
-          console.log('设置认证状态为true')
           set({ 
             user,
             isAuthenticated: true,
@@ -58,7 +56,6 @@ export const useAuthStore = create<AuthState>()(
           
           // 确保状态已更新
           setTimeout(() => {
-            console.log('登录完成，当前认证状态:', get().isAuthenticated)
           }, 100)
         } else {
           set({ isLoading: false })
@@ -102,7 +99,6 @@ export const useAuthStore = create<AuthState>()(
       },
 
       logout: () => {
-        console.log('执行退出登录，清除认证状态')
         set({
           user: null,
           isAuthenticated: false
@@ -121,7 +117,6 @@ export const useAuthStore = create<AuthState>()(
         isAuthenticated: state.isAuthenticated 
       }),
       onRehydrateStorage: () => (state) => {
-        console.log('认证状态已从存储中恢复:', state)
       },
       skipHydration: false
     }

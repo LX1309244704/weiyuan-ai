@@ -12,7 +12,7 @@ interface SelectionData {
 interface SelectionPanelProps {
   selectedArea: SelectionData | null
   onGenerateImage: (prompt: string, model: string, position: { x: number; y: number }, screenshotData?: string, aspectRatio?: string) => void
-  onGenerateVideo: (prompt: string, model: string) => void
+  onGenerateVideo: (prompt: string, model: string, position: { x: number; y: number }, screenshotData?: string, aspectRatio?: string, duration?: string) => void
   onCaptureArea: () => Promise<string | null>
   onReceiveScreenshot?: (imageData: string, prompt: string) => void
   onClearSelection?: () => void
@@ -25,14 +25,13 @@ export default function SelectionPanel({ selectedArea, onGenerateImage, onCaptur
   const [addButtonPosition, setAddButtonPosition] = useState({ left: 0, top: 0 })
   const [showAddButton, setShowAddButton] = useState(false)
   const [showTooltip, setShowTooltip] = useState(false)
-  const [selectedModelType, setSelectedModelType] = useState<'image' | 'video'>('image')
-  const [selectedImageModel, setSelectedImageModel] = useState('seedream-4')
-  const [selectedVideoModel, setSelectedVideoModel] = useState('veo3')
+  const [selectedModelType, setSelectedModelType] = useState<'image'>('image')
+  const [selectedImageModel, setSelectedImageModel] = useState('nano-banana')
   const [selectedAspectRatio, setSelectedAspectRatio] = useState('16:9')
-  const [selectedVideoSeconds, setSelectedVideoSeconds] = useState('5')
   const [showModelDropdown, setShowModelDropdown] = useState(false)
   const [showAspectDropdown, setShowAspectDropdown] = useState(false)
-  const [showSecondsDropdown, setShowSecondsDropdown] = useState(false)
+  const [showRatioDropdown, setShowRatioDropdown] = useState(false)
+
   const [customPrompt, setCustomPrompt] = useState('')
   const [textareaHeight, setTextareaHeight] = useState('32px')
   const [canvasScale, setCanvasScale] = useState(1)
@@ -100,6 +99,8 @@ export default function SelectionPanel({ selectedArea, onGenerateImage, onCaptur
       clearInterval(intervalId)
     }
   }, [])
+
+
 
 
 
@@ -268,7 +269,6 @@ export default function SelectionPanel({ selectedArea, onGenerateImage, onCaptur
         }, 2000)
       }
     } catch (error) {
-      console.error('添加到聊天失败:', error)
     } finally {
       setIsGenerating(false)
       // 操作完成后隐藏按钮和清除框选
@@ -290,11 +290,7 @@ export default function SelectionPanel({ selectedArea, onGenerateImage, onCaptur
         throw new Error('截图失败')
       }
       
-      console.log('SelectionPanel截图数据调试:', {
-        screenshotDataLength: screenshotData.length,
-        screenshotDataPrefix: screenshotData.substring(0, 50),
-        hasDataPrefix: screenshotData.startsWith('data:')
-      })
+
       
       // 获取框选区域的位置信息
       const { left, top, width, height } = selectedArea.rect
@@ -308,40 +304,20 @@ export default function SelectionPanel({ selectedArea, onGenerateImage, onCaptur
       // 准备提示词
       const prompt = customPrompt.trim() 
         ? customPrompt
-        : `基于框选区域生成${selectedModelType === 'image' ? '图片' : '视频'}，位置: (${left.toFixed(0)}, ${top.toFixed(0)})`
+        : `基于框选区域生成图片，位置: (${left.toFixed(0)}, ${top.toFixed(0)})`
       
-      const model = selectedModelType === 'image' ? selectedImageModel : selectedVideoModel
+      const model = selectedImageModel
       
-      if (selectedModelType === 'image') {
-        // 记录生图任务到聊天记录 - 添加重试机制
-        const logToChatPanel = () => {
-          if (typeof window !== 'undefined' && (window as any).chatPanelRef) {
-            const chatPanel = (window as any).chatPanelRef
-            if (chatPanel.logGenerateImageTask) {
-              console.log('调用ChatPanel记录生图任务:', { prompt, model, selectedAspectRatio })
-              chatPanel.logGenerateImageTask(prompt, model, selectedAspectRatio, screenshotData)
-              return true
-            }
-          }
-          return false
+      // 记录生成任务到聊天记录 - 在调用生成接口之前
+      if (typeof window !== 'undefined' && (window as any).chatPanelRef) {
+        const chatPanel = (window as any).chatPanelRef
+        if (chatPanel.logGenerateImageTask) {
+          chatPanel.logGenerateImageTask(prompt, model, selectedAspectRatio, screenshotData)
         }
-        
-        // 尝试调用，如果失败则延迟重试
-        if (!logToChatPanel()) {
-          console.log('ChatPanel ref未找到，延迟重试...')
-          setTimeout(() => {
-            if (!logToChatPanel()) {
-              console.error('无法调用ChatPanel记录生图任务')
-            }
-          }, 100)
-        }
-        
-        // 调用图片生成接口，传入截图数据、模型和比例
-        onGenerateImage(prompt, model, newImagePosition, screenshotData, selectedAspectRatio)
-      } else {
-        // 这里需要调用视频生成函数
-        console.log('视频生成:', prompt, model)
       }
+      
+      // 调用图片生成接口，传入截图数据、模型和比例
+      onGenerateImage(prompt, model, newImagePosition, screenshotData, selectedAspectRatio)
       
       // 操作完成后隐藏面板和清除框选
       setIsVisible(false)
@@ -351,7 +327,6 @@ export default function SelectionPanel({ selectedArea, onGenerateImage, onCaptur
       setCustomPrompt('')
       
     } catch (error) {
-      console.error('生成图片失败:', error)
       // 出现错误时，不调用onGenerateImage，避免显示默认的生成中预览图
       // 直接隐藏面板和清除框选
       setIsVisible(false)
@@ -379,35 +354,6 @@ export default function SelectionPanel({ selectedArea, onGenerateImage, onCaptur
         }}
       >
         <div className="flex items-center justify-end space-x-2">
-          {/* 1. 图标左右切换 - 模型类型切换 */}
-          <div className="flex items-center bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
-            <button
-              onClick={() => setSelectedModelType('image')}
-              className={`p-1 rounded-lg transition-colors ${
-                selectedModelType === 'image' 
-                  ? 'bg-white dark:bg-gray-600 shadow-sm text-gray-700 dark:text-gray-300' 
-                  : 'text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
-              }`}
-              title="图片生成"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
-            </button>
-            <button
-              onClick={() => setSelectedModelType('video')}
-              className={`p-1 rounded-lg transition-colors ${
-                selectedModelType === 'video' 
-                  ? 'bg-white dark:bg-gray-600 shadow-sm text-gray-700 dark:text-gray-300' 
-                  : 'text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
-              }`}
-              title="视频生成"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-              </svg>
-            </button>
-          </div>
 
           {/* 2. 模型选择 */}
           <div className="relative">
@@ -417,8 +363,7 @@ export default function SelectionPanel({ selectedArea, onGenerateImage, onCaptur
                 className="flex items-center space-x-1 p-1 text-gray-700 dark:text-gray-300 rounded-lg text-xs hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
               >
                 <span>
-                  {ModelService.getModelInfo(selectedModelType === 'image' ? selectedImageModel : selectedVideoModel)?.name || 
-                   (selectedModelType === 'image' ? selectedImageModel : selectedVideoModel)}
+                  {ModelService.getModelInfo(selectedImageModel)?.name || selectedImageModel}
                 </span>
                 <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -429,135 +374,78 @@ export default function SelectionPanel({ selectedArea, onGenerateImage, onCaptur
             {showAspectDropdown && (
               <div className="absolute bottom-full left-0 mb-1 w-20 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-600 z-10">
                 <div className="p-1">
-                  {selectedModelType === 'image' ? (
-                    <>
-                      <button
-                        onClick={() => {
-                          setSelectedImageModel('nano-banana')
-                          setShowAspectDropdown(false)
-                        }}
-                        className={`w-full text-left px-2 py-1 text-xs rounded ${
-                          selectedImageModel === 'nano-banana' 
-                            ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300' 
-                            : 'hover:bg-gray-100 dark:hover:bg-gray-700'
-                        }`}
-                      >
-                        Nano-Banana
-                      </button>
-                      <button
-                        onClick={() => {
-                          setSelectedImageModel('seedream-4')
-                          setShowAspectDropdown(false)
-                        }}
-                        className={`w-full text-left px-2 py-1 text-xs rounded ${
-                          selectedImageModel === 'seedream-4' 
-                            ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300' 
-                            : 'hover:bg-gray-100 dark:hover:bg-gray-700'
-                        }`}
-                      >
-                        Seedream-4
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <button
-                        onClick={() => {
-                          setSelectedVideoModel('veo3')
-                          setShowAspectDropdown(false)
-                        }}
-                        className={`w-full text-left px-2 py-1 text-xs rounded ${
-                          selectedVideoModel === 'veo3' 
-                            ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300' 
-                            : 'hover:bg-gray-100 dark:hover:bg-gray-700'
-                        }`}
-                      >
-                        Veo3
-                      </button>
-                      <button
-                        onClick={() => {
-                          setSelectedVideoModel('sora2')
-                          setShowAspectDropdown(false)
-                        }}
-                        className={`w-full text-left px-2 py-1 text-xs rounded ${
-                          selectedVideoModel === 'sora2' 
-                            ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300' 
-                            : 'hover:bg-gray-100 dark:hover:bg-gray-700'
-                        }`}
-                      >
-                        Sora2
-                      </button>
-                    </>
-                  )}
+                  <button
+                    onClick={() => {
+                      setSelectedImageModel('nano-banana')
+                      setShowAspectDropdown(false)
+                    }}
+                    className={`w-full text-left px-2 py-1 text-xs rounded ${
+                      selectedImageModel === 'nano-banana' 
+                        ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300' 
+                        : 'hover:bg-gray-100 dark:hover:bg-gray-700'
+                    }`}
+                  >
+                    Nano-Banana
+                  </button>
+                  <button
+                    onClick={() => {
+                      setSelectedImageModel('seedream-4')
+                      setShowAspectDropdown(false)
+                    }}
+                    className={`w-full text-left px-2 py-1 text-xs rounded ${
+                      selectedImageModel === 'seedream-4' 
+                        ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300' 
+                        : 'hover:bg-gray-100 dark:hover:bg-gray-700'
+                    }`}
+                  >
+                    Seedream-4
+                  </button>
                 </div>
               </div>
             )}
           </div>
 
-          {/* 3. 比例/秒数选择 */}
-          <div className="relative">
-            <div className="flex items-center bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
-              <button
-                onClick={() => setShowSecondsDropdown(!showSecondsDropdown)}
-                className="flex items-center space-x-1 p-1 text-gray-700 dark:text-gray-300 rounded-lg text-xs hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-              >
-                <span>
-                  {selectedModelType === 'image' 
-                    ? selectedAspectRatio
-                    : `${selectedVideoSeconds}s`
-                  }
-                </span>
-                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-              </button>
-            </div>
-            
-            {showSecondsDropdown && (
-              <div className="absolute bottom-full left-0 mb-1 w-16 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-600 z-10">
-                <div className="p-1">
-                  {selectedModelType === 'image' ? (
-                    <>
-                      {['16:9', '9:16', '4:3', '3:4', '1:1'].map((ratio) => (
-                        <button
-                          key={ratio}
-                          onClick={() => {
-                            setSelectedAspectRatio(ratio)
-                            setShowSecondsDropdown(false)
-                          }}
-                          className={`w-full text-left px-2 py-1 text-xs rounded ${
-                            selectedAspectRatio === ratio 
-                              ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300' 
-                              : 'hover:bg-gray-100 dark:hover:bg-gray-700'
-                          }`}
-                        >
-                          {ratio}
-                        </button>
-                      ))}
-                    </>
-                  ) : (
-                    <>
-                      {['3', '5', '10', '15', '30'].map((seconds) => (
-                        <button
-                          key={seconds}
-                          onClick={() => {
-                            setSelectedVideoSeconds(seconds)
-                            setShowSecondsDropdown(false)
-                          }}
-                          className={`w-full text-left px-2 py-1 text-xs rounded ${
-                            selectedVideoSeconds === seconds 
-                              ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300' 
-                              : 'hover:bg-gray-100 dark:hover:bg-gray-700'
-                          }`}
-                        >
-                          {seconds}s
-                        </button>
-                      ))}
-                    </>
-                  )}
-                </div>
+          {/* 3. 比例选择 - 仅对图片模型显示 */}
+          {selectedModelType === 'image' && (
+            <div className="relative">
+              <div className="flex items-center bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
+                <button
+                  onClick={() => setShowRatioDropdown(!showRatioDropdown)}
+                  className="flex items-center space-x-1 p-1 text-gray-700 dark:text-gray-300 rounded-lg text-xs hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                >
+                  <span>{selectedAspectRatio}</span>
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
               </div>
-            )}
-          </div>
+              
+              {showRatioDropdown && (
+                <div className="absolute bottom-full left-0 mb-1 w-16 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-600 z-10">
+                  <div className="p-1">
+                    {(selectedModelType === 'image' ? ['1:1', '16:9', '9:16', '4:3', '3:4'] : ['16:9', '9:16']).map((ratio) => (
+                      <button
+                        key={ratio}
+                        onClick={() => {
+                          setSelectedAspectRatio(ratio)
+                          setShowRatioDropdown(false)
+                        }}
+                        className={`w-full text-left px-2 py-1 text-xs rounded ${
+                          selectedAspectRatio === ratio 
+                            ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300' 
+                            : 'hover:bg-gray-100 dark:hover:bg-gray-700'
+                        }`}
+                      >
+                        {ratio}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+
 
           {/* 4. 输入框 */}
           <textarea
@@ -582,7 +470,7 @@ export default function SelectionPanel({ selectedArea, onGenerateImage, onCaptur
                 e.preventDefault()
               }
             }}
-            placeholder="输入提示词..."
+placeholder=""
             className="flex-1 px-2 py-1 border border-gray-300 dark:border-gray-600 rounded text-xs bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:border-blue-500 dark:focus:border-blue-400 resize-none"
             style={{ minWidth: '120px', height: textareaHeight, minHeight: '32px', maxHeight: '80px' }}
             rows={1}

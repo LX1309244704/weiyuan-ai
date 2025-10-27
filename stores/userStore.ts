@@ -64,7 +64,6 @@ export const useUserStore = create<UserState>()(
       },
       
       clearUserInfo: () => {
-        console.log('清除用户信息')
         set({ userInfo: null })
         // 强制清除持久化存储
         if (typeof window !== 'undefined') {

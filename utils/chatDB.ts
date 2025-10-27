@@ -6,6 +6,7 @@ interface ChatMessage {
   content: string;
   timestamp: Date;
   imageData?: string;
+  videoData?: string;
   sessionId?: string; // 可选：用于区分不同会话
 }
 
@@ -32,18 +33,15 @@ class ChatDB {
       const request = indexedDB.open(this.dbName, this.dbVersion);
 
       request.onerror = () => {
-        console.error('IndexedDB打开失败:', request.error);
         reject(request.error);
       };
       
       request.onsuccess = () => {
         this.db = request.result;
-        console.log('IndexedDB初始化成功');
         resolve();
       };
 
       request.onupgradeneeded = (event) => {
-        console.log('IndexedDB升级/创建数据库');
         const db = (event.target as IDBOpenDBRequest).result;
         
         // 创建聊天消息存储
@@ -57,7 +55,7 @@ class ChatDB {
           messageStore.createIndex('timestamp', 'timestamp', { unique: false });
           messageStore.createIndex('sessionId', 'sessionId', { unique: false });
           messageStore.createIndex('type', 'type', { unique: false });
-          console.log('聊天消息存储创建成功');
+
         }
         
         // 创建聊天会话存储
@@ -69,12 +67,11 @@ class ChatDB {
           
           // 创建索引用于按时间排序
           sessionStore.createIndex('updatedAt', 'updatedAt', { unique: false });
-          console.log('聊天会话存储创建成功');
+
         }
       };
       
       request.onblocked = () => {
-        console.warn('IndexedDB被其他标签页占用');
       };
     });
   }
@@ -250,6 +247,38 @@ class ChatDB {
       sessionRequest.onerror = () => reject(sessionRequest.error);
       
       transaction.oncomplete = () => resolve();
+    });
+  }
+
+  // 更新消息
+  async updateMessage(messageId: string, updatedMessage: Omit<ChatMessage, 'id'>): Promise<void> {
+    if (!this.db) await this.init();
+
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction([this.storeNames.messages], 'readwrite');
+      const store = transaction.objectStore(this.storeNames.messages);
+      
+      // 获取现有消息
+      const getRequest = store.get(messageId);
+      
+      getRequest.onerror = () => reject(getRequest.error);
+      getRequest.onsuccess = () => {
+        if (!getRequest.result) {
+          reject(new Error('消息不存在'));
+          return;
+        }
+        
+        // 更新消息
+        const fullMessage: ChatMessage = {
+          ...getRequest.result,
+          ...updatedMessage,
+          id: messageId // 保持原有ID
+        };
+        
+        const putRequest = store.put(fullMessage);
+        putRequest.onerror = () => reject(putRequest.error);
+        putRequest.onsuccess = () => resolve();
+      };
     });
   }
 

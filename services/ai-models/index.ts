@@ -1,18 +1,22 @@
-import { nanoBananaConfig, type ToImageDvo as NanoBananaDvo, type HumanDto as NanoBananaHumanDto } from './nano-banana';
-import { seedream4Config, type ToImageDvo as Seedream4Dvo, type HumanDto as Seedream4HumanDto } from './seedream-4';
-import { veo3Config, type ToVideoDvo as Veo3Dvo, type HumanDto as Veo3HumanDto } from './veo3';
-import { sora2Config, type ToVideoDvo as Sora2Dvo, type HumanDto as Sora2HumanDto } from './sora2';
+import { nanoBananaConfig, type ToImageDvo as NanoBananaDvo, type ImageDto as NanoBananaHumanDto } from './weiyuan/nano-banana';
+import { seedream4Config, type ToImageDvo as Seedream4Dvo, type ImageDto as Seedream4HumanDto } from './weiyuan/seedream-4';
+import { veo3Config, type ToVideoDvo as Veo3Dvo, type VideoDto as Veo3HumanDto } from './weiyuan/veo3';
+import { sora2Config, type ToVideoDvo as Sora2Dvo, type VideoDto as Sora2HumanDto } from './weiyuan/sora2';
+import { gpt5Config, type TextRequestDvo as Gpt5RequestDvo, type TextResponseDto as Gpt5ResponseDto } from './weiyuan/gpt5';
+import { deepseekConfig, type TextRequestDvo as DeepSeekRequestDvo, type TextResponseDto as DeepSeekResponseDto } from './weiyuan/deepseek';
+import { gemini25Config, type TextRequestDvo as Gemini25RequestDvo, type TextResponseDto as Gemini25ResponseDto } from './weiyuan/gemini2.5';
+import { ApiKeyCache } from '@/utils/apiKeyCache';
+import { handleApiError, isTokenError, getUserFriendlyErrorMessage } from '@/utils/errorHandler';
 
 // 统一的模型类型定义
 export type ModelType = 'image' | 'video' | 'text';
 export type ImageModel = 'nano-banana' | 'seedream-4';
-export type VideoModel = 'veo3' | 'sora2';
-export type TextModel = 'gpt-4' | 'claude-3'; // 预留文本模型
+export type VideoModel = 'veo3.1' | 'sora2';
+export type TextModel = 'gpt5' | 'deepseek' | 'gemini2.5';
 
 // 统一的请求参数接口
 export interface BaseRequestDvo {
   prompt: string;
-  key: string;
   taskId?: string;
   images?: string[];
 }
@@ -27,7 +31,15 @@ export interface VideoRequestDvo extends BaseRequestDvo {
   duration?: string;
   resolution?: string;
   style?: string;
+  aspectRatio?: string;
   model: VideoModel;
+}
+
+export interface TextRequestDvo extends BaseRequestDvo {
+  maxTokens?: number;
+  temperature?: number;
+  topP?: number;
+  model: TextModel;
 }
 
 export interface BaseResponseDto {
@@ -43,6 +55,10 @@ export interface VideoResponseDto extends BaseResponseDto {
   videoUrl?: string;
 }
 
+export interface TextResponseDto extends BaseResponseDto {
+  text?: string;
+}
+
 // 模型配置映射
 export const modelConfigs = {
   // 图片生成模型
@@ -50,8 +66,13 @@ export const modelConfigs = {
   'seedream-4': seedream4Config,
   
   // 视频生成模型
-  'veo3': veo3Config,
+  'veo3.1': veo3Config,
   'sora2': sora2Config,
+  
+  // 文本生成模型
+  'gpt5': gpt5Config,
+  'deepseek': deepseekConfig,
+  'gemini2.5': gemini25Config,
 } as const;
 
 // 模型信息映射
@@ -70,8 +91,8 @@ export const modelInfo = {
     supportsImageInput: true,
     maxPromptLength: 1000
   },
-  'veo3': {
-    name: 'Veo3',
+  'veo3.1': {
+    name: 'Veo3.1',
     type: 'video' as const,
     description: '快速视频生成模型',
     supportsImageInput: true,
@@ -83,6 +104,27 @@ export const modelInfo = {
     description: '高级视频生成模型',
     supportsImageInput: true,
     maxPromptLength: 1000
+  },
+  'gpt5': {
+    name: 'GPT-5',
+    type: 'text' as const,
+    description: 'OpenAI最新文本生成模型',
+    supportsImageInput: false,
+    maxPromptLength: 4000
+  },
+  'deepseek': {
+    name: 'DeepSeek',
+    type: 'text' as const,
+    description: '深度求索文本生成模型',
+    supportsImageInput: false,
+    maxPromptLength: 4000
+  },
+  'gemini2.5': {
+    name: 'Gemini 2.5',
+    type: 'text' as const,
+    description: 'Google Gemini文本生成模型',
+    supportsImageInput: false,
+    maxPromptLength: 4000
   }
 } as const;
 
@@ -91,7 +133,7 @@ export class ModelService {
   /**
    * 创建生成任务
    */
-  static async createTask(request: ImageRequestDvo | VideoRequestDvo): Promise<string> {
+  static async createTask(request: ImageRequestDvo | VideoRequestDvo | TextRequestDvo): Promise<string> {
     const model = request.model;
     const config = modelConfigs[model];
     
@@ -99,9 +141,10 @@ export class ModelService {
       throw new Error(`不支持的模型: ${model}`);
     }
     
-    // 验证API密钥
-    if (!config.validateApiKey(request.key)) {
-      throw new Error('无效的API密钥');
+    // 验证API密钥 - 从缓存中获取
+    const apiKey = ApiKeyCache.getApiKey();
+    if (!config.validateApiKey(apiKey)) {
+      throw new Error('无效的API密钥，请检查API密钥配置');
     }
     
     // 验证提示词
@@ -109,34 +152,73 @@ export class ModelService {
       throw new Error('无效的提示词');
     }
     
+    // 动态设置基础地址
+    const currentProvider = ApiKeyCache.getApiProvider();
+    const baseUrl = ApiKeyCache.getBaseUrlByProvider(currentProvider);
+    
+    // 临时修改配置的基础地址
+    const originalBaseUrl = config.baseUrl;
+    config.baseUrl = baseUrl;
+    
+    let result: string;
+    
     try {
       if (config.type === 'image') {
         // 为图片模型构建正确的参数对象，确保aspectRatio正确传递
         const imageRequest = request as ImageRequestDvo;
         const toImageDvo = {
           prompt: imageRequest.prompt,
-          key: imageRequest.key,
           taskId: imageRequest.taskId,
           images: imageRequest.images,
           size: imageRequest.size,
           aspectRatio: imageRequest.aspectRatio // 确保aspectRatio参数传递
         };
-        return await config.createAsyncImage(toImageDvo as any);
+        result = await config.createAsyncImage(toImageDvo as any);
       } else if (config.type === 'video') {
-        return await config.createVideo(request as any);
+        // 为视频模型构建正确的参数对象，确保aspectRatio正确传递
+        const videoRequest = request as VideoRequestDvo;
+        const toVideoDvo = {
+          prompt: videoRequest.prompt,
+          taskId: videoRequest.taskId,
+          images: videoRequest.images,
+          duration: videoRequest.duration,
+          resolution: videoRequest.resolution,
+          style: videoRequest.style,
+          aspectRatio: videoRequest.aspectRatio // 确保aspectRatio参数传递
+        };
+        result = await config.createVideo(toVideoDvo as any);
+      } else if (config.type === 'text') {
+        // 文本模型处理
+        const textRequest = request as TextRequestDvo;
+        const textDvo = {
+          prompt: textRequest.prompt,
+          taskId: textRequest.taskId,
+          maxTokens: textRequest.maxTokens,
+          temperature: textRequest.temperature,
+          topP: textRequest.topP
+        };
+        result = await config.createTextGeneration(textDvo as any);
       } else {
         throw new Error(`不支持的模型类型`);
       }
+      
+      // 恢复原始基础地址
+      config.baseUrl = originalBaseUrl;
+      
+      return result;
     } catch (error) {
-      console.error(`创建 ${model} 任务失败:`, error);
-      throw error;
+      // 恢复原始基础地址
+      config.baseUrl = originalBaseUrl;
+      
+      // 处理API错误，特别是令牌错误
+      handleApiError(error);
     }
   }
   
   /**
    * 查询任务状态（支持状态循环查询）
    */
-  static async getTaskStatus(request: ImageRequestDvo | VideoRequestDvo): Promise<ImageResponseDto | VideoResponseDto> {
+  static async getTaskStatus(request: ImageRequestDvo | VideoRequestDvo | TextRequestDvo): Promise<ImageResponseDto | VideoResponseDto | TextResponseDto> {
     const model = request.model;
     const config = modelConfigs[model];
     
@@ -149,43 +231,67 @@ export class ModelService {
     }
     
     try {
-      // 循环查询直到出现最终状态（FAILURE或SUCCESS）
+      // 循环查询直到出现最终状态（SUCCESS或FAILURE）
       let result: any = null;
       let attempts = 0;
       const maxAttempts = 300; // 最多尝试5分钟（300秒）
       
       while (attempts < maxAttempts) {
-        if (config.type === 'image') {
-          result = await config.getTask(request as any);
-        } else if (config.type === 'video') {
-          result = await config.getTask(request as any);
-        } else {
-          throw new Error(`不支持的模型类型`);
+        try {
+          if (config.type === 'image') {
+            result = await config.getTask(request as any);
+          } else if (config.type === 'video') {
+            result = await config.getTask(request as any);
+          } else if (config.type === 'text') {
+            result = await config.getTask(request as any);
+          } else {
+            throw new Error(`不支持的模型类型`);
+          }
+          
+          // 检查是否为最终状态（SUCCESS或FAILURE）
+          // 对于Nano-Banana模型，result.status为'2'表示成功，'3'表示失败
+          // '1'表示处理中状态，需要继续循环查询
+          if (result && (result.status === '2' || result.status === '3')) {
+            break;
+          }
+          
+          // 如果不是最终状态，等待3秒后继续查询
+          attempts++;
+          if (attempts < maxAttempts) {
+            await new Promise(resolve => setTimeout(resolve, 3000)); // 等待3秒
+          }
+        } catch (error) {
+          // 如果是令牌错误，立即抛出
+          if (isTokenError(error)) {
+            handleApiError(error);
+          }
+          
+          // 其他错误继续重试
+          attempts++;
+          if (attempts < maxAttempts) {
+            await new Promise(resolve => setTimeout(resolve, 3000)); // 等待3秒
+          }
         }
-        
-        // 检查是否为最终状态（SUCCESS或FAILURE）
-        // 对于Nano-Banana模型，result.status为'2'表示成功，'3'表示失败
-        // '1'表示处理中状态，需要继续循环查询
-        if (result.status === '2' || result.status === '3') {
-          break;
-        }
-        
-        // 如果不是最终状态，等待1秒后继续查询
-        attempts++;
-        if (attempts < maxAttempts) {
-          await new Promise(resolve => setTimeout(resolve, 1000)); // 等待1秒
-        }
+      }
+      
+      // 如果达到最大尝试次数仍未获得最终状态，返回超时错误
+      if (attempts >= maxAttempts && result && !(result.status === '2' || result.status === '3')) {
+        return {
+          status: '3',
+          error: '任务状态查询超时'
+        } as any;
       }
       
       // 返回标准化响应
       if (config.type === 'image') {
         return this.normalizeImageResponse(result);
-      } else {
+      } else if (config.type === 'video') {
         return this.normalizeVideoResponse(result);
+      } else {
+        return this.normalizeTextResponse(result);
       }
     } catch (error) {
-      console.error(`查询 ${model} 任务状态失败:`, error);
-      throw error;
+      handleApiError(error);
     }
   }
   
@@ -257,6 +363,19 @@ export class ModelService {
     return {
       status: response.status || '3',
       videoUrl: response.videoUrl,
+      error: response.error
+    };
+  }
+  
+  // 标准化文本响应
+  private static normalizeTextResponse(response: any): TextResponseDto {
+    if (!response) {
+      return { status: '3', error: '无响应数据' };
+    }
+    
+    return {
+      status: response.status || '3',
+      text: response.text,
       error: response.error
     };
   }
