@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useAuthStore } from '@/stores/authStore'
 import { useUserStore } from '@/stores/userStore'
 import NavigationBar from '@/components/NavigationBar'
-import { CreditCard, DollarSign, TrendingUp, Calendar, Download, Receipt } from 'lucide-react'
+import { CreditCard, DollarSign, TrendingUp, Calendar, Download, Receipt, User } from 'lucide-react'
 
 // 导入JSON数据
 import billingData from '@/data/billing.json'
@@ -36,6 +36,41 @@ export default function BillingPage() {
       activeMenu="账单"
     >
       <div className="space-y-6">
+        {/* 个人信息概览 */}
+        <div className="bg-white dark:bg-gray-800 rounded-2xl p-8 border border-gray-100 dark:border-gray-700">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">个人信息</h2>
+          </div>
+          
+          <div className="flex items-center space-x-6">
+            <img 
+              src={userInfo?.avatar || '/default-avatar.png'} 
+              alt={userInfo?.username}
+              className="w-20 h-20 rounded-2xl"
+              onError={(e) => {
+                e.currentTarget.src = '/default-avatar.png'
+              }}
+            />
+            <div className="flex-1">
+              <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
+                {userInfo?.username}
+              </h3>
+              <p className="text-gray-600 dark:text-gray-400 text-lg mb-3">{userInfo?.email}</p>
+              {userInfo?.bio && (
+                <p className="text-gray-500 dark:text-gray-400 text-base">{userInfo.bio}</p>
+              )}
+              <div className="flex items-center space-x-6 mt-4">
+                <span className="text-sm text-gray-500 dark:text-gray-400">
+                  注册时间: {new Date(userInfo?.createdAt || '').toLocaleDateString('zh-CN')}
+                </span>
+                <span className="text-sm text-gray-500 dark:text-gray-400">
+                  会员等级: 标准用户
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
         {/* 账户概览 */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">

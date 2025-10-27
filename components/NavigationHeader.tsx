@@ -115,61 +115,107 @@ export default function NavigationHeader({ title, icon: Icon, iconColor = 'text-
             {/* 用户信息胶囊 */}
             <div className="relative" ref={userMenuRef}>
               <div 
-                className="flex items-center space-x-2 bg-gray-100 dark:bg-gray-700 rounded-full px-3 py-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                className="flex items-center space-x-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-full px-3 py-2 cursor-pointer hover:shadow-md transition-all duration-200 group"
                 onClick={handleUserMenuToggle}
               >
-                {/* 消耗点数 */}
-                <div className="flex items-center space-x-1">
-                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{userInfo?.points || 100}</span>
-                  <span className="text-xs text-gray-500 dark:text-gray-400">点</span>
-                </div>
-                  
-                {/* 分隔线 */}
-                <div className="h-4 w-px bg-gray-300 dark:bg-gray-600"></div>
-                
                 {/* 用户头像 */}
-                <div className="flex items-center">
+                <div className="relative">
                   <img 
                     src={userInfo?.avatar || '/default-avatar.png'} 
                     alt={userInfo?.username || '用户'}
-                    className="w-6 h-6 rounded-full"
+                    className="w-8 h-8 rounded-full border-2 border-gray-200 dark:border-gray-600 group-hover:border-blue-500 dark:group-hover:border-blue-400 transition-colors"
+                    onError={(e) => {
+                      e.currentTarget.src = '/default-avatar.png'
+                    }}
                   />
+                  {/* 在线状态指示器 */}
+                  <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-green-500 border-2 border-white dark:border-gray-800 rounded-full"></div>
                 </div>
+                
+                {/* 用户名和点数 */}
+                <div className="flex flex-col items-start">
+                  <span className="text-sm font-medium text-gray-900 dark:text-white leading-none">
+                    {userInfo?.username || '用户'}
+                  </span>
+                  <div className="flex items-center space-x-1 mt-1">
+                    <span className="text-xs font-medium text-blue-600 dark:text-blue-400">{userInfo?.points || 100}</span>
+                    <span className="text-xs text-gray-500 dark:text-gray-400">点</span>
+                  </div>
+                </div>
+                
+                {/* 下拉箭头 */}
+                <svg 
+                  className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${showUserMenu ? 'rotate-180' : ''}`}
+                  fill="none" 
+                  stroke="currentColor" 
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
               </div>
 
               {/* 用户菜单卡片 */}
               {showUserMenu && (
-                <div className="absolute right-0 top-full mt-2 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 z-50">
-                  <div className="p-2">
+                <div className="absolute right-0 top-full mt-3 w-56 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 z-50 animate-in fade-in-0 zoom-in-95">
+                  {/* 用户信息头部 */}
+                  <div className="p-4 border-b border-gray-100 dark:border-gray-700">
+                    <div className="flex items-center space-x-3">
+                      <img 
+                        src={userInfo?.avatar || '/default-avatar.png'} 
+                        alt={userInfo?.username || '用户'}
+                        className="w-10 h-10 rounded-full border-2 border-gray-200 dark:border-gray-600"
+                        onError={(e) => {
+                          e.currentTarget.src = '/default-avatar.png'
+                        }}
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">
+                          {userInfo?.username || '用户'}
+                        </p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                          {userInfo?.email || 'test@example.com'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* 菜单项 */}
+                  <div className="p-2 space-y-1">
                     <button 
-                      onClick={() => router.push('/user/billing')}
-                      className="w-full flex items-center space-x-3 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                      onClick={() => {
+                        setShowUserMenu(false)
+                        router.push('/user/billing')
+                      }}
+                      className="w-full flex items-center space-x-3 px-3 py-3 text-sm text-gray-700 dark:text-gray-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:text-blue-600 dark:hover:text-blue-400 rounded-lg transition-all duration-200 group"
                     >
-                      <CreditCard className="h-4 w-4" />
-                      <span>我的账单</span>
+                      <CreditCard className="h-4 w-4 text-gray-500 dark:text-gray-400 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors" />
+                      <span>账单管理</span>
                     </button>
                     <button 
-                      onClick={() => router.push('/user/invitation')}
-                      className="w-full flex items-center space-x-3 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                      onClick={() => {
+                        setShowUserMenu(false)
+                        router.push('/user/invitation')
+                      }}
+                      className="w-full flex items-center space-x-3 px-3 py-3 text-sm text-gray-700 dark:text-gray-300 hover:bg-green-50 dark:hover:bg-green-900/20 hover:text-green-600 dark:hover:text-green-400 rounded-lg transition-all duration-200 group"
                     >
-                      <Users className="h-4 w-4" />
-                      <span>我的邀请</span>
+                      <Users className="h-4 w-4 text-gray-500 dark:text-gray-400 group-hover:text-green-600 dark:group-hover:text-green-400 transition-colors" />
+                      <span>邀请好友</span>
                     </button>
-                    <div className="my-1 border-t border-gray-200 dark:border-gray-600"></div>
+                    <div className="my-1 border-t border-gray-100 dark:border-gray-700"></div>
                     <button 
                       onClick={() => {
                         setShowUserMenu(false)
                         setShowSettingsModal(true)
                       }}
-                      className="w-full flex items-center space-x-3 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                      className="w-full flex items-center space-x-3 px-3 py-3 text-sm text-gray-700 dark:text-gray-300 hover:bg-purple-50 dark:hover:bg-purple-900/20 hover:text-purple-600 dark:hover:text-purple-400 rounded-lg transition-all duration-200 group"
                     >
-                      <Settings className="h-4 w-4" />
+                      <Settings className="h-4 w-4 text-gray-500 dark:text-gray-400 group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors" />
                       <span>API密钥设置</span>
                     </button>
-                    <div className="my-1 border-t border-gray-200 dark:border-gray-600"></div>
+                    <div className="my-1 border-t border-gray-100 dark:border-gray-700"></div>
                     <button 
                       onClick={handleLogout}
-                      className="w-full flex items-center space-x-3 px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900 rounded-md transition-colors"
+                      className="w-full flex items-center space-x-3 px-3 py-3 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all duration-200 group"
                     >
                       <LogOut className="h-4 w-4" />
                       <span>退出登录</span>

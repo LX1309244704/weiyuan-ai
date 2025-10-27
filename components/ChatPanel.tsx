@@ -489,17 +489,10 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
     event.target.value = ''
   }
 
-  // 接收截图并显示在输入区域左侧 - 如果有已有截图就替换
+  // 接收截图并显示在输入区域左侧 - 支持添加多个图片
   const handleReceiveScreenshot = (imageData: string, prompt: string) => {
-    // 替换上传图片预览列表中的截图（如果有截图就替换，没有就添加）
-    setUploadedImagePreviews(prev => {
-      // 如果已经有截图，替换第一个截图；如果没有，添加新截图
-      if (prev.length > 0) {
-        return [imageData, ...prev.slice(1)]
-      } else {
-        return [imageData]
-      }
-    })
+    // 添加新的截图到上传图片预览列表
+    setUploadedImagePreviews(prev => [...prev, imageData])
     // 自动填充提示词到输入框
     setInputText(prompt)
   }

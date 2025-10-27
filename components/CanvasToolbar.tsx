@@ -1300,7 +1300,6 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
     { id: 'text' as Tool, icon: Type, label: '文字' },
     { id: 'eraser' as Tool, icon: Eraser, label: '橡皮擦' },
     { id: 'image' as Tool, icon: ImageIcon, label: '图片' },
-    { id: 'layers' as Tool, icon: Layers, label: '层级管理' },
   ]
 
   const shapes = [
@@ -2735,7 +2734,7 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
 
       {/* 层级管理面板 */}
       {showLayerPanel && (
-        <div ref={layerPanelRef} className="absolute right-16 top-12 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-3 z-10 w-64">
+        <div ref={layerPanelRef} className="fixed left-20 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-3 z-40 w-64" style={{ top: '50%', transform: 'translateY(-50%)' }}>
           <div className="flex justify-between items-center mb-3">
             <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100">层级管理</h4>
             <button 

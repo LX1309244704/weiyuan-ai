@@ -12,6 +12,7 @@ import { loadImageWithCors } from '../../utils/corsProxy'
 import TextPropertiesPanel from '../../components/TextPropertiesPanel'
 import { useUserStore } from '@/stores/userStore'
 import { ModelService } from '@/services/ai-models'
+import { ApiKeyCache } from '@/utils/apiKeyCache'
 
 // 导入JSON数据
 import canvasData from '@/data/canvas.json'

@@ -18,7 +18,6 @@ export default function SidebarMenu({ activeMenu, onMenuClick, showInvitation = 
     { id: '灵感', icon: Lightbulb, label: '灵感', path: '/user/inspiration' },
     { id: '资产', icon: Database, label: '资产', path: '/user/assets' },
     { id: '账单', icon: CreditCard, label: '账单', path: '/user/billing' },
-    { id: '我的', icon: User, label: '我的', path: '/user/profile' },
   ]
 
   if (showInvitation) {

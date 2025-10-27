@@ -77,8 +77,7 @@ export default function NavigationBar({ title, icon: Icon, activeMenu, children 
     { id: '项目', icon: Folder, label: '项目', path: '/user/projects' },
     { id: '灵感', icon: Lightbulb, label: '灵感', path: '/user/inspiration' },
     { id: '账单', icon: CreditCard, label: '账单', path: '/user/billing' },
-    { id: '邀请', icon: Users, label: '邀请', path: '/user/invitation' },
-    { id: '我的', icon: User, label: '我的', path: '/user/profile' }
+    { id: '邀请', icon: Users, label: '邀请', path: '/user/invitation' }
   ]
 
   const handleMenuClick = (path: string) => {
