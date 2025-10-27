@@ -12,6 +12,9 @@ import TextPropertiesPanel from '../../components/TextPropertiesPanel'
 import { useUserStore } from '@/stores/userStore'
 import { ModelService } from '@/services/ai-models'
 
+// 导入JSON数据
+import canvasData from '@/data/canvas.json'
+
 type SelectionData = {
   rect: any
   mousePosition: { x: number; y: number }
@@ -560,7 +563,7 @@ export default function CanvasPage() {
               })
               
               // 设置合适的缩放比例
-              const maxSize = 400
+              const maxSize = canvasData.maxImageSize
               const scale = Math.min(maxSize / img.width, maxSize / img.height, 1)
               fabricImg.scale(scale)
               
@@ -955,7 +958,7 @@ export default function CanvasPage() {
           })
           
           // 设置合适的缩放比例
-          const maxSize = 400
+          const maxSize = canvasData.maxImageSize
           const scale = Math.min(maxSize / img.width, maxSize / img.height, 1)
           fabricImg.scale(scale)
           
@@ -996,15 +999,7 @@ export default function CanvasPage() {
   
   // 根据宽高比获取对应的尺寸
   const getSizeByAspectRatio = (aspectRatio: string): string => {
-    const ratioMap: Record<string, string> = {
-      '1:1': '1024x1024',
-      '16:9': '1024x576',
-      '9:16': '576x1024',
-      '4:3': '1024x768',
-      '3:4': '768x1024'
-    }
-    
-    return ratioMap[aspectRatio] || '1024x1024'
+    return canvasData.aspectRatios[aspectRatio] || canvasData.defaultSize
   }
   
   // 将图片对象转换为Base64格式
@@ -1135,7 +1130,7 @@ export default function CanvasPage() {
           })
           
           // 设置合适的缩放比例
-          const maxSize = 400
+          const maxSize = canvasData.maxImageSize
           const scale = Math.min(maxSize / img.width, maxSize / img.height, 1)
           fabricImg.scale(scale)
           

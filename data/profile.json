@@ -1,0 +1,49 @@
+{
+  "userInfo": {
+    "username": "示例用户",
+    "email": "user@example.com",
+    "avatar": "/default-avatar.png",
+    "bio": "这是一个示例用户的个人简介",
+    "createdAt": "2024-01-01",
+    "membershipLevel": "标准用户"
+  },
+  "apiSettings": {
+    "generalApiKey": "",
+    "apiKeyVisibility": false
+  },
+  "userSettings": {
+    "notifications": true,
+    "emailUpdates": false,
+    "autoSave": true,
+    "language": "zh",
+    "theme": "light"
+  },
+  "securitySettings": {
+    "twoFactorAuth": false,
+    "loginAlerts": true,
+    "publicProfile": true,
+    "dataCollection": false
+  },
+  "tabs": [
+    {
+      "id": "profile",
+      "label": "个人资料",
+      "icon": "User"
+    },
+    {
+      "id": "api-keys",
+      "label": "API配置",
+      "icon": "Key"
+    },
+    {
+      "id": "settings",
+      "label": "偏好设置",
+      "icon": "Settings"
+    },
+    {
+      "id": "security",
+      "label": "安全",
+      "icon": "Shield"
+    }
+  ]
+}

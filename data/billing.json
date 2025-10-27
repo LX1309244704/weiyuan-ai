@@ -1,0 +1,84 @@
+{
+  "billingData": {
+    "currentBalance": 1500,
+    "usageThisMonth": 320,
+    "plan": "Pro",
+    "nextBillingDate": "2024-12-01",
+    "billingHistory": [
+      {
+        "id": 1,
+        "date": "2024-10-15",
+        "amount": 99,
+        "description": "Pro Plan Subscription",
+        "status": "Paid"
+      },
+      {
+        "id": 2,
+        "date": "2024-09-15",
+        "amount": 99,
+        "description": "Pro Plan Subscription",
+        "status": "Paid"
+      },
+      {
+        "id": 3,
+        "date": "2024-08-15",
+        "amount": 99,
+        "description": "Pro Plan Subscription",
+        "status": "Paid"
+      },
+      {
+        "id": 4,
+        "date": "2024-07-15",
+        "amount": 49,
+        "description": "Basic Plan Subscription",
+        "status": "Paid"
+      }
+    ]
+  },
+  "pricingPlans": [
+    {
+      "name": "基础版",
+      "description": "适合个人用户和小型项目",
+      "price": "¥49",
+      "period": "/月",
+      "popular": false,
+      "features": [
+        "1000 点数/月",
+        "基础AI模型",
+        "标准支持"
+      ],
+      "buttonText": "选择套餐",
+      "buttonColor": "from-gray-500 to-gray-600"
+    },
+    {
+      "name": "专业版",
+      "description": "最适合大多数用户",
+      "price": "¥99",
+      "period": "/月",
+      "popular": true,
+      "features": [
+        "5000 点数/月",
+        "高级AI模型",
+        "优先支持",
+        "团队协作"
+      ],
+      "buttonText": "当前套餐",
+      "buttonColor": "from-blue-500 to-purple-600"
+    },
+    {
+      "name": "企业版",
+      "description": "适合大型团队和企业",
+      "price": "¥199",
+      "period": "/月",
+      "popular": false,
+      "features": [
+        "无限点数",
+        "所有AI模型",
+        "专属支持",
+        "定制功能"
+      ],
+      "buttonText": "选择套餐",
+      "buttonColor": "from-purple-500 to-pink-600"
+    }
+  ]
+}

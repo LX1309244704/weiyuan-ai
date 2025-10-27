@@ -1,0 +1,134 @@
+{
+  "header": {
+    "title": "选择适合您的计划",
+    "description": "无论您是个人创作者还是企业团队，我们都有适合您的方案",
+    "billingOptions": [
+      {
+        "text": "月度",
+        "active": false
+      },
+      {
+        "text": "年度（节省20%）",
+        "active": true
+      }
+    ]
+  },
+  "pricingPlans": [
+    {
+      "name": "基础版",
+      "description": "适合个人用户和小型项目",
+      "price": "¥49",
+      "period": "/月",
+      "popular": false,
+      "features": [
+        "1000 点数/月",
+        "基础AI模型",
+        "标准支持"
+      ],
+      "buttonText": "选择套餐",
+      "buttonColor": "from-gray-500 to-gray-600"
+    },
+    {
+      "name": "专业版",
+      "description": "最适合大多数用户",
+      "price": "¥99",
+      "period": "/月",
+      "popular": true,
+      "features": [
+        "5000 点数/月",
+        "高级AI模型",
+        "优先支持",
+        "团队协作"
+      ],
+      "buttonText": "当前套餐",
+      "buttonColor": "from-blue-500 to-purple-600"
+    },
+    {
+      "name": "企业版",
+      "description": "适合大型团队和企业",
+      "price": "¥199",
+      "period": "/月",
+      "popular": false,
+      "features": [
+        "无限点数",
+        "所有AI模型",
+        "专属支持",
+        "定制功能"
+      ],
+      "buttonText": "选择套餐",
+      "buttonColor": "from-purple-500 to-pink-600"
+    }
+  ],
+  "featureComparison": [
+    {
+      "name": "点数/月",
+      "基础版": "1000",
+      "专业版": "5000",
+      "企业版": "无限"
+    },
+    {
+      "name": "AI模型",
+      "基础版": "基础",
+      "专业版": "高级",
+      "企业版": "全部"
+    },
+    {
+      "name": "客服支持",
+      "基础版": "标准",
+      "专业版": "优先",
+      "企业版": "专属"
+    },
+    {
+      "name": "团队协作",
+      "基础版": "❌",
+      "专业版": "✓",
+      "企业版": "✓"
+    },
+    {
+      "name": "定制功能",
+      "基础版": "❌",
+      "专业版": "❌",
+      "企业版": "✓"
+    }
+  ],
+  "faqs": [
+    {
+      "question": "可以随时取消订阅吗？",
+      "answer": "是的，您可以随时取消订阅，取消后服务将持续到当前计费周期结束。"
+    },
+    {
+      "question": "支持哪些支付方式？",
+      "answer": "我们支持支付宝、微信支付、信用卡等多种支付方式。"
+    },
+    {
+      "question": "升级套餐后何时生效？",
+      "answer": "升级套餐后立即生效，系统会自动按比例计算费用。"
+    },
+    {
+      "question": "是否有免费试用？",
+      "answer": "新用户注册即可获得免费试用额度，体验基础功能。"
+    },
+    {
+      "question": "数据安全如何保障？",
+      "answer": "我们采用银行级别的加密技术，确保您的数据安全。"
+    },
+    {
+      "question": "支持团队协作吗？",
+      "answer": "Pro和Enterprise版本支持团队协作功能。"
+    }
+  ],
+  "finalCTA": {
+    "title": "准备好开始了吗？",
+    "description": "立即选择适合您的套餐，开启AI创作的全新体验",
+    "buttons": [
+      {
+        "text": "立即升级到Pro",
+        "variant": "primary"
+      },
+      {
+        "text": "联系销售",
+        "variant": "secondary"
+      }
+    ]
+  }
+}

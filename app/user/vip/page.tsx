@@ -6,6 +6,9 @@ import { useAuthStore } from '@/stores/authStore'
 import NavigationBar from '@/components/NavigationBar'
 import { Crown, Check, Star, Zap, Shield, Users, Globe, Infinity, CreditCard, Sparkles } from 'lucide-react'
 
+// 导入JSON数据
+import vipData from '@/data/vip.json'
+
 export default function VIPPage() {
   const router = useRouter()
   const { isAuthenticated } = useAuthStore()
@@ -20,60 +23,7 @@ export default function VIPPage() {
     return null
   }
 
-  const pricingPlans = [
-    {
-      name: '基础版',
-      description: '适合个人用户和小型项目',
-      price: '¥49',
-      period: '/月',
-      popular: false,
-      features: [
-        '1000 点数/月',
-        '基础AI模型',
-        '标准支持'
-      ],
-      buttonText: '选择套餐',
-      buttonColor: 'from-gray-500 to-gray-600'
-    },
-    {
-      name: '专业版',
-      description: '最适合大多数用户',
-      price: '¥99',
-      period: '/月',
-      popular: true,
-      features: [
-        '5000 点数/月',
-        '高级AI模型',
-        '优先支持',
-        '团队协作'
-      ],
-      buttonText: '当前套餐',
-      buttonColor: 'from-blue-500 to-purple-600'
-    },
-    {
-      name: '企业版',
-      description: '适合大型团队和企业',
-      price: '¥199',
-      period: '/月',
-      popular: false,
-      features: [
-        '无限点数',
-        '所有AI模型',
-        '专属支持',
-        '定制功能'
-      ],
-      buttonText: '选择套餐',
-      buttonColor: 'from-purple-500 to-pink-600'
-    }
-  ]
-
-  const featureComparison = [
-    { name: '点数/月', 基础版: '1000', 专业版: '5000', 企业版: '无限' },
-    { name: 'AI模型', 基础版: '基础', 专业版: '高级', 企业版: '全部' },
-    { name: '客服支持', 基础版: '标准', 专业版: '优先', 企业版: '专属' },
-    { name: '团队协作', 基础版: '❌', 专业版: '✓', 企业版: '✓' },
-    { name: '定制功能', 基础版: '❌', 专业版: '❌', 企业版: '✓' }
-  ]
+  const { pricingPlans, featureComparison, faqs, finalCTA, header } = vipData
 
   return (
     <NavigationBar 
@@ -86,16 +36,26 @@ export default function VIPPage() {
         <div className="text-center py-16 px-4">
           <div className="max-w-4xl mx-auto">
             <h1 className="text-5xl font-bold text-gray-900 dark:text-white mb-6">
-              选择适合您的计划
+              {header.title}
             </h1>
             <p className="text-xl text-gray-600 dark:text-gray-400 mb-8">
-              无论您是个人创作者还是企业团队，我们都有适合您的方案
+              {header.description}
             </p>
             
             {/* 年度/月度切换 */}
             <div className="inline-flex items-center bg-white dark:bg-gray-800 rounded-full p-1 shadow-lg">
-              <button className="px-6 py-2 rounded-full text-gray-600 dark:text-gray-400">月度</button>
-              <button className="px-6 py-2 bg-blue-500 text-white rounded-full">年度（节省20%）</button>
+              {header.billingOptions.map((option, index) => (
+                <button 
+                  key={index}
+                  className={`px-6 py-2 rounded-full ${
+                    option.active 
+                      ? 'bg-blue-500 text-white' 
+                      : 'text-gray-600 dark:text-gray-400'
+                  }`}
+                >
+                  {option.text}
+                </button>
+              ))}
             </div>
           </div>
         </div>
@@ -217,32 +177,7 @@ export default function VIPPage() {
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            {[
-              {
-                question: '可以随时取消订阅吗？',
-                answer: '是的，您可以随时取消订阅，取消后服务将持续到当前计费周期结束。'
-              },
-              {
-                question: '支持哪些支付方式？',
-                answer: '我们支持支付宝、微信支付、信用卡等多种支付方式。'
-              },
-              {
-                question: '升级套餐后何时生效？',
-                answer: '升级套餐后立即生效，系统会自动按比例计算费用。'
-              },
-              {
-                question: '是否有免费试用？',
-                answer: '新用户注册即可获得免费试用额度，体验基础功能。'
-              },
-              {
-                question: '数据安全如何保障？',
-                answer: '我们采用银行级别的加密技术，确保您的数据安全。'
-              },
-              {
-                question: '支持团队协作吗？',
-                answer: 'Pro和Enterprise版本支持团队协作功能。'
-              }
-            ].map((faq, index) => (
+            {faqs.map((faq, index) => (
               <div key={index} className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-lg">
                 <h3 className="font-bold text-gray-900 dark:text-white mb-3 text-lg">
                   {faq.question}
@@ -259,17 +194,19 @@ export default function VIPPage() {
         <div className="max-w-4xl mx-auto px-4 pb-16">
           <div className="bg-gradient-to-r from-blue-500 to-purple-600 rounded-3xl p-12 text-center text-white shadow-2xl">
             <Sparkles className="w-16 h-16 mx-auto mb-6" />
-            <h2 className="text-3xl font-bold mb-4">准备好开始了吗？</h2>
+            <h2 className="text-3xl font-bold mb-4">{finalCTA.title}</h2>
             <p className="text-blue-100 text-xl mb-8 max-w-2xl mx-auto">
-              立即选择适合您的套餐，开启AI创作的全新体验
+              {finalCTA.description}
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <button className="bg-white text-blue-600 hover:bg-gray-100 px-8 py-4 rounded-xl font-bold text-lg transition-colors">
-                立即升级到Pro
-              </button>
-              <button className="border-2 border-white text-white hover:bg-white hover:text-blue-600 px-8 py-4 rounded-xl font-bold text-lg transition-colors">
-                联系销售
-              </button>
+              {finalCTA.buttons.map((button, index) => (
+                <button 
+                  key={index}
+                  className={`${button.variant === 'primary' ? 'bg-white text-blue-600 hover:bg-gray-100' : 'border-2 border-white text-white hover:bg-white hover:text-blue-600'} px-8 py-4 rounded-xl font-bold text-lg transition-colors`}
+                >
+                  {button.text}
+                </button>
+              ))}
             </div>
           </div>
         </div>

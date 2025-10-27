@@ -1,0 +1,111 @@
+{
+  "welcome": {
+    "title": "欢迎回来！",
+    "subtitle": "今天准备创作什么精彩内容？"
+  },
+  "quickActions": [
+    {
+      "title": "开始创作",
+      "description": "创建新的画板项目",
+      "icon": "Plus",
+      "color": "from-blue-500 to-cyan-500",
+      "route": "/canvas"
+    },
+    {
+      "title": "我的项目",
+      "description": "查看和管理项目",
+      "icon": "TrendingUp",
+      "color": "from-green-500 to-teal-500",
+      "route": "/user/projects"
+    },
+    {
+      "title": "灵感库",
+      "description": "探索创意灵感",
+      "icon": "Star",
+      "color": "from-purple-500 to-pink-500",
+      "route": "/user/inspiration"
+    },
+    {
+      "title": "邀请好友",
+      "description": "邀请好友获得奖励",
+      "icon": "Users",
+      "color": "from-orange-500 to-red-500",
+      "route": "/user/invitation"
+    }
+  ],
+  "recentActivities": [
+    {
+      "icon": "🎨",
+      "title": "创建了新项目",
+      "time": "刚刚",
+      "type": "画板项目"
+    },
+    {
+      "icon": "💾",
+      "title": "保存了项目",
+      "time": "2小时前",
+      "type": "我的设计"
+    },
+    {
+      "icon": "📊",
+      "title": "导出了数据",
+      "time": "昨天",
+      "type": "数据可视化"
+    },
+    {
+      "icon": "👥",
+      "title": "分享了项目",
+      "time": "2天前",
+      "type": "团队协作"
+    }
+  ],
+  "statistics": [
+    {
+      "label": "项目总数",
+      "value": "12",
+      "change": "+2",
+      "color": "blue"
+    },
+    {
+      "label": "本周创作",
+      "value": "3",
+      "change": "+1",
+      "color": "green"
+    },
+    {
+      "label": "灵感收藏",
+      "value": "28",
+      "change": "+5",
+      "color": "purple"
+    },
+    {
+      "label": "团队协作",
+      "value": "4",
+      "change": "+0",
+      "color": "orange"
+    }
+  ],
+  "templates": [
+    {
+      "title": "自由画板",
+      "description": "自由创作和设计画板",
+      "icon": "🎨",
+      "color": "from-blue-500 to-cyan-500",
+      "route": "/canvas"
+    },
+    {
+      "title": "视频创作",
+      "description": "AI视频生成和编辑",
+      "icon": "🎬",
+      "color": "from-green-500 to-teal-500",
+      "route": "/video"
+    },
+    {
+      "title": "广告创作",
+      "description": "营销广告设计制作",
+      "icon": "📢",
+      "color": "from-purple-500 to-pink-500",
+      "route": "/ad"
+    }
+  ]
+}

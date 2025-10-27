@@ -7,6 +7,9 @@ import { useUserStore } from '@/stores/userStore'
 import NavigationBar from '@/components/NavigationBar'
 import { CreditCard, DollarSign, TrendingUp, Calendar, Download, Receipt } from 'lucide-react'
 
+// 导入JSON数据
+import billingData from '@/data/billing.json'
+
 export default function BillingPage() {
   const router = useRouter()
   const { isAuthenticated } = useAuthStore()
@@ -23,19 +26,8 @@ export default function BillingPage() {
     return null
   }
 
-  // 模拟账单数据
-  const billingData = {
-    currentBalance: 1500,
-    usageThisMonth: 320,
-    plan: 'Pro',
-    nextBillingDate: '2024-12-01',
-    billingHistory: [
-      { id: 1, date: '2024-10-15', amount: 99, description: 'Pro Plan Subscription', status: 'Paid' },
-      { id: 2, date: '2024-09-15', amount: 99, description: 'Pro Plan Subscription', status: 'Paid' },
-      { id: 3, date: '2024-08-15', amount: 99, description: 'Pro Plan Subscription', status: 'Paid' },
-      { id: 4, date: '2024-07-15', amount: 49, description: 'Basic Plan Subscription', status: 'Paid' }
-    ]
-  }
+  // 使用JSON数据
+  const { billingData: data, pricingPlans } = billingData
 
   return (
     <NavigationBar 
@@ -51,7 +43,7 @@ export default function BillingPage() {
               <div>
                 <p className="text-sm font-medium text-gray-600 dark:text-gray-400">当前余额</p>
                 <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                  ¥{billingData.currentBalance.toLocaleString()}
+                  ¥{data.currentBalance.toLocaleString()}
                 </p>
               </div>
               <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-full">
@@ -68,27 +60,27 @@ export default function BillingPage() {
               <div>
                 <p className="text-sm font-medium text-gray-600 dark:text-gray-400">本月使用</p>
                 <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {billingData.usageThisMonth} 点数
+                  {data.usageThisMonth} 点数
                 </p>
               </div>
               <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-full">
                 <TrendingUp className="w-6 h-6 text-green-600 dark:text-green-400" />
               </div>
             </div>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">剩余点数: {billingData.currentBalance - billingData.usageThisMonth}</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">剩余点数: {data.currentBalance - data.usageThisMonth}</p>
           </div>
 
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600 dark:text-gray-400">当前套餐</p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">{billingData.plan}</p>
+                <p className="text-2xl font-bold text-gray-900 dark:text-white">{data.plan}</p>
               </div>
               <div className="p-3 bg-purple-50 dark:bg-purple-900/20 rounded-full">
                 <Calendar className="w-6 h-6 text-purple-600 dark:text-purple-400" />
               </div>
             </div>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">下次扣费: {billingData.nextBillingDate}</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">下次扣费: {data.nextBillingDate}</p>
           </div>
         </div>
 
@@ -96,49 +88,31 @@ export default function BillingPage() {
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">选择套餐</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-              <h4 className="font-semibold text-gray-900 dark:text-white">基础版</h4>
-              <p className="text-2xl font-bold text-gray-900 dark:text-white mt-2">¥49<span className="text-sm font-normal text-gray-600 dark:text-gray-400">/月</span></p>
-              <ul className="mt-4 space-y-2 text-sm text-gray-600 dark:text-gray-400">
-                <li>• 1000 点数/月</li>
-                <li>• 基础AI模型</li>
-                <li>• 标准支持</li>
-              </ul>
-              <button className="w-full mt-4 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-900 dark:text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
-                选择套餐
-              </button>
-            </div>
-
-            <div className="border-2 border-blue-500 dark:border-blue-400 rounded-lg p-4 bg-blue-50 dark:bg-blue-900/20">
-              <div className="flex items-center justify-between">
-                <h4 className="font-semibold text-gray-900 dark:text-white">专业版</h4>
-                <span className="bg-blue-500 text-white text-xs px-2 py-1 rounded-full">推荐</span>
+            {pricingPlans.map((plan, index) => (
+              <div 
+                key={index}
+                className={`border ${plan.popular ? 'border-2 border-blue-500 dark:border-blue-400 bg-blue-50 dark:bg-blue-900/20' : 'border-gray-200 dark:border-gray-700'} rounded-lg p-4`}
+              >
+                {plan.popular && (
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="font-semibold text-gray-900 dark:text-white">{plan.name}</h4>
+                    <span className="bg-blue-500 text-white text-xs px-2 py-1 rounded-full">推荐</span>
+                  </div>
+                )}
+                {!plan.popular && (
+                  <h4 className="font-semibold text-gray-900 dark:text-white mb-2">{plan.name}</h4>
+                )}
+                <p className="text-2xl font-bold text-gray-900 dark:text-white mt-2">{plan.price}<span className="text-sm font-normal text-gray-600 dark:text-gray-400">{plan.period}</span></p>
+                <ul className="mt-4 space-y-2 text-sm text-gray-600 dark:text-gray-400">
+                  {plan.features.map((feature, idx) => (
+                    <li key={idx}>• {feature}</li>
+                  ))}
+                </ul>
+                <button className={`w-full mt-4 ${plan.popular ? 'bg-blue-600 hover:bg-blue-700 text-white' : 'bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-900 dark:text-white'} px-4 py-2 rounded-lg text-sm font-medium transition-colors`}>
+                  {plan.buttonText}
+                </button>
               </div>
-              <p className="text-2xl font-bold text-gray-900 dark:text-white mt-2">¥99<span className="text-sm font-normal text-gray-600 dark:text-gray-400">/月</span></p>
-              <ul className="mt-4 space-y-2 text-sm text-gray-600 dark:text-gray-400">
-                <li>• 5000 点数/月</li>
-                <li>• 高级AI模型</li>
-                <li>• 优先支持</li>
-                <li>• 团队协作</li>
-              </ul>
-              <button className="w-full mt-4 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
-                当前套餐
-              </button>
-            </div>
-
-            <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-              <h4 className="font-semibold text-gray-900 dark:text-white">企业版</h4>
-              <p className="text-2xl font-bold text-gray-900 dark:text-white mt-2">¥199<span className="text-sm font-normal text-gray-600 dark:text-gray-400">/月</span></p>
-              <ul className="mt-4 space-y-2 text-sm text-gray-600 dark:text-gray-400">
-                <li>• 无限点数</li>
-                <li>• 所有AI模型</li>
-                <li>• 专属支持</li>
-                <li>• 定制功能</li>
-              </ul>
-              <button className="w-full mt-4 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-900 dark:text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
-                选择套餐
-              </button>
-            </div>
+            ))}
           </div>
         </div>
 
@@ -163,7 +137,7 @@ export default function BillingPage() {
                 </tr>
               </thead>
               <tbody>
-                {billingData.billingHistory.map((item) => (
+                {data.billingHistory.map((item) => (
                   <tr key={item.id} className="border-b border-gray-100 dark:border-gray-800">
                     <td className="py-3 px-4 text-sm text-gray-600 dark:text-gray-400">{item.date}</td>
                     <td className="py-3 px-4 text-sm text-gray-900 dark:text-white">{item.description}</td>

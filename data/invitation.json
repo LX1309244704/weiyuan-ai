@@ -1,0 +1,102 @@
+{
+  "invitationData": {
+    "inviteCode": "WEIYUAN2024",
+    "inviteLink": "https://weiyuan.ai/invite/WEIYUAN2024",
+    "invitedCount": 8,
+    "rewardsEarned": 400,
+    "pendingRewards": 200,
+    "invitationHistory": [
+      {
+        "id": 1,
+        "email": "user1@example.com",
+        "date": "2024-10-15",
+        "status": "已注册",
+        "reward": 50
+      },
+      {
+        "id": 2,
+        "email": "user2@example.com",
+        "date": "2024-10-12",
+        "status": "已注册",
+        "reward": 50
+      },
+      {
+        "id": 3,
+        "email": "user3@example.com",
+        "date": "2024-10-10",
+        "status": "已注册",
+        "reward": 50
+      },
+      {
+        "id": 4,
+        "email": "user4@example.com",
+        "date": "2024-10-08",
+        "status": "已注册",
+        "reward": 50
+      },
+      {
+        "id": 5,
+        "email": "user5@example.com",
+        "date": "2024-10-05",
+        "status": "已注册",
+        "reward": 50
+      },
+      {
+        "id": 6,
+        "email": "user6@example.com",
+        "date": "2024-10-03",
+        "status": "已注册",
+        "reward": 50
+      },
+      {
+        "id": 7,
+        "email": "user7@example.com",
+        "date": "2024-10-01",
+        "status": "已注册",
+        "reward": 50
+      },
+      {
+        "id": 8,
+        "email": "user8@example.com",
+        "date": "2024-09-28",
+        "status": "已注册",
+        "reward": 50
+      },
+      {
+        "id": 9,
+        "email": "user9@example.com",
+        "date": "2024-09-25",
+        "status": "待注册",
+        "reward": 0
+      },
+      {
+        "id": 10,
+        "email": "user10@example.com",
+        "date": "2024-09-22",
+        "status": "待注册",
+        "reward": 0
+      }
+    ]
+  },
+  "rewardRules": [
+    {
+      "step": 1,
+      "title": "邀请好友注册",
+      "description": "好友通过您的邀请链接完成注册",
+      "icon": "1"
+    },
+    {
+      "step": 2,
+      "title": "好友完成首次创作",
+      "description": "好友在平台上完成第一次创作",
+      "icon": "2"
+    },
+    {
+      "step": 3,
+      "title": "获得奖励",
+      "description": "您和好友各获得50点数奖励",
+      "icon": "3"
+    }
+  ],
+  "tip": "💡 提示：每成功邀请一位好友，您和好友都将获得50点数奖励，上不封顶！"
+}
