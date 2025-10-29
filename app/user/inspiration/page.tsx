@@ -63,17 +63,32 @@ export default function UserInspirationPage() {
 
         {/* 灵感统计 */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          {inspirationData.stats.map((stat, index) => (
-            <div key={index} className="bg-white dark:bg-gray-800 rounded-2xl p-6 border border-gray-100 dark:border-gray-700">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-2xl font-bold text-gray-900 dark:text-white">{stat.value}</div>
-                  <div className="text-sm text-gray-600 dark:text-gray-400">{stat.label}</div>
+          {inspirationData.stats.map((stat, index) => {
+            // 为每个统计项设置不同的颜色
+            const getColorConfig = (index: number) => {
+              switch(index) {
+                case 0: return 'from-blue-500 to-cyan-500'
+                case 1: return 'from-green-500 to-teal-500'
+                case 2: return 'from-purple-500 to-pink-500'
+                case 3: return 'from-orange-500 to-red-500'
+                default: return 'from-blue-500 to-cyan-500'
+              }
+            }
+            
+            const colorConfig = getColorConfig(index)
+            
+            return (
+              <div key={index} className={`bg-gradient-to-r ${colorConfig} text-white rounded-2xl p-6 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105`}>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-2xl font-bold">{stat.value}</div>
+                    <div className="text-sm opacity-90">{stat.label}</div>
+                  </div>
+                  <div className="text-3xl opacity-90">{stat.icon}</div>
                 </div>
-                <div className="text-3xl">{stat.icon}</div>
               </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
 
         {/* 热门标签 */}
@@ -153,7 +168,7 @@ export default function UserInspirationPage() {
         {/* 空状态 */}
         {inspirations.length === 0 && (
           <div className="text-center py-16">
-            <div className="w-24 h-24 bg-gradient-to-r from-purple-100 to-pink-100 dark:from-purple-900/20 dark:to-pink-900/20 rounded-3xl flex items-center justify-center text-4xl mx-auto mb-6">
+            <div className="w-24 h-24 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-3xl flex items-center justify-center text-4xl mx-auto mb-6 shadow-lg">
               {inspirationData.emptyState.icon}
             </div>
             <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">{inspirationData.emptyState.title}</h3>

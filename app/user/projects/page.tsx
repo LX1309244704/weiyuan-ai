@@ -72,17 +72,31 @@ export default function UserProjectsPage() {
 
         {/* 项目统计 */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {projectsData.stats.map((stat, index) => (
-            <div key={index} className="bg-gradient-to-br bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm rounded-2xl p-6 border border-gray-200/50 dark:border-gray-700/50 shadow-sm hover:shadow-md transition-all duration-300">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-2xl font-bold text-gray-900 dark:text-white">{stat.value}</div>
-                  <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">{stat.label}</div>
+          {projectsData.stats.map((stat, index) => {
+            // 为每个统计项设置不同的颜色
+            const getColorConfig = (index: number) => {
+              switch(index) {
+                case 0: return 'from-blue-500 to-cyan-500'
+                case 1: return 'from-green-500 to-teal-500'
+                case 2: return 'from-purple-500 to-pink-500'
+                default: return 'from-blue-500 to-cyan-500'
+              }
+            }
+            
+            const colorConfig = getColorConfig(index)
+            
+            return (
+              <div key={index} className={`bg-gradient-to-r ${colorConfig} text-white rounded-2xl p-6 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105`}>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-2xl font-bold">{stat.value}</div>
+                    <div className="text-sm opacity-90 mt-1">{stat.label}</div>
+                  </div>
+                  <div className="text-3xl opacity-90">{stat.icon}</div>
                 </div>
-                <div className="text-3xl opacity-80">{stat.icon}</div>
               </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
 
         {/* 项目网格 */}
@@ -92,7 +106,7 @@ export default function UserProjectsPage() {
               {/* 项目头部 */}
               <div className="flex items-start mb-4">
                 <div className="flex items-start space-x-3">
-                  <div className="text-3xl p-2 bg-gradient-to-br from-blue-100 to-cyan-100 dark:from-blue-900/30 dark:to-cyan-900/30 rounded-xl">
+                  <div className="text-3xl p-2 bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-xl shadow-lg">
                     {project.icon}
                   </div>
                   <div className="flex-1 min-w-0">
@@ -151,7 +165,7 @@ export default function UserProjectsPage() {
         {/* 空状态 */}
         {projects.length === 0 && (
           <div className="text-center py-16">
-            <div className="w-24 h-24 bg-gradient-to-r from-blue-100 to-cyan-100 dark:from-blue-900/20 dark:to-cyan-900/20 rounded-3xl flex items-center justify-center text-4xl mx-auto mb-6">
+            <div className="w-24 h-24 bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-3xl flex items-center justify-center text-4xl mx-auto mb-6 shadow-lg">
               {projectsData.emptyState.icon}
             </div>
             <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">{projectsData.emptyState.title}</h3>
