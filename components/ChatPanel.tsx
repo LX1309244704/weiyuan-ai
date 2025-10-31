@@ -474,15 +474,9 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
     if (!files || files.length === 0) return
 
     const validFiles = Array.from(files).filter(file => {
-      // 检查文件类型
+      // 仅检查文件类型，不限制大小，确保图片以原始质量上传
       if (!file.type.startsWith('image/')) {
         alert(`文件 ${file.name} 不是图片文件，已跳过`)
-        return false
-      }
-
-      // 检查文件大小（限制为5MB）
-      if (file.size > 5 * 1024 * 1024) {
-        alert(`图片 ${file.name} 大小超过5MB，已跳过`)
         return false
       }
 
@@ -491,7 +485,7 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
 
     if (validFiles.length === 0) return
 
-    // 读取所有有效文件
+    // 读取所有有效文件，使用原始质量
     validFiles.forEach(file => {
       const reader = new FileReader()
       reader.onload = (e) => {
@@ -499,7 +493,7 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
         // 将上传的图片添加到预览列表
         setUploadedImagePreviews(prev => [...prev, imageData])
       }
-      reader.readAsDataURL(file)
+      reader.readAsDataURL(file) // 以原始质量读取为DataURL
     })
     
     // 重置文件输入，允许重复上传同一文件
@@ -1428,7 +1422,15 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
         <div className="flex space-x-2">
           <textarea
             value={inputText}
-            onChange={(e) => setInputText(e.target.value)}
+            onChange={(e) => {
+              setInputText(e.target.value)
+              // 自动调整高度，最多显示5行
+              const textarea = e.target as HTMLTextAreaElement
+              textarea.style.height = 'auto'
+              const lineHeight = parseInt(getComputedStyle(textarea).lineHeight) || 20
+              const maxHeight = lineHeight * 5
+              textarea.style.height = Math.min(textarea.scrollHeight, maxHeight) + 'px'
+            }}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault()
@@ -1436,8 +1438,9 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
               }
             }}
             placeholder="输入提示词或描述..."
-            className="flex-1 input-field text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-400 min-h-[38px] resize-none"
+            className="flex-1 input-field text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-400 min-h-[60px] max-h-[120px] resize-none"
             rows={1}
+            style={{ overflow: 'hidden' }}
           />
           <button
             onClick={handleSendMessage}

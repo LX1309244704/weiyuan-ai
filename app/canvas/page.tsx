@@ -235,6 +235,35 @@ export default function CanvasPage() {
     }
   }, [fabricCanvas])
 
+  // URL转Base64辅助函数
+  const urlToBase64 = async (url: string): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image()
+      img.crossOrigin = 'anonymous'
+      
+      img.onload = () => {
+        const canvas = document.createElement('canvas')
+        const ctx = canvas.getContext('2d')
+        canvas.width = img.width
+        canvas.height = img.height
+        
+        if (ctx) {
+          ctx.drawImage(img, 0, 0)
+          const dataURL = canvas.toDataURL('image/png')
+          resolve(dataURL)
+        } else {
+          reject(new Error('无法获取Canvas上下文'))
+        }
+      }
+      
+      img.onerror = () => {
+        reject(new Error('图片加载失败'))
+      }
+      
+      img.src = url
+    })
+  }
+
   // 从所选区域截图到 base64（高质量）
   const handleCaptureArea = async (): Promise<string | null> => {
     if (!fabricCanvas || !selectedArea) return null
@@ -303,34 +332,7 @@ export default function CanvasPage() {
         throw new Error('画布未初始化')
       }
       
-      // URL转Base64辅助函数
-      const urlToBase64 = async (url: string): Promise<string> => {
-        return new Promise((resolve, reject) => {
-          const img = new Image()
-          img.crossOrigin = 'anonymous'
-          
-          img.onload = () => {
-            const canvas = document.createElement('canvas')
-            const ctx = canvas.getContext('2d')
-            canvas.width = img.width
-            canvas.height = img.height
-            
-            if (ctx) {
-              ctx.drawImage(img, 0, 0)
-              const dataURL = canvas.toDataURL('image/png')
-              resolve(dataURL)
-            } else {
-              reject(new Error('无法获取Canvas上下文'))
-            }
-          }
-          
-          img.onerror = () => {
-            reject(new Error('图片加载失败'))
-          }
-          
-          img.src = url
-        })
-      }
+      // urlToBase64函数已定义在文件顶层
       
       // 定义内部函数，避免依赖问题
       const getApiKeyForModel = (model: string): string => {
@@ -863,7 +865,44 @@ export default function CanvasPage() {
           const pointer = fabricCanvas.getPointer(options.e)
           
           const img = new Image()
-          img.crossOrigin = 'anonymous'
+          // 尝试直接加载图片
+          const loadImage = async () => {
+            try {
+              // 首先尝试直接设置图片源
+              img.crossOrigin = 'anonymous'
+              img.src = imageData
+            } catch (error) {
+              // 直接加载失败，尝试通过代理
+              await loadImageWithProxy()
+            }
+          }
+          
+          // 通过本地代理API加载图片
+          const loadImageWithProxy = async () => {
+            try {
+              const response = await fetch('/api/proxy-image', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ imageUrl: imageData })
+              })
+              
+              if (!response.ok) {
+                throw new Error('代理请求失败')
+              }
+              
+              const data = await response.json()
+               if (data.imageData) {
+                 img.src = data.imageData
+               } else {
+                 // 如果代理也失败，至少记录错误
+                 console.error('代理返回的数据无效:', data)
+               }
+            } catch (error) {
+              console.error('通过代理加载图片失败:', error)
+            }
+          }
           
           img.onload = () => {
             try {
@@ -885,7 +924,7 @@ export default function CanvasPage() {
                 rotatingPointOffset: 40
               })
               
-              // 设置合适的缩放比例
+              // 设置缩放比例，添加400px尺寸限制但保持图片质量
               const maxSize = 400
               const scale = Math.min(maxSize / img.width, maxSize / img.height, 1)
               fabricImg.scale(scale)
@@ -896,15 +935,17 @@ export default function CanvasPage() {
               fabricCanvas.renderAll()
               
             } catch (error) {
-              // 添加图片到画板失败
+              console.error('添加图片到画板失败:', error)
             }
           }
           
-          img.onerror = (error) => {
-            // 图片加载失败
+          img.onerror = async (error) => {
+            console.error('图片直接加载失败，尝试通过代理:', error)
+            await loadImageWithProxy()
           }
           
-          img.src = imageData
+          // 开始加载图片
+          loadImage()
         }
         
         // 如果没有更多待处理图片，清除全局变量
@@ -1824,11 +1865,8 @@ export default function CanvasPage() {
   // 处理图片添加到聊天
   const handleAddImageToChat = async (imageObject: any) => {
     try {
-      // 将图片对象转换为DataURL
-      const imageData = imageObject.toDataURL({
-        format: 'png',
-        quality: 0.8
-      })
+      // 将图片对象转换为DataURL，使用原图质量
+      const imageData = imageObject.toDataURL()
       
       // 发送到聊天面板
       chatPanelRef.current?.handleReceiveScreenshot(imageData, '上传的图片')
@@ -2110,10 +2148,10 @@ export default function CanvasPage() {
   const convertImageToBase64 = async (imageObject: any): Promise<string | null> => {
     return new Promise((resolve) => {
       try {
-        // 使用Fabric.js的toDataURL方法将图片转换为Base64
-        const dataURL = imageObject.toDataURL({
-          format: 'png',
-          quality: 0.8
+        // 使用Fabric.js的toDataURL方法将图片转换为Base64，保持最高质量
+            const dataURL = imageObject.toDataURL({
+              format: 'png',
+              quality: 1.0
         })
         
         // 提取Base64数据部分（去掉data:image/png;base64,前缀）

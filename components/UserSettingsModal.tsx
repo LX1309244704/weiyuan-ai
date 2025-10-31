@@ -83,7 +83,7 @@ export default function UserSettingsModal({ isOpen, onClose }: UserSettingsModal
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-9999">
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md mx-4">
         {/* 头部 */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
@@ -103,8 +103,8 @@ export default function UserSettingsModal({ isOpen, onClose }: UserSettingsModal
 
         {/* 内容 */}
         <div className="p-6 space-y-4">
-          {/* API基础地址 */}
-          <div>
+          {/* API基础地址 (隐藏但保留默认值) */}
+          <div className="hidden">
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               API基础地址
             </label>

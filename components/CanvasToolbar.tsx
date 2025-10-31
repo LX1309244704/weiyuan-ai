@@ -38,7 +38,8 @@ import {
   Redo,
   History,
   Clock,
-  Trash2
+  Trash2,
+  UserRound
 } from 'lucide-react'
 
 import { useUserStore } from '../stores/userStore'
@@ -54,7 +55,7 @@ interface CanvasToolbarProps {
   selectedArea: any
 }
 
-type Tool = 'pencil' | 'shapes' | 'text' | 'eraser' | 'image' | 'hand' | 'arrow' | 'layers' | 'history'
+type Tool = 'pencil' | 'shapes' | 'text' | 'eraser' | 'image' | 'hand' | 'arrow' | 'layers' | 'history' | 'stickfigure'
 type ShapeType = 'rectangle' | 'circle' | 'triangle' | 'star' | 'heart' | 'diamond' | 'octagon' | 'arrow' | 'line' | 'dashed-line' | 'left-brace' | 'right-brace'
 
 export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: CanvasToolbarProps) {
@@ -734,10 +735,10 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
     if (!canvas) return
     
     try {
-      // 生成画布预览图
-      const previewDataURL = canvas.toDataURL({
+      // 生成画布预览图，保持最高质量
+      const previewDataURL = canvas.toDataURL({  
         format: 'png',
-        quality: 0.3,
+        quality: 1.0,
         width: 200,
         height: 150
       })
@@ -1339,6 +1340,7 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
     { id: 'text' as Tool, icon: Type, label: '文字' },
     { id: 'eraser' as Tool, icon: Eraser, label: '橡皮擦' },
     { id: 'image' as Tool, icon: ImageIcon, label: '图片' },
+    { id: 'stickfigure' as Tool, icon: UserRound, label: '火柴人' },
     { id: 'layers' as Tool, icon: Layers, label: '层级管理' },
   ]
 
@@ -1356,6 +1358,322 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
     { id: 'left-brace' as ShapeType, icon: Braces, label: '左大括号' },
     { id: 'right-brace' as ShapeType, icon: Braces, label: '右大括号' },
   ]
+
+
+  
+  const handleAddStickFigure = () => {
+    if (!canvas || !(window as any).fabric) return;
+    
+    const fabric = (window as any).fabric;
+    
+    // 保存当前状态到历史记录
+    saveCanvasState();
+    
+    // 创建关节圆形函数 - 使用中心点定位
+    const makeCircle = (centerX: number, centerY: number) => {
+      const radius = 12;
+      const c = new fabric.Circle({
+        left: centerX - radius,  // 计算左上角坐标
+        top: centerY - radius,   // 计算左上角坐标
+        strokeWidth: 5,
+        radius: radius,
+        fill: '#fff',
+        stroke: '#666',
+        selectable: true,
+        hasControls: false,
+        hasBorders: false,
+        // 关键：确保关节在移动时不会与线条失去关联
+        lockMovementX: false,
+        lockMovementY: false
+      });
+      
+      // 存储与此关节连接的线条和中心点坐标
+      c.connectedLines = [];
+      c.centerX = centerX;
+      c.centerY = centerY;
+      
+      // 添加标志以标识这是火柴人关节，点击时不显示任何面板
+      c.isStickFigureJoint = true;
+      
+      return c;
+    };
+
+    // 创建线条函数
+    const makeLine = (x1: number, y1: number, x2: number, y2: number, startJoint: any, endJoint: any) => {
+      const line = new fabric.Line([x1, y1, x2, y2], {
+        fill: 'red',
+        stroke: 'red',
+        strokeWidth: 5,
+        selectable: false,
+        evented: false,
+        // 存储线条的两个端点关节引用
+        startJoint: startJoint,
+        endJoint: endJoint
+      });
+      
+      return line;
+    };
+
+    // 连接两个关节的函数 - 使用关节的中心点连接
+    const connectJoints = (joint1: any, joint2: any) => {
+      const line = makeLine(joint1.centerX, joint1.centerY, joint2.centerX, joint2.centerY, joint1, joint2);
+      
+      // 将线条添加到两个关节的连接线条数组中
+      joint1.connectedLines.push({ line, isEnd: false }); // joint1是线条的起点
+      joint2.connectedLines.push({ line, isEnd: true });  // joint2是线条的终点
+      
+      // 同时在线条上保存关节引用，便于反向查找
+      line.startJoint = joint1;
+      line.endJoint = joint2;
+      
+      return line;
+    };
+
+    // 创建火柴人的各个部分
+    const centerX = canvas.width! / 2;
+    const centerY = canvas.height! / 2;
+    
+    // 首先创建所有关节控制点 - 增加手部和脚部关节
+    const headJoint = makeCircle(centerX, centerY - 75);      // 头部关节
+    const bodyJoint = makeCircle(centerX, centerY - 25);      // 身体中央关节
+    const hipsJoint = makeCircle(centerX, centerY + 25);      // 臀部关节
+    
+    // 手臂相关关节
+    const leftArmJoint = makeCircle(centerX - 75, centerY + 25);    // 左臂肩膀关节
+    const leftHandJoint = makeCircle(centerX - 120, centerY + 25);  // 左手关节
+    const rightArmJoint = makeCircle(centerX + 75, centerY + 25);   // 右臂肩膀关节
+    const rightHandJoint = makeCircle(centerX + 120, centerY + 25); // 右手关节
+    
+    // 腿部相关关节
+    const leftLegJoint = makeCircle(centerX - 50, centerY + 100);   // 左腿膝盖关节
+    const leftFootJoint = makeCircle(centerX - 50, centerY + 150);  // 左脚关节
+    const rightLegJoint = makeCircle(centerX + 50, centerY + 100);  // 右腿膝盖关节
+    const rightFootJoint = makeCircle(centerX + 50, centerY + 150); // 右脚关节
+
+    // 然后创建连接关节的线条 - 增加手部和脚部连接
+    const headToBody = connectJoints(headJoint, bodyJoint);
+    const bodyToHips = connectJoints(bodyJoint, hipsJoint);
+    
+    // 手臂连接
+    const bodyToLeftArm = connectJoints(bodyJoint, leftArmJoint);
+    const leftArmToHand = connectJoints(leftArmJoint, leftHandJoint);
+    const bodyToRightArm = connectJoints(bodyJoint, rightArmJoint);
+    const rightArmToHand = connectJoints(rightArmJoint, rightHandJoint);
+    
+    // 腿部连接
+    const hipsToLeftLeg = connectJoints(hipsJoint, leftLegJoint);
+    const leftLegToFoot = connectJoints(leftLegJoint, leftFootJoint);
+    const hipsToRightLeg = connectJoints(hipsJoint, rightLegJoint);
+    const rightLegToFoot = connectJoints(rightLegJoint, rightFootJoint);
+
+    // 先添加线条，再添加关节，这样关节会在上面，更容易选择
+    canvas.add(
+      headToBody, 
+      bodyToHips,
+      // 手臂线条
+      bodyToLeftArm, 
+      leftArmToHand,
+      bodyToRightArm,
+      rightArmToHand,
+      // 腿部线条
+      hipsToLeftLeg,
+      leftLegToFoot,
+      hipsToRightLeg,
+      rightLegToFoot
+    );
+    canvas.add(
+      headJoint, 
+      bodyJoint, 
+      hipsJoint,
+      // 手臂关节
+      leftArmJoint, 
+      leftHandJoint,
+      rightArmJoint,
+      rightHandJoint,
+      // 腿部关节
+      leftLegJoint,
+      leftFootJoint,
+      rightLegJoint,
+      rightFootJoint
+    );
+
+    // 使用Fabric.js内置方法获取关节在画布上的实际渲染位置
+    const getJointRenderPosition = (joint: any) => {
+      if (!joint) return { x: 0, y: 0 };
+      
+      try {
+        // 获取关节的边界矩形，这包含了变换后的实际渲染位置
+        const bounds = joint.getBoundingRect();
+        
+        // 计算中心点坐标
+        const centerX = bounds.left + bounds.width / 2;
+        const centerY = bounds.top + bounds.height / 2;
+        
+        return { centerX, centerY };
+      } catch (err) {
+        console.warn('Error calculating joint position:', err);
+        // 回退方案 - 使用简化计算
+        const radius = joint.radius || 12;
+        let x = joint.left || 0;
+        let y = joint.top || 0;
+        
+        // 基础计算
+        x += radius;
+        y += radius;
+        
+        return { centerX: x, centerY: y };
+      }
+    };
+    
+    // 更新单个线条的位置
+    const updateLinePosition = (line: any) => {
+      if (!line || !line.startJoint || !line.endJoint) return;
+      
+      try {
+        // 获取两个关节的实际渲染位置
+        const startPos = getJointRenderPosition(line.startJoint);
+        const endPos = getJointRenderPosition(line.endJoint);
+        
+        // 更新线条位置
+        line.set({
+          'x1': startPos.centerX,
+          'y1': startPos.centerY,
+          'x2': endPos.centerX,
+          'y2': endPos.centerY
+        });
+        line.setCoords();
+      } catch (err) {
+        console.warn('Error updating line position:', err);
+      }
+    };
+    
+    // 更新所有线条 - 直接从线条关联的关节获取位置
+    const updateAllLines = () => {
+      // 获取画布上所有对象
+      const allObjects = canvas.getObjects();
+      
+      // 找出所有线条对象
+      const lines = allObjects.filter((obj: any) => 
+        obj && obj.type === 'line' && obj.startJoint && obj.endJoint
+      );
+      
+      // 更新每条线条的端点坐标
+      lines.forEach(updateLinePosition);
+      
+      // 渲染画布
+      canvas.renderAll();
+    };
+    
+    // 优化的实时更新函数
+    let isUpdating = false;
+    const throttledUpdate = () => {
+      if (isUpdating) return;
+      
+      isUpdating = true;
+      requestAnimationFrame(() => {
+        updateAllLines();
+        isUpdating = false;
+      });
+    };
+    
+    // 处理选择组的变换事件 - 使用requestAnimationFrame实现平滑更新
+    const handleSelectionTransform = () => {
+      throttledUpdate();
+    };
+
+    // 处理单个对象移动事件
+    const handleObjectMoving = (e: any) => {
+      throttledUpdate();
+    };
+
+    // 处理对象移动结束事件
+    const handleObjectMoved = (e: any) => {
+      throttledUpdate();
+    };
+
+    // 处理选择区域创建事件 - 当框选完成后立即更新
+    const handleSelectionCreated = () => {
+      throttledUpdate();
+    };
+
+    // 处理选择区域更新事件 - 用于框选多个关节同时移动的情况
+    const handleSelectionUpdated = () => {
+      throttledUpdate();
+    };
+
+    // 处理对象修改完成事件 - 确保移动结束后线条正确更新
+    const handleObjectModified = (e: any) => {
+      throttledUpdate();
+    };
+
+    // 处理鼠标抬起事件 - 确保拖动结束后线条正确更新
+    const handleMouseUp = () => {
+      throttledUpdate();
+    };
+
+    // 处理选择:cleared事件 - 当取消选择时也更新一下，确保线条位置正确
+    const handleSelectionCleared = () => {
+      // 当选择被清除时，直接更新所有线条
+      throttledUpdate();
+    };
+
+    // 处理对象删除事件 - 确保删除关节时同时删除相关线条
+    const handleObjectRemoved = (e: any) => {
+      const removedObject = e.target;
+      
+      // 检查被删除的对象是否是火柴人关节
+      if (removedObject && removedObject.isStickFigureJoint && removedObject.connectedLines) {
+        // 收集所有需要删除的线条
+        const linesToRemove: any[] = [];
+        
+        // 从关节的连接信息中获取线条
+        removedObject.connectedLines.forEach((connection: any) => {
+          if (connection && connection.line) {
+            linesToRemove.push(connection.line);
+            
+            // 同时从另一个关节的连接列表中移除这个连接
+            if (connection.line.startJoint && connection.line.startJoint !== removedObject) {
+              connection.line.startJoint.connectedLines = connection.line.startJoint.connectedLines.filter(
+                (conn: any) => conn.line !== connection.line
+              );
+            }
+            if (connection.line.endJoint && connection.line.endJoint !== removedObject) {
+              connection.line.endJoint.connectedLines = connection.line.endJoint.connectedLines.filter(
+                (conn: any) => conn.line !== connection.line
+              );
+            }
+          }
+        });
+        
+        // 删除所有关联的线条
+        linesToRemove.forEach((line) => {
+          canvas.remove(line);
+        });
+      }
+    };
+
+    // 移除之前可能存在的同名事件监听器，避免重复
+    canvas.off('object:moving', handleObjectMoving);
+    canvas.off('object:moved', handleObjectMoved);
+    canvas.off('selection:created', handleSelectionCreated);
+    canvas.off('selection:updated', handleSelectionUpdated);
+    canvas.off('object:modified', handleObjectModified);
+    canvas.off('mouse:up', handleMouseUp);
+    canvas.off('selection:cleared', handleSelectionCleared);
+    canvas.off('selection:transform', handleSelectionTransform);
+    canvas.off('object:removed', handleObjectRemoved);
+    
+    // 添加新的事件监听器
+    canvas.on('object:moving', handleObjectMoving);     // 移动过程中持续更新
+    canvas.on('object:moved', handleObjectMoved);       // 移动结束后最终更新
+    canvas.on('selection:created', handleSelectionCreated); // 新选择创建时更新
+    canvas.on('selection:updated', handleSelectionUpdated); // 选择区域更新时更新
+    canvas.on('selection:transform', handleSelectionTransform); // 选择组变换过程中持续更新 - 关键修复
+    canvas.on('object:modified', handleObjectModified);     // 对象修改完成时更新
+    canvas.on('mouse:up', handleMouseUp);                 // 鼠标抬起时更新
+    canvas.on('selection:cleared', handleSelectionCleared); // 取消选择时更新
+    canvas.on('object:removed', handleObjectRemoved);     // 对象删除时清理相关线条
+  };
 
   const handleToolSelect = (tool: Tool) => {
     setActiveTool(tool)
@@ -1383,6 +1701,7 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
         canvas.hoverCursor = 'crosshair'
         setShowShapePicker(true)
         break
+
       case 'eraser':
         canvas.isDrawingMode = true
         setIsDrawingMode(true)
@@ -1494,7 +1813,16 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
         canvas.selection = true
         canvas.defaultCursor = 'default'
         canvas.hoverCursor = 'default'
-        setShowLayerPanel(true)
+        break
+      case 'stickfigure':
+        canvas.isDrawingMode = false
+        setIsDrawingMode(false)
+        // 启用选择模式
+        canvas.selection = true
+        canvas.defaultCursor = 'default'
+        canvas.hoverCursor = 'default'
+        // 添加火柴人
+        handleAddStickFigure()
         break
       case 'history':
         canvas.isDrawingMode = false
@@ -1769,11 +2097,11 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
           // 创建Fabric图片对象
           const fabricImg = new fabric.Image(img)
           
-          // 设置缩放比例
+          // 设置缩放比例，添加400px尺寸限制但保持图片质量
           const canvasWidth = canvas.getWidth()
           const canvasHeight = canvas.getHeight()
-          const maxWidth = canvasWidth * 0.8
-          const maxHeight = canvasHeight * 0.8
+          const maxWidth = Math.min(400, canvasWidth * 0.8)
+          const maxHeight = Math.min(400, canvasHeight * 0.8)
           const scaleX = maxWidth / img.width
           const scaleY = maxHeight / img.height
           const scale = Math.min(scaleX, scaleY, 1)
@@ -1872,10 +2200,10 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
       const editMode = urlParams.get('edit') === 'true'
       const projectId = urlParams.get('projectId')
       
-      // 生成画布预览图
-      const previewDataURL = canvas.toDataURL({
+      // 生成画布预览图，使用原图质量
+      const previewDataURL = canvas.toDataURL({  
         format: 'png',
-        quality: 0.8
+        quality: 1.0
       })
       
       // 获取画布数据（序列化）
@@ -2644,7 +2972,7 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
         break
       case 'p':
         event.preventDefault()
-        handleToolSelect('pencil')
+        handleAddStickFigure()
         break
       case 'r':
         event.preventDefault()
@@ -2691,10 +3019,6 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
           event.preventDefault()
           handleRedo()
           break
-        case 'd':
-          event.preventDefault()
-          handleClearCanvas()
-          break
         case 'c':
           event.preventDefault()
           handleCopyObject()
@@ -2710,6 +3034,11 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
           })
           break
       }
+    }
+    // 单独的D键用于清除画板
+    if (event.key.toLowerCase() === 'd' && !(event.ctrlKey || event.metaKey)) {
+      event.preventDefault()
+      handleClearCanvas()
     }
   }, [canvas, handleUndo, handleRedo, handleClearCanvas, handleSelectAll, handleCopyObject, handlePasteObject, handleBackToUser, handleToolSelect])
 
@@ -2905,27 +3234,28 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
 
       {/* 左侧工具组 */}
       <div className="flex items-center justify-center lg:justify-start flex-wrap gap-1 lg:gap-2">
-        {/* 返回按钮 */}
+        {/* 返回按钮 - 隐藏但保留位置宽度 */}
         <Tooltip content="返回用户页面 (Esc)" position="bottom">
           <button
             onClick={handleBackToUser}
             className="p-1 lg:p-2 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+            style={{ opacity: 0, visibility: 'hidden' }}
           >
             <ArrowLeft className="h-4 w-4 lg:h-5 lg:w-5" />
           </button>
         </Tooltip>
         
-        {tools.map((tool) => {
+        {tools.filter(tool => tool.id !== 'layers').map((tool) => {
           const getShortcut = (toolId: string) => {
             switch (toolId) {
               case 'hand': return 'H'
-              case 'pencil': return 'P'
+              case 'pencil': return ''
               case 'arrow': return 'R'
               case 'shapes': return 'S'
               case 'text': return 'T'
               case 'eraser': return 'E'
               case 'image': return 'I'
-              case 'layers': return 'L'
+              case 'stickfigure': return 'P'
               default: return ''
             }
           }
@@ -2965,7 +3295,7 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
             <RotateCw className="h-4 w-4 lg:h-5 lg:w-5" />
           </button>
         </Tooltip>
-        <Tooltip content="清除画板 (Ctrl+D)" position="bottom">
+        <Tooltip content="清除画板 (D)" position="bottom">
           <button
             onClick={handleClearCanvas}
             className="p-1 lg:p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"
@@ -3154,13 +3484,13 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
 
       {/* 右侧操作组 */}
       <div className="flex items-center justify-center lg:justify-end flex-wrap gap-1 lg:gap-2 mt-2 lg:mt-0">
-        {/* 保存 */}
-        <Tooltip content="保存画板" position="bottom">
+        {/* 导出JSON */}
+        <Tooltip content="导出画板JSON" position="bottom">
           <button
-            onClick={handleSave}
+            onClick={handleDownloadCanvas}
             className="p-1 lg:p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"
           >
-            <Save className="h-4 w-4 lg:h-5 lg:w-5" />
+            <Download className="h-4 w-4 lg:h-5 lg:w-5" />
           </button>
         </Tooltip>
         <Tooltip content="导入画板(JSON)" position="bottom">
@@ -3171,14 +3501,7 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
             <Upload className="h-4 w-4 lg:h-5 lg:w-5" />
           </button>
         </Tooltip>
-        <Tooltip content="下载画板(JSON)" position="bottom">
-          <button
-            onClick={handleDownloadCanvas}
-            className="p-1 lg:p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg hidden"
-          >
-            <Download className="h-4 w-4 lg:h-5 lg:w-5" />
-          </button>
-        </Tooltip>
+
 
         {/* 主题切换按钮 */}
         <Tooltip content={`切换到${theme === 'light' ? '深色' : '浅色'}主题`} position="bottom">

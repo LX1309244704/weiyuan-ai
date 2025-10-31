@@ -240,10 +240,20 @@ const AgentWorkbench = ({ isOpen = true, onToggle }: AgentWorkbenchProps) => {
             <label className="block text-sm font-medium text-gray-700 mb-2">创作提示词</label>
             <textarea
               value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
+              onChange={(e) => {
+                setPrompt(e.target.value)
+                // 自动调整高度，最多显示5行
+                const textarea = e.target as HTMLTextAreaElement
+                textarea.style.height = 'auto'
+                const lineHeight = parseInt(getComputedStyle(textarea).lineHeight) || 20
+                const maxHeight = lineHeight * 5
+                const scrollHeight = textarea.scrollHeight
+                textarea.style.height = `${Math.min(scrollHeight, maxHeight)}px`
+              }}
               placeholder="描述您想要创作的内容..."
               className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-              rows={3}
+              rows={5}
+              style={{ minHeight: '100px', maxHeight: '120px', overflow: 'hidden' }}
             />
           </div>
 

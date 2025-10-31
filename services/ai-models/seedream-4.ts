@@ -55,15 +55,46 @@ export const seedream4Config = {
     // 验证API域名地址
     validateApiBaseUrl(apiBaseUrl);
     
-    // 根据宽高比获取对应的尺寸，优先使用aspectRatio
-    const size = toImageDvo.aspectRatio 
-      ? this.getSizeByAspectRatio(toImageDvo.aspectRatio)
-      : toImageDvo.size || "1024x1024";
+    // 从尺寸反推宽高比的函数
+    const getAspectRatioFromSize = (sizeStr: string): string => {
+      const [width, height] = sizeStr.split('x').map(Number);
+      if (!width || !height) return '';
+      
+      // 计算最简宽高比
+      const gcd = (a: number, b: number) => b ? gcd(b, a % b) : a;
+      const divisor = gcd(width, height);
+      const ratio = `${width/divisor}:${height/divisor}`;
+      
+      // 检查是否是我们支持的标准比例之一
+      if (this.supportedAspectRatios.includes(ratio)) {
+        return ratio;
+      }
+      
+      return '';
+    };
+    
+    // 优先使用aspectRatio，如果没有，尝试从size反推宽高比，最后才使用传入的size
+    let finalSize = this.defaultSize; // 默认尺寸
+    
+    if (toImageDvo.aspectRatio) {
+      // 如果提供了aspectRatio，使用模型定义的对应尺寸
+      finalSize = this.getSizeByAspectRatio(toImageDvo.aspectRatio);
+    } else if (toImageDvo.size) {
+      // 如果没有aspectRatio但有size，尝试从size反推宽高比
+      const derivedAspectRatio = getAspectRatioFromSize(toImageDvo.size);
+      if (derivedAspectRatio) {
+        // 如果能反推到支持的宽高比，使用模型定义的对应尺寸
+        finalSize = this.getSizeByAspectRatio(derivedAspectRatio);
+      } else {
+        // 否则才使用传入的size
+        finalSize = toImageDvo.size;
+      }
+    }
     
     // 构建请求体
     const map = {
       model: "doubao-seedream-4-0-250828",
-     size: size,
+      size: finalSize,
       prompt: toImageDvo.prompt,
       image: toImageDvo.images || []
     };
@@ -133,7 +164,32 @@ export const seedream4Config = {
           
           if (imageData && imageData.length > 0) {
             ImageDto.status = ApiConst.STRING_TWO;
-            ImageDto.imageUrl = imageData[0].url;
+            try {
+              // 通过代理API获取图片数据
+              const proxyResponse = await fetch('/api/proxy-image', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ imageUrl: imageData[0].url })
+              });
+              
+              if (proxyResponse.ok) {
+                const proxyData = await proxyResponse.json();
+                if (proxyData.imageData) {
+                  ImageDto.imageUrl = proxyData.imageData;
+                } else {
+                  // 降级使用原始URL
+                  ImageDto.imageUrl = imageData[0].url;
+                }
+              } else {
+                // 降级使用原始URL
+                ImageDto.imageUrl = imageData[0].url;
+              }
+            } catch (error) {
+              // 出错时使用原始URL
+              ImageDto.imageUrl = imageData[0].url;
+            }
             return ImageDto;
           } else {
             // 没有图片数据，返回失败

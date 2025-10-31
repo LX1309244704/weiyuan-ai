@@ -133,7 +133,32 @@ export const nanoBananaConfig = {
           
           if (imageData && imageData.length > 0) {
             ImageDto.status = ApiConst.STRING_TWO;
-            ImageDto.imageUrl = imageData[0].url;
+            try {
+              // 通过代理API获取图片数据
+              const proxyResponse = await fetch('/api/proxy-image', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ imageUrl: imageData[0].url })
+              });
+              
+              if (proxyResponse.ok) {
+                const proxyData = await proxyResponse.json();
+                if (proxyData.imageData) {
+                  ImageDto.imageUrl = proxyData.imageData;
+                } else {
+                  // 降级使用原始URL
+                  ImageDto.imageUrl = imageData[0].url;
+                }
+              } else {
+                // 降级使用原始URL
+                ImageDto.imageUrl = imageData[0].url;
+              }
+            } catch (error) {
+              // 降级使用原始URL
+              ImageDto.imageUrl = imageData[0].url;
+            }
             return ImageDto;
           } else {
             // 没有图片数据，返回失败

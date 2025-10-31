@@ -23,9 +23,9 @@ export default function ShapePropertiesPanel({ canvas }: ShapePropertiesPanelPro
 
     const handleSelectionCreated = () => {
       const activeObject = canvas.getActiveObject()
-      // 只显示形状对象（排除文字）
-      const shapeTypes = ['rect', 'circle', 'triangle', 'polygon', 'ellipse', 'line', 'path']
-      if (activeObject && shapeTypes.includes(activeObject.type)) {
+      // 只显示形状对象（排除文字和火柴人关节）
+        const shapeTypes = ['rect', 'circle', 'triangle', 'polygon', 'ellipse', 'line', 'path']
+        if (activeObject && shapeTypes.includes(activeObject.type) && !activeObject.isStickFigureJoint) {
         setSelectedObject(activeObject)
         setIsVisible(true)
         

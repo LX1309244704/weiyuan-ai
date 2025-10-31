@@ -27,7 +27,6 @@ const ImageSelectionPanel: React.FC<ImageSelectionPanelProps> = ({
   const [selectedModelType, setSelectedModelType] = useState<'image' | 'video'>('image')
   const [selectedImageModel, setSelectedImageModel] = useState('nano-banana')
   const [selectedVideoModel, setSelectedVideoModel] = useState('sora2')
-  const [selectedVideoModel, setSelectedVideoModel] = useState('sora2')
   const [selectedAspectRatio, setSelectedAspectRatio] = useState('16:9')
   const [selectedVideoSeconds, setSelectedVideoSeconds] = useState('8')
   const [showModelDropdown, setShowModelDropdown] = useState(false)
@@ -44,7 +43,7 @@ const ImageSelectionPanel: React.FC<ImageSelectionPanelProps> = ({
     const lineCount = customPrompt.split('\n').length
     const baseHeight = 32
     const lineHeight = 20
-    const maxHeight = 80
+      const maxHeight = lineHeight * 5 // 最大高度，5行
     
     let newHeight = baseHeight + (lineCount - 1) * lineHeight
     newHeight = Math.min(Math.max(newHeight, baseHeight), maxHeight)
@@ -296,7 +295,10 @@ const ImageSelectionPanel: React.FC<ImageSelectionPanelProps> = ({
     selectedImage._element && 
     selectedImage._element.tagName === 'VIDEO'
   
-  if (isVideoObject) return null
+  // 检测是否为火柴人关节 - 如果是火柴人关节，不显示任何面板
+    const isStickFigureJoint = selectedImage.isStickFigureJoint
+    
+    if (isVideoObject || isStickFigureJoint) return null
   
   // 在渲染时重新计算position
   const currentPosition = getImagePosition()
@@ -411,6 +413,7 @@ const ImageSelectionPanel: React.FC<ImageSelectionPanelProps> = ({
               onClick={() => setSelectedModelType('video')}
               className={`p-1 rounded-lg transition-colors ${selectedModelType === 'video' ? 'bg-white dark:bg-gray-600 shadow-sm text-gray-700 dark:text-gray-300' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'}`}
               title="视频生成"
+              style={{ display: 'none' }}
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
@@ -600,8 +603,8 @@ const ImageSelectionPanel: React.FC<ImageSelectionPanelProps> = ({
             }}
             placeholder="输入提示词..."
             className="flex-1 px-2 py-1 border border-gray-300 dark:border-gray-600 rounded text-xs bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:border-blue-500 dark:focus:border-blue-400 resize-none"
-            style={{ minWidth: '120px', height: textareaHeight, minHeight: '32px', maxHeight: '80px' }}
-            rows={1}
+              style={{ minWidth: '120px', height: textareaHeight, minHeight: '32px', maxHeight: '100px', overflow: 'hidden' }}
+              rows={1}
           />
 
           {/* 5. 生成按钮 */}

@@ -128,24 +128,16 @@ export const veo3Config = {
           const videoData = taskData.data?.data?.[0];
           VideoDto.videoUrl = videoData?.url;
           return VideoDto;
-          VideoDto.videoUrl = videoData?.url;
-          return VideoDto;
         } else if (taskData.status === 'FAILURE') {
-          VideoDto.status = '3';
-          VideoDto.error = taskData.fail_reason || '视频生成失败';
-          return VideoDto;
           VideoDto.status = '3';
           VideoDto.error = taskData.fail_reason || '视频生成失败';
           return VideoDto;
         } else if (taskData.status === 'IN_PROGRESS' || taskData.status === 'NOT_START') {
           VideoDto.status = '1';
           return VideoDto;
-          VideoDto.status = '1';
-          return VideoDto;
         }
       }
       
-      return VideoDto;
       return VideoDto;
     } catch (error) {
       throw error;
