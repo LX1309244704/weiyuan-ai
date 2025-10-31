@@ -56,6 +56,15 @@ interface State {
   isConnecting: boolean
   connectionStart: { cardId: number; storyboardEl: HTMLElement; storyboardData: Storyboard } | null
   playbackIntervals: Record<number, NodeJS.Timeout>
+  // 拖拽相关状态
+  isDraggingStoryboard: boolean
+  draggingStoryboardId: number | null
+  dragStart: { x: number; y: number }
+  dragStoryboardStart: { x: number; y: number }
+  isDraggingCard: boolean
+  draggingCardId: number | null
+  draggingStoryboardIdForCard: number | null
+  dragCardStart: { x: number; y: number }
 }
 
 // 认证包装组件
@@ -94,11 +103,20 @@ function VideoCreationContent() {
     sceneReferenceImage: null,
     isConnecting: false,
     connectionStart: null,
-    playbackIntervals: {}
+    playbackIntervals: {},
+    // 拖拽相关状态
+    isDraggingStoryboard: false,
+    draggingStoryboardId: null,
+    dragStart: { x: 0, y: 0 },
+    dragStoryboardStart: { x: 0, y: 0 },
+    isDraggingCard: false,
+    draggingCardId: null,
+    draggingStoryboardIdForCard: null,
+    dragCardStart: { x: 0, y: 0 }
   })
 
   const [promptInput, setPromptInput] = useState('')
-  const [modifyPrompt, setModifyPrompt] = useState('')
+  // const [modifyPrompt, setModifyPrompt] = useState('')
   const [isThinking, setIsThinking] = useState(false)
   
   const canvasRef = useRef<HTMLDivElement>(null)
@@ -169,21 +187,42 @@ function VideoCreationContent() {
       const LEFT_PANEL_WIDTH = 320
       const CARD_GAP = 20
       const PADDING = 20
-      const PLAYER_CARD_WIDTH = 576
+      // const PLAYER_CARD_WIDTH = 576
       const CARD_HEIGHT_WITH_GAP = 420
       const CARDS_PER_ROW = 8
 
       const shotPanelWidth = PADDING * 2 + (CARDS_PER_ROW * (CARD_WIDTH + CARD_GAP)) - CARD_GAP
       const containerWidth = LEFT_PANEL_WIDTH + shotPanelWidth
 
-      let initialX, initialY
+      let initialX: number, initialY: number
       if (state.storyboards.length === 0) {
         initialX = (window.innerWidth / 2 - containerWidth / 2) / state.zoom - state.pan.x / state.zoom
         initialY = 100 / state.zoom - state.pan.y / state.zoom
       } else {
+        // 找到最右边的故事板
         const rightmostSB = state.storyboards.reduce((p, c) => (p.x > c.x) ? p : c, { x: 0, y: 0 } as Storyboard)
-        initialX = rightmostSB.x + rightmostSB.width + 100
-        initialY = rightmostSB.y
+        
+        // 检查是否有重叠，如果有重叠就向下移动
+        let newY = rightmostSB.y
+        const newX = rightmostSB.x + rightmostSB.width + 100
+        
+        // 检查新位置是否会与现有故事板重叠
+        const hasOverlap = state.storyboards.some(sb => {
+          return newX < sb.x + sb.width && 
+                 newX + containerWidth > sb.x &&
+                 newY < sb.y + sb.height && 
+                 newY + 600 > sb.y
+        })
+        
+        // 如果有重叠，向下移动
+        if (hasOverlap) {
+          // 找到最下面的故事板
+          const bottommostSB = state.storyboards.reduce((p, c) => (p.y > c.y) ? p : c, { x: 0, y: 0 } as Storyboard)
+          newY = bottommostSB.y + bottommostSB.height + 100
+        }
+        
+        initialX = newX
+        initialY = newY
       }
 
       const newStoryboard: Storyboard = {
@@ -220,7 +259,7 @@ function VideoCreationContent() {
       const lastShotIndex = mockStoryboardData.shots.length - 1
       const lastRow = Math.floor(lastShotIndex / CARDS_PER_ROW)
       const lastCol = lastShotIndex % CARDS_PER_ROW
-      let playerX, playerY
+      let playerX: number, playerY: number
       
       if (lastCol < CARDS_PER_ROW - 2) {
         playerX = PADDING + ((lastCol + 1) * (CARD_WIDTH + CARD_GAP))
@@ -262,7 +301,7 @@ function VideoCreationContent() {
                   ...sb,
                   cards: sb.cards.map(card => 
                     card.type === 'image' 
-                      ? { ...card, isLoading: false, imageUrl: `/api/placeholder/288/192` }
+                      ? { ...card, isLoading: false, imageUrl: null }
                       : card
                   )
                 }
@@ -293,7 +332,10 @@ function VideoCreationContent() {
       return
     }
 
-    e.preventDefault()
+    // 只在需要平移时阻止默认行为
+    if (!state.isDraggingStoryboard) {
+      e.preventDefault()
+    }
     setState(prev => ({
       ...prev,
       isPanning: true,
@@ -306,6 +348,7 @@ function VideoCreationContent() {
   }
 
   const handleMouseMove = (e: MouseEvent) => {
+    if (state.isDraggingStoryboard) return
     if (!state.isPanning) return
 
     setState(prev => ({
@@ -318,15 +361,213 @@ function VideoCreationContent() {
   }
 
   const handleMouseUp = () => {
-    setState(prev => ({ ...prev, isPanning: false }))
+    setState(prev => ({ ...prev, isPanning: false, isDraggingStoryboard: false, draggingStoryboardId: null }))
     if (canvasContainerRef.current) {
       canvasContainerRef.current.style.cursor = 'grab'
     }
   }
 
+  // 故事板拖拽事件处理
+  const handleStoryboardMouseDown = (e: React.MouseEvent, storyboardId: number) => {
+    e.stopPropagation()
+    
+    const storyboard = state.storyboards.find(sb => sb.id === storyboardId)
+    if (!storyboard) return
+    
+    setState(prev => ({
+      ...prev,
+      isDraggingStoryboard: true,
+      draggingStoryboardId: storyboardId,
+      dragStart: { 
+        x: e.clientX,
+        y: e.clientY
+      },
+      dragStoryboardStart: {
+        x: storyboard.x,
+        y: storyboard.y
+      }
+    }))
+  }
+
+  const handleStoryboardMouseMove = (e: MouseEvent) => {
+    if (!state.isDraggingStoryboard || state.draggingStoryboardId === null) return
+
+    const deltaX = (e.clientX - state.dragStart.x) / state.zoom
+    const deltaY = (e.clientY - state.dragStart.y) / state.zoom
+
+    setState(prev => ({
+      ...prev,
+      storyboards: prev.storyboards.map(sb => 
+        sb.id === prev.draggingStoryboardId
+          ? { 
+              ...sb, 
+              x: prev.dragStoryboardStart.x + deltaX,
+              y: prev.dragStoryboardStart.y + deltaY
+            }
+          : sb
+      )
+    }))
+  }
+
+  // 分镜卡片拖拽交换顺序
+  const handleCardMouseDown = (e: React.MouseEvent, cardId: number, storyboardId: number) => {
+    e.stopPropagation()
+    
+    const storyboard = state.storyboards.find(sb => sb.id === storyboardId)
+    if (!storyboard) return
+    
+    const card = storyboard.cards.find(c => c.id === cardId)
+    if (!card) return
+    
+    setState(prev => ({
+      ...prev,
+      isDraggingCard: true,
+      draggingCardId: cardId,
+      draggingStoryboardIdForCard: storyboardId,
+      dragCardStart: {
+        x: e.clientX,
+        y: e.clientY
+      }
+    }))
+  }
+
+  const handleCardMouseMove = (e: MouseEvent) => {
+    if (!state.isDraggingCard || state.draggingCardId === null || state.draggingStoryboardIdForCard === null) return
+
+    const deltaX = (e.clientX - state.dragCardStart.x) / state.zoom
+    const deltaY = (e.clientY - state.dragCardStart.y) / state.zoom
+
+    setState(prev => ({
+      ...prev,
+      storyboards: prev.storyboards.map(sb => 
+        sb.id === prev.draggingStoryboardIdForCard
+          ? {
+              ...sb,
+              cards: sb.cards.map(card => {
+                if (card.id === prev.draggingCardId) {
+                  // 计算新的位置
+                  let newX = card.x + deltaX
+                  let newY = card.y + deltaY
+                  
+                  // 卡片边界检查 - 确保卡片不会移出故事板
+                  const cardWidth = card.type === 'player' ? 576 : 288
+                  const cardHeight = card.type === 'player' ? 384 : 192
+                  
+                  // 故事板内容区域边界（减去内边距）
+                  const storyboardContentWidth = sb.width - 40 // 左右各20px内边距
+                  const storyboardContentHeight = sb.height - 40 // 上下各20px内边距
+                  
+                  // 限制卡片在故事板内容区域内
+                  newX = Math.max(0, Math.min(newX, storyboardContentWidth - cardWidth))
+                  newY = Math.max(0, Math.min(newY, storyboardContentHeight - cardHeight))
+                  
+                  return { ...card, x: newX, y: newY }
+                }
+                return card
+              })
+            }
+          : sb
+      )
+    }))
+  }
+
+  const handleCardMouseUp = () => {
+    if (!state.isDraggingCard || state.draggingCardId === null || state.draggingStoryboardIdForCard === null) return
+
+    const storyboard = state.storyboards.find(sb => sb.id === state.draggingStoryboardIdForCard)
+    if (!storyboard) return
+
+    const draggingCard = storyboard.cards.find(c => c.id === state.draggingCardId)
+    if (!draggingCard) return
+
+    // 检查是否与其他卡片重叠，实现交换顺序
+    const overlappingCard = storyboard.cards.find(card => 
+      card.id !== state.draggingCardId &&
+      Math.abs(card.x - draggingCard.x) < 150 &&
+      Math.abs(card.y - draggingCard.y) < 150
+    )
+
+    if (overlappingCard) {
+      // 交换卡片位置
+      setState(prev => ({
+        ...prev,
+        storyboards: prev.storyboards.map(sb => 
+          sb.id === prev.draggingStoryboardIdForCard
+            ? {
+                ...sb,
+                cards: sb.cards.map(card => {
+                  if (card.id === prev.draggingCardId) {
+                    return { ...card, x: overlappingCard.x, y: overlappingCard.y }
+                  }
+                  if (card.id === overlappingCard.id) {
+                    return { ...card, x: draggingCard.x, y: draggingCard.y }
+                  }
+                  return card
+                })
+              }
+            : sb
+        )
+      }))
+    }
+
+    setState(prev => ({
+      ...prev,
+      isDraggingCard: false,
+      draggingCardId: null,
+      draggingStoryboardIdForCard: null
+    }))
+  }
+
+  // 剧本操作函数
+  const handleModifyScript = (storyboardId: number) => {
+    const storyboard = state.storyboards.find(sb => sb.id === storyboardId)
+    if (!storyboard) return
+    
+    const newScript = prompt('修改剧本内容：', storyboard.scriptText)
+    if (newScript !== null) {
+      setState(prev => ({
+        ...prev,
+        storyboards: prev.storyboards.map(sb => 
+          sb.id === storyboardId
+            ? { ...sb, scriptText: newScript }
+            : sb
+        )
+      }))
+    }
+  }
+
+  const handleRegenerateScript = (storyboardId: number) => {
+    const storyboard = state.storyboards.find(sb => sb.id === storyboardId)
+    if (!storyboard) return
+    
+    // 模拟重新生成剧本
+    const newScript = `这是重新生成的关于${storyboard.title}的剧本。剧本内容已经根据最新要求进行了优化和调整。`
+    
+    setState(prev => ({
+      ...prev,
+      storyboards: prev.storyboards.map(sb => 
+        sb.id === storyboardId
+          ? { ...sb, scriptText: newScript }
+          : sb
+      )
+    }))
+  }
+
+  const handleDeleteScript = (storyboardId: number) => {
+    if (confirm('确定要删除这个剧本吗？')) {
+      setState(prev => ({
+        ...prev,
+        storyboards: prev.storyboards.filter(sb => sb.id !== storyboardId)
+      }))
+    }
+  }
+
   // 滚轮缩放
   const handleWheel = (e: React.WheelEvent) => {
-    e.preventDefault()
+    // 只在需要缩放时阻止默认行为
+    if (Math.abs(e.deltaY) > 0) {
+      e.preventDefault()
+    }
     const zoomFactor = 1.1
     const oldZoom = state.zoom
     
@@ -359,12 +600,18 @@ function VideoCreationContent() {
     
     document.addEventListener('mousemove', handleMouseMove)
     document.addEventListener('mouseup', handleMouseUp)
+    document.addEventListener('mousemove', handleStoryboardMouseMove)
+    document.addEventListener('mousemove', handleCardMouseMove)
+    document.addEventListener('mouseup', handleCardMouseUp)
     
     return () => {
       document.removeEventListener('mousemove', handleMouseMove)
       document.removeEventListener('mouseup', handleMouseUp)
+      document.removeEventListener('mousemove', handleStoryboardMouseMove)
+      document.removeEventListener('mousemove', handleCardMouseMove)
+      document.removeEventListener('mouseup', handleCardMouseUp)
     }
-  }, [state.pan, state.zoom, state.isPanning])
+  }, [state.pan, state.zoom, state.isPanning, state.isDraggingStoryboard, state.isDraggingCard])
 
   return (
     <div className="relative w-full h-screen overflow-hidden bg-gray-900">
@@ -423,8 +670,11 @@ function VideoCreationContent() {
                 height: `${storyboard.height}px`
               }}
             >
-              {/* 故事板头部 */}
-              <div className="storyboard-header bg-gray-900/70 p-4 flex justify-between items-center">
+              {/* 故事板头部 - 可拖拽区域 */}
+              <div 
+                className="storyboard-header bg-gray-900/70 p-4 flex justify-between items-center cursor-move"
+                onMouseDown={(e) => handleStoryboardMouseDown(e, storyboard.id)}
+              >
                 <h2 className="font-bold text-white truncate flex-1">{storyboard.title}</h2>
                 <div className="flex items-center space-x-2">
                   <button className="bg-purple-600 hover:bg-purple-700 text-white font-bold px-3 py-2 rounded-lg text-sm">
@@ -471,9 +721,29 @@ function VideoCreationContent() {
                   {storyboard.scriptText && (
                     <div>
                       <h4 className="text-sm font-semibold text-gray-400 mb-2">剧本内容</h4>
-                      <p className="text-gray-300 text-sm whitespace-pre-wrap">
+                      <p className="text-gray-300 text-sm whitespace-pre-wrap mb-4">
                         {storyboard.scriptText}
                       </p>
+                      <div className="flex space-x-2">
+                        <button 
+                          className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-3 py-1 rounded text-xs"
+                          onClick={() => handleModifyScript(storyboard.id)}
+                        >
+                          修改
+                        </button>
+                        <button 
+                          className="bg-green-600 hover:bg-green-700 text-white font-bold px-3 py-1 rounded text-xs"
+                          onClick={() => handleRegenerateScript(storyboard.id)}
+                        >
+                          重新生成
+                        </button>
+                        <button 
+                          className="bg-red-600 hover:bg-red-700 text-white font-bold px-3 py-1 rounded text-xs"
+                          onClick={() => handleDeleteScript(storyboard.id)}
+                        >
+                          删除
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -483,22 +753,28 @@ function VideoCreationContent() {
                   {storyboard.cards.map(card => (
                     <div
                       key={card.id}
-                      className="absolute bg-gray-700 rounded-lg shadow-lg overflow-hidden transition-all duration-200 hover:shadow-xl hover:-translate-y-1 cursor-grab"
+                      className={`absolute bg-gray-700 rounded-lg shadow-lg overflow-hidden transition-all duration-200 ${
+                        state.isDraggingCard && state.draggingCardId === card.id 
+                          ? 'shadow-2xl scale-105 z-50 cursor-grabbing' 
+                          : 'hover:shadow-xl hover:-translate-y-1 cursor-grab'
+                      }`}
                       style={{
                         left: `${card.x}px`,
                         top: `${card.y}px`,
                         width: card.type === 'player' ? '576px' : '288px'
                       }}
+                      onMouseDown={(e) => handleCardMouseDown(e, card.id, storyboard.id)}
                     >
                       {card.type === 'image' ? (
                         <>
-                          <div className="w-full h-48 bg-gray-600 flex items-center justify-center">
+                          <div className="w-full h-48 bg-gradient-to-br from-green-500 to-blue-600 flex items-center justify-center">
                             {card.isLoading ? (
                               <div className="border-4 border-gray-300 border-t-blue-500 rounded-full w-8 h-8 animate-spin"></div>
-                            ) : card.imageUrl ? (
-                              <img src={card.imageUrl} className="w-full h-full object-cover" alt={card.title} />
                             ) : (
-                              <span className="text-red-400 text-sm">生成失败</span>
+                              <div className="text-white text-center p-4">
+                                <div className="font-bold text-lg mb-2">{card.title}</div>
+                                <div className="text-sm opacity-80">图片已生成</div>
+                              </div>
                             )}
                           </div>
                           <div className="p-3">
@@ -513,7 +789,9 @@ function VideoCreationContent() {
                         <>
                           <div className="w-full h-96 bg-gray-600 flex items-center justify-center">
                             {card.isReady ? (
-                              <img src={card.thumbnailUrl || '/api/placeholder/576/384'} className="w-full h-full object-cover" alt="播放器" />
+                              <div className="w-full h-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold">
+                                播放器预览
+                              </div>
                             ) : (
                               <span className="text-gray-500">未执行</span>
                             )}
@@ -637,7 +915,7 @@ function VideoCreationContent() {
             className="bg-transparent text-white placeholder-gray-400 text-base px-6 h-full w-full focus:ring-0 focus:outline-none"
             value={promptInput}
             onChange={(e) => setPromptInput(e.target.value)}
-            onKeyPress={(e) => {
+            onKeyDown={(e) => {
               if (e.key === 'Enter') {
                 handleGenerate()
               }

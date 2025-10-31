@@ -235,7 +235,9 @@ export default function SelectionPanel({ selectedArea, onGenerateImage, onCaptur
   }, [selectedArea])
 
   // 如果不显示面板，直接返回null
-  if (!isVisible) {
+  // 如果选中的是火柴人关节，不显示面板
+  const isStickFigureJoint = selectedArea?.object?.isStickFigureJoint || false
+    if (!isVisible || isStickFigureJoint) {
     return null
   }
 

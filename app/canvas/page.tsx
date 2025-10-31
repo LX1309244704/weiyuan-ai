@@ -866,49 +866,47 @@ export default function CanvasPage() {
           // 在点击位置添加图片
           const pointer = fabricCanvas.getPointer(options.e)
           
-          const img = new Image()
-          img.crossOrigin = 'anonymous'
-          
-          img.onload = () => {
-            try {
-              const fabric = (window as any).fabric
-              if (!fabric) {
-                throw new Error('Fabric.js未正确加载')
+          // 使用CORS代理安全加载图片
+          loadImageWithCors(imageData)
+            .then((img) => {
+              try {
+                const fabric = (window as any).fabric
+                if (!fabric) {
+                  throw new Error('Fabric.js未正确加载')
+                }
+                
+                // 创建Fabric图片对象
+                const fabricImg = new fabric.Image(img, {
+                  left: pointer.x,
+                  top: pointer.y,
+                  selectable: true,
+                  hasControls: true,
+                  cornerStyle: 'circle',
+                  transparentCorners: false,
+                  cornerColor: '#3b82f6',
+                  cornerSize: 12,
+                  rotatingPointOffset: 40
+                })
+                
+                // 设置合适的缩放比例
+                const maxSize = canvasData.maxImageSize
+                const scale = Math.min(maxSize / img.width, maxSize / img.height, 1)
+                fabricImg.scale(scale)
+                
+                // 添加到画布
+                fabricCanvas.add(fabricImg)
+                fabricCanvas.setActiveObject(fabricImg)
+                fabricCanvas.renderAll()
+                
+              } catch (error) {
+                // 添加图片到画板失败
+                console.error('添加图片到画板失败:', error)
               }
-              
-              // 创建Fabric图片对象
-              const fabricImg = new fabric.Image(img, {
-                left: pointer.x,
-                top: pointer.y,
-                selectable: true,
-                hasControls: true,
-                cornerStyle: 'circle',
-                transparentCorners: false,
-                cornerColor: '#3b82f6',
-                cornerSize: 12,
-                rotatingPointOffset: 40
-              })
-              
-              // 设置合适的缩放比例
-              const maxSize = canvasData.maxImageSize
-              const scale = Math.min(maxSize / img.width, maxSize / img.height, 1)
-              fabricImg.scale(scale)
-              
-              // 添加到画布
-              fabricCanvas.add(fabricImg)
-              fabricCanvas.setActiveObject(fabricImg)
-              fabricCanvas.renderAll()
-              
-            } catch (error) {
-              // 添加图片到画板失败
-            }
-          }
-          
-          img.onerror = (error) => {
-            // 图片加载失败
-          }
-          
-          img.src = imageData
+            })
+            .catch((error) => {
+              // 图片加载失败
+              console.error('图片加载失败:', error)
+            })
         }
         
         // 如果没有更多待处理图片，清除全局变量
@@ -1837,11 +1835,16 @@ export default function CanvasPage() {
   // 处理图片添加到聊天
   const handleAddImageToChat = async (imageObject: any) => {
     try {
-      // 将图片对象转换为DataURL
-      const imageData = imageObject.toDataURL({
-        format: 'png',
-        quality: 0.8
-      })
+      // 优先使用图片的URL，如果没有URL则转换为DataURL
+      let imageData = imageObject._element?.src || imageObject.src || imageObject.imageUrl
+      
+      // 如果没有URL，则转换为DataURL
+      if (!imageData || imageData.startsWith('data:')) {
+        imageData = imageObject.toDataURL({
+          format: 'png',
+          quality: 1.0
+        })
+      }
       
       // 发送到聊天面板
       chatPanelRef.current?.handleReceiveScreenshot(imageData, '上传的图片')
@@ -2127,7 +2130,7 @@ export default function CanvasPage() {
         // 使用Fabric.js的toDataURL方法将图片转换为Base64
         const dataURL = imageObject.toDataURL({
           format: 'png',
-          quality: 0.8
+          quality: 1.0
         })
         
         // 提取Base64数据部分（去掉data:image/png;base64,前缀）
@@ -2224,50 +2227,45 @@ export default function CanvasPage() {
       // 移除加载中图片
       fabricCanvas.remove(loadingImage)
       
-      // 创建实际图片元素
-      const img = new Image()
-      img.crossOrigin = 'anonymous'
-      
-      img.onload = () => {
-        try {
-          // 创建Fabric图片对象
-          const fabricImg = new (window as any).fabric.Image(img, {
-            left: position.x,
-            top: position.y,
-            selectable: true,
-            hasControls: true,
-            cornerStyle: 'circle',
-            transparentCorners: false,
-            cornerColor: '#3b82f6',
-            cornerSize: 12,
-            rotatingPointOffset: 40
-          })
-          
-          // 设置合适的缩放比例
-          const maxSize = canvasData.maxImageSize
-          const scale = Math.min(maxSize / img.width, maxSize / img.height, 1)
-          fabricImg.scale(scale)
-          
-          // 添加到画布
-          fabricCanvas.add(fabricImg)
-          fabricCanvas.setActiveObject(fabricImg)
-          fabricCanvas.renderAll()
-          
-          console.log('实际图片已替换加载中占位图片，位置:', position)
-          resolve(fabricImg)
-          
-        } catch (error) {
-          console.error('替换为实际图片失败:', error)
-          reject(error)
-        }
-      }
-      
-      img.onerror = (error) => {
-        console.error('实际图片加载失败:', error)
-        reject(new Error('实际图片加载失败'))
-      }
-      
-      img.src = actualImageUrl
+      // 使用CORS代理安全加载图片
+      loadImageWithCors(actualImageUrl)
+        .then((img) => {
+          try {
+            // 创建Fabric图片对象
+            const fabricImg = new (window as any).fabric.Image(img, {
+              left: position.x,
+              top: position.y,
+              selectable: true,
+              hasControls: true,
+              cornerStyle: 'circle',
+              transparentCorners: false,
+              cornerColor: '#3b82f6',
+              cornerSize: 12,
+              rotatingPointOffset: 40
+            })
+            
+            // 设置合适的缩放比例
+            const maxSize = canvasData.maxImageSize
+            const scale = Math.min(maxSize / img.width, maxSize / img.height, 1)
+            fabricImg.scale(scale)
+            
+            // 添加到画布
+            fabricCanvas.add(fabricImg)
+            fabricCanvas.setActiveObject(fabricImg)
+            fabricCanvas.renderAll()
+            
+            console.log('实际图片已替换加载中占位图片，位置:', position)
+            resolve(fabricImg)
+            
+          } catch (error) {
+            console.error('替换为实际图片失败:', error)
+            reject(error)
+          }
+        })
+        .catch((error) => {
+          console.error('实际图片加载失败:', error)
+          reject(new Error('实际图片加载失败'))
+        })
     })
   }
 

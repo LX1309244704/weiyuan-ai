@@ -288,7 +288,10 @@ const ImageSelectionPanel: React.FC<ImageSelectionPanelProps> = ({
     selectedImage._element && 
     selectedImage._element.tagName === 'VIDEO'
   
-  if (isVideoObject) return null
+    // 检测是否为火柴人关节 - 如果是火柴人关节，不显示任何面板
+    const isStickFigureJoint = selectedImage.isStickFigureJoint
+    
+    if (isVideoObject || isStickFigureJoint) return null
   
   // 在渲染时重新计算position
   const currentPosition = getImagePosition()

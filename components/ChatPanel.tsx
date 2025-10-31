@@ -5,6 +5,7 @@ import { Send, Image as ImageIcon, Video, Download, X, MessageSquare, ChevronLef
 import { ModelService, type ImageModel, type VideoModel, type TextModel } from '@/services/ai-models'
 import { chatDB } from '@/utils/chatDB'
 import { ApiKeyCache } from '@/utils/apiKeyCache'
+import { getCorsProxyUrl, getEnhancedCorsProxyUrl } from '@/utils/corsProxy'
 
 interface Message {
   id: string
@@ -275,10 +276,10 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
         // 图片模型请求 - 支持多张图片
         const allImages = imageData ? [imageData, ...multipleImages] : multipleImages
         request.images = allImages.length > 0 ? allImages : undefined
-        request.size = selectedAspectRatio === '16:9' ? '1024x576' : 
-                      selectedAspectRatio === '9:16' ? '576x1024' : 
-                      selectedAspectRatio === '4:3' ? '1024x768' : 
-                      selectedAspectRatio === '3:4' ? '768x1024' : '1024x1024'
+        request.size = selectedAspectRatio === '16:9' ? '2560x1440' : 
+                      selectedAspectRatio === '9:16' ? '1440x2560' : 
+                      selectedAspectRatio === '4:3' ? '2304x1728' : 
+                      selectedAspectRatio === '3:4' ? '1728x2304' : '2048x2048'
       } else if (modelInfo?.type === 'video') {
         // 视频模型请求 - 支持多张图片
         const allImages = imageData ? [imageData, ...multipleImages] : multipleImages
@@ -682,7 +683,11 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
           return
         }
         
-        fabric.Image.fromURL(imageData, (img) => {
+        // 使用增强的CORS代理加载图片
+        const proxyUrl = getEnhancedCorsProxyUrl(imageData);
+        
+        // 添加图片加载错误处理
+        fabric.Image.fromURL(proxyUrl, (img) => {
           if (img) {
             // 设置图片位置和大小
             img.set({
@@ -699,9 +704,23 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
             // 选中新添加的图片
             canvas.setActiveObject(img)
             canvas.renderAll()
+            
+            // 显示成功提示
+            showNotification('图片已成功添加到画板', 'success');
+          } else {
+            // 图片加载失败，尝试使用备选方法
+            console.error('Fabric.js无法加载图片，尝试备选方法');
+            showNotification('图片加载失败，请重试', 'error');
           }
-        })
+        }, null, {
+          crossOrigin: 'anonymous'
+        }).catch((error) => {
+          // Fabric.js加载失败时的错误处理
+          console.error('Fabric.js图片加载错误:', error);
+          showNotification('图片加载失败，请重试', 'error');
+        });
       } catch (error) {
+        console.error('添加图片到画板失败:', error);
         alert('添加图片到画板失败，请重试')
       }
     } else {
@@ -1436,8 +1455,9 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
               }
             }}
             placeholder="输入提示词或描述..."
-            className="flex-1 input-field text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-400 min-h-[38px] resize-none px-3 py-2 leading-normal"
-            rows={1}
+            className="flex-1 input-field text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-400 min-h-[38px] max-h-[120px] resize-y px-3 py-2 leading-normal border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            rows={3}
+            style={{ minHeight: '38px', maxHeight: '120px' }}
           />
           <button
             onClick={handleSendMessage}

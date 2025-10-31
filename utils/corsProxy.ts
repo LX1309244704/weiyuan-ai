@@ -16,12 +16,18 @@ const getCorsProxyUrls = (url: string): string[] => {
     return [url];
   }
 
-  // 多个备选CORS代理服务
+  // 多个备选CORS代理服务（使用更可靠的服务）
   const proxyServices = [
-    `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
-    `https://cors-anywhere.herokuapp.com/${url}`,
+    // 使用本地代理服务作为首选
+    `/api/cors-proxy?url=${encodeURIComponent(url)}`,
+    // 可靠的公共CORS代理服务
     `https://corsproxy.io/?${encodeURIComponent(url)}`,
+    `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
+    `https://cors-anywhere.herokuapp.com/${url}`,
+    // 更多备选代理服务
+    `https://cors.bridged.cc/${url}`,
     `https://proxy.cors.sh/${url}`,
+    `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
   ];
   
   return proxyServices;
@@ -71,7 +77,15 @@ export const loadImageWithCors = (url: string): Promise<HTMLImageElement> => {
         return;
       }
       
-      const currentUrl = proxyUrls[urlIndex];
+      let currentUrl = proxyUrls[urlIndex];
+      
+      // 如果是本地代理服务，确保URL格式正确
+      if (currentUrl.startsWith('/api/cors-proxy')) {
+        // 本地代理服务已经是相对路径，不需要修改
+      } else if (currentUrl.startsWith('http')) {
+        // 公共代理服务，保持原样
+      }
+      
       const img = new Image();
       img.crossOrigin = 'anonymous';
       
@@ -80,6 +94,7 @@ export const loadImageWithCors = (url: string): Promise<HTMLImageElement> => {
       };
       
       img.onerror = (error) => {
+        console.warn(`CORS代理服务 ${currentUrl} 加载失败，尝试下一个服务`);
         // 尝试下一个代理服务
         tryLoadImage(urlIndex + 1);
       };
@@ -90,4 +105,23 @@ export const loadImageWithCors = (url: string): Promise<HTMLImageElement> => {
     // 开始尝试加载
     tryLoadImage(0);
   });
+};
+
+/**
+ * 增强的CORS代理URL获取函数，提供更好的错误处理
+ * @param url 原始URL
+ * @returns 代理URL
+ */
+export const getEnhancedCorsProxyUrl = (url: string): string => {
+  const proxyUrls = getCorsProxyUrls(url);
+  
+  // 优先使用本地代理服务
+  for (const proxyUrl of proxyUrls) {
+    if (proxyUrl.startsWith('/api/cors-proxy')) {
+      return proxyUrl;
+    }
+  }
+  
+  // 如果没有本地代理，使用第一个可用的代理
+  return proxyUrls[0];
 };
