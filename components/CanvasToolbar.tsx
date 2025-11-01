@@ -39,7 +39,8 @@ import {
   History,
   Clock,
   Trash2,
-  UserRound
+  UserRound,
+  Video
 } from 'lucide-react'
 
 import { useUserStore } from '../stores/userStore'
@@ -76,12 +77,376 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
   const [showHistoryPanel, setShowHistoryPanel] = useState(false)
   const [showApiSettingsModal, setShowApiSettingsModal] = useState(false)
   const [historyRecords, setHistoryRecords] = useState<HistoryRecord[]>([])
-
+  // 录屏功能状态 - 参考Cap仓库实现
+  const [isRecording, setIsRecording] = useState(false)
+  const [recorder, setRecorder] = useState<MediaRecorder | null>(null)
+  const [recordedChunks, setRecordedChunks] = useState<Blob[]>([])
+  const [captureStream, setCaptureStream] = useState<MediaStream | null>(null)
 
   const layerPanelRef = useRef<HTMLDivElement>(null)
   const historyPanelRef = useRef<HTMLDivElement>(null)
   const [copiedObject, setCopiedObject] = useState<any>(null)
   const [isLoadingPoints, setIsLoadingPoints] = useState(false)
+
+  // 录屏功能实现 - 使用更可靠的音频录制方法
+  const handleStartRecording = async () => {
+    if (isRecording) {
+      // 停止录制
+      if (recorder) {
+        recorder.stop();
+      }
+      return;
+    }
+
+    try {
+      // 显示提示，引导用户选择整个屏幕
+      const preNotification = document.createElement('div');
+      preNotification.id = 'screen-recording-notification'; // 添加ID以便于定位
+      preNotification.innerHTML = `
+        <div style="position: fixed; top: 20px; right: 20px; background: #3b82f6; color: white; padding: 12px 16px; border-radius: 8px; z-index: 10000; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+          <strong>请选择录制内容</strong><br>
+          <span style="font-weight: bold; color: #fbbf24;">重要：请务必选择"整个屏幕"选项</span><br>
+          选择其他选项可能导致录制内容不完整或背景为黑色
+        </div>
+      `;
+      document.body.appendChild(preNotification);
+      
+      // 添加超时机制，确保提示不会一直显示
+      setTimeout(() => {
+        const notification = document.getElementById('screen-recording-notification');
+        if (notification && document.body.contains(notification)) {
+          document.body.removeChild(notification);
+        }
+      }, 10000); // 10秒后自动移除
+
+      // 首先尝试获取麦克风权限，确保用户已授权音频录制
+      let micStream: MediaStream | null = null;
+      try {
+        micStream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+            sampleRate: 48000,
+            channelCount: 2
+          }
+        });
+        console.log('成功获取麦克风权限');
+      } catch (err) {
+        console.warn('无法获取麦克风权限:', err);
+        // 显示麦克风权限提示
+        const micNotification = document.createElement('div');
+        micNotification.innerHTML = `
+          <div style="position: fixed; top: 20px; right: 20px; background: #ef4444; color: white; padding: 12px 16px; border-radius: 8px; z-index: 10000; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+            <strong>需要麦克风权限</strong><br>
+            请确保已授予麦克风访问权限，这对录制音频至关重要
+          </div>
+        `;
+        document.body.appendChild(micNotification);
+        setTimeout(() => {
+          if (document.body.contains(micNotification)) {
+            document.body.removeChild(micNotification);
+          }
+        }, 3000);
+      }
+
+      // 配置录制参数，使用更简单直接的音频配置
+      const screenStream = await navigator.mediaDevices.getDisplayMedia({
+        video: true,
+        audio: true  // 使用默认设置，让浏览器自动处理
+      });
+      
+      console.log('屏幕共享流获取成功，包含的轨道:', {
+        videoTracks: screenStream.getVideoTracks().length,
+        audioTracks: screenStream.getAudioTracks().length
+      });
+      
+      // 移除预录制提示
+      const notification = document.getElementById('screen-recording-notification');
+      if (notification && document.body.contains(notification)) {
+        document.body.removeChild(notification);
+      }
+      
+      // 创建组合媒体流，用于合并屏幕视频和所有音频
+      const combinedStream = new MediaStream();
+      
+      // 添加屏幕视频轨道
+      screenStream.getVideoTracks().forEach(track => {
+        combinedStream.addTrack(track);
+        console.log('添加视频轨道:', track.kind, track.enabled);
+        
+        // 监听屏幕共享结束事件
+        track.addEventListener('ended', () => {
+          console.log('屏幕共享已结束');
+          if (recorder && recorder.state !== 'inactive') {
+            recorder.stop();
+          }
+        });
+      });
+      
+      // 首先添加麦克风音频轨道（优先级更高）
+      if (micStream) {
+        const micAudioTracks = micStream.getAudioTracks();
+        if (micAudioTracks.length > 0) {
+          micAudioTracks.forEach(track => {
+            combinedStream.addTrack(track);
+            console.log('添加麦克风音频轨道:', track.kind, track.enabled);
+            // 确保音频轨道已启用
+            track.enabled = true;
+          });
+        }
+      }
+      
+      // 然后添加屏幕音频轨道
+      const screenAudioTracks = screenStream.getAudioTracks();
+      if (screenAudioTracks.length > 0) {
+        screenAudioTracks.forEach(track => {
+          combinedStream.addTrack(track);
+          console.log('添加系统音频轨道:', track.kind, track.enabled);
+          // 确保音频轨道已启用
+          track.enabled = true;
+        });
+      } else {
+        console.warn('未找到屏幕音频轨道，将仅使用麦克风音频');
+      }
+      
+      // 记录组合流中的所有轨道信息
+      console.log('组合流中的轨道信息:', {
+        videoTracks: combinedStream.getVideoTracks().length,
+        audioTracks: combinedStream.getAudioTracks().length
+      });
+      combinedStream.getTracks().forEach(track => {
+        console.log(`轨道类型: ${track.kind}, 启用状态: ${track.enabled}`);
+      });
+
+      // 使用更保守的MIME类型选择策略，优先确保音频正常工作
+      let mimeType = '';
+      const mimeTypeOptions = [
+        'video/webm',  // 使用基本WebM格式，让浏览器自动选择合适的编解码器
+        'video/webm;codecs=vp8,opus',
+        'video/webm;codecs=vp9,opus'
+      ];
+      
+      // 找到第一个支持的MIME类型
+      for (const option of mimeTypeOptions) {
+        if (MediaRecorder.isTypeSupported(option)) {
+          mimeType = option;
+          break;
+        }
+      }
+      
+      console.log('选择的MIME类型:', mimeType);
+      
+      // 创建MediaRecorder实例
+      const mediaRecorderOptions: MediaRecorderOptions = {};
+      if (mimeType) {
+        mediaRecorderOptions.mimeType = mimeType;
+      }
+      
+      // 添加更全面的录制配置
+      mediaRecorderOptions.audioBitsPerSecond = 192000;  // 提高音频比特率
+      mediaRecorderOptions.videoBitsPerSecond = 5000000;  // 设置合理的视频比特率
+      
+      const mediaRecorder = new MediaRecorder(combinedStream, mediaRecorderOptions);
+      console.log('MediaRecorder配置:', mediaRecorderOptions);
+      console.log('实际使用的MIME类型:', mediaRecorder.mimeType);
+      
+      setRecorder(mediaRecorder);
+      setCaptureStream(combinedStream);
+      setRecordedChunks([]);
+      setIsRecording(true);
+      
+      // 使用本地变量同步跟踪录制的块，避免React状态更新的异步问题
+      const localRecordedChunks: BlobPart[] = [];
+
+      // 监听数据可用事件，收集录制的媒体数据
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          localRecordedChunks.push(event.data);
+          // 同时更新React状态以便于调试
+          setRecordedChunks(prev => [...prev, event.data]);
+        }
+      };
+
+      // 监听录制停止事件，处理录制结果
+      mediaRecorder.onstop = async () => {
+          setIsRecording(false);
+          
+          // 清理录制中的提示
+          const recordingNotifications = document.querySelectorAll('div[style*="background: #ef4444"]');
+          recordingNotifications.forEach(notification => {
+            if (document.body.contains(notification)) {
+              document.body.removeChild(notification);
+            }
+          });
+          
+          // 清理流资源
+          combinedStream.getTracks().forEach(track => track.stop());
+          setCaptureStream(null);
+          
+          // 检查是否有录制数据
+          if (localRecordedChunks.length === 0) {
+            console.log('没有录制到任何内容');
+            // 显示更详细的录制失败提示
+            const failNotification = document.createElement('div');
+            failNotification.innerHTML = `
+              <div style="position: fixed; top: 20px; right: 20px; background: #ef4444; color: white; padding: 12px 16px; border-radius: 8px; z-index: 10000; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                <strong>录制失败</strong><br>
+                请确保您已授权屏幕录制并选择了正确的录制源<br>
+                尝试录制更长时间以确保有足够的数据
+              </div>
+            `;
+            document.body.appendChild(failNotification);
+            setTimeout(() => {
+              if (document.body.contains(failNotification)) {
+                document.body.removeChild(failNotification);
+              }
+            }, 3000);
+            return;
+          }
+
+          try {
+            // 创建完整的录制Blob
+            const recordingBlob = new Blob(localRecordedChunks, { type: mediaRecorder.mimeType || 'video/webm' });
+            
+            // 验证Blob大小
+            if (recordingBlob.size < 1024) { // 小于1KB可能表示数据不完整
+              throw new Error('录制数据不完整');
+            }
+          
+          // 创建下载链接
+          const downloadUrl = URL.createObjectURL(recordingBlob);
+          
+          // 创建并触发下载
+          const a = document.createElement('a');
+          a.href = downloadUrl;
+          
+          // 根据MIME类型设置合适的文件扩展名
+          let fileExtension = 'webm';
+          if (mediaRecorder.mimeType.includes('mp4')) {
+            fileExtension = 'mp4';
+          }
+          
+          const fileName = `screen-recording-${new Date().toISOString().replace(/[:.]/g, '-')}.${fileExtension}`;
+          a.download = fileName;
+          a.style.display = 'none';
+          document.body.appendChild(a);
+          
+          // 触发下载
+          a.click();
+          
+          // 显示录制成功提示
+          const audioStatusMessage = combinedStream.getAudioTracks().length > 0 
+            ? '包含音频轨道' 
+            : '未检测到音频轨道';
+          
+          const successNotification = document.createElement('div');
+          successNotification.innerHTML = `
+            <div style="position: fixed; top: 20px; right: 20px; background: #10b981; color: white; padding: 12px 16px; border-radius: 8px; z-index: 10000; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+              <strong>录制成功！</strong><br>
+              文件已开始下载: ${fileName}<br>
+              ${audioStatusMessage}<br>
+              <span style="font-size: 12px; opacity: 0.8;">如果视频没有声音，请检查您的浏览器权限设置</span>
+            </div>
+          `;
+          document.body.appendChild(successNotification);
+          
+          // 延迟移除a标签和提示
+          setTimeout(() => {
+            if (document.body.contains(a)) {
+              document.body.removeChild(a);
+            }
+            if (document.body.contains(successNotification)) {
+              document.body.removeChild(successNotification);
+            }
+            // 释放URL对象
+            URL.revokeObjectURL(downloadUrl);
+          }, 3000);
+          } catch (error) {
+            console.error('处理录制数据时出错:', error);
+            const errorNotification = document.createElement('div');
+            errorNotification.innerHTML = `
+              <div style="position: fixed; top: 20px; right: 20px; background: #ef4444; color: white; padding: 12px 16px; border-radius: 8px; z-index: 10000; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                <strong>录制数据处理失败</strong><br>
+                请尝试重新录制
+              </div>
+            `;
+            document.body.appendChild(errorNotification);
+            setTimeout(() => {
+              if (document.body.contains(errorNotification)) {
+                document.body.removeChild(errorNotification);
+              }
+            }, 3000);
+          }
+        };
+
+      // 开始录制
+      mediaRecorder.start();
+
+      // 显示录制中提示，提供更详细的指导
+      const audioTrackCount = combinedStream.getAudioTracks().length;
+      const recordingNotification = document.createElement('div');
+      recordingNotification.innerHTML = `
+        <div style="position: fixed; top: 20px; right: 20px; background: #ef4444; color: white; padding: 12px 16px; border-radius: 8px; z-index: 10000; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+          <strong>正在录制屏幕...</strong><br>
+          点击录屏按钮或按 Ctrl+Shift+R 停止录制<br>
+          音频轨道: ${audioTrackCount} 条<br>
+          <span style="font-weight: bold; color: #fbbf24;">重要提示:</span><br>
+          1. 请确保您的麦克风已开启<br>
+          2. 请确保扬声器音量适中<br>
+          3. 请尝试对着麦克风说话测试
+        </div>
+      `;
+      document.body.appendChild(recordingNotification);
+      
+      // 3秒后自动移除提示
+      setTimeout(() => {
+        if (document.body.contains(recordingNotification)) {
+          document.body.removeChild(recordingNotification);
+        }
+      }, 3000);
+      
+    } catch (error) {
+      console.error('录屏失败:', error);
+      
+      // 移除预录制提示
+      const notification = document.getElementById('screen-recording-notification');
+      if (notification && document.body.contains(notification)) {
+        document.body.removeChild(notification);
+      }
+      
+      alert('录屏功能初始化失败，请确保浏览器支持屏幕录制API并授予权限');
+    }
+  }
+
+  // 添加快捷键支持 (Ctrl+Shift+R)
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // 检查是否按下了Ctrl+Shift+R
+      if (event.ctrlKey && event.shiftKey && event.key === 'R') {
+        event.preventDefault();
+        handleStartRecording();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [handleStartRecording]);
+
+  // 清理函数，组件卸载时确保停止录制
+  useEffect(() => {
+    return () => {
+      if (recorder && recorder.state !== 'inactive') {
+        recorder.stop();
+      }
+      if (captureStream) {
+        captureStream.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, [recorder, captureStream]);
 
   // 获取用户点数
   const fetchUserPoints = useCallback(async () => {
@@ -3367,6 +3732,16 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
 
           {/* 历史记录按钮 */}
           <div className="relative">
+            {/* 录屏按钮 */}
+            <Tooltip content="录屏 (Ctrl+Shift+R)" position="bottom">
+              <button
+                onClick={handleStartRecording}
+                className={`p-1 lg:p-2 mr-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded ${isRecording ? 'bg-red-100 dark:bg-red-900' : ''}`}
+              >
+                <Video className="h-4 w-4 lg:h-5 lg:w-5" />
+              </button>
+            </Tooltip>
+
             <Tooltip content="历史记录 (Ctrl+S)" position="bottom">
               <button
                 onClick={() => {
