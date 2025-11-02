@@ -1127,8 +1127,7 @@ export default function CanvasPage() {
               if (fabricCanvas) {
                 fabric.util.requestAnimFrame(renderLoop)
               }
-              
-            } catch (error) {
+          } catch (error) {
                 
                 // 如果视频添加失败，创建视频占位符
                 const fabricVideoPlaceholder = new fabric.Group([
@@ -1237,10 +1236,10 @@ export default function CanvasPage() {
       }
     }
 
-    fabricCanvas.on('mouse:down', handleCanvasClick)
+    fabricCanvas.on('mouse:up', handleCanvasClick)
 
     return () => {
-      fabricCanvas.off('mouse:down', handleCanvasClick)
+      fabricCanvas.off('mouse:up', handleCanvasClick)
     }
   }, [fabricCanvas])
 

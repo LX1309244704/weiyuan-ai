@@ -223,22 +223,10 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
             echoCancellation: true,
             noiseSuppression: true,
             autoGainControl: true,
-            // 增强降噪配置
-            noiseSuppressionLevel: 'high', // 高级别降噪
             sampleRate: 48000,
             channelCount: 2,
-            // 添加更多音频优化配置
-            echoCancellationType: 'system',
-            latency: 0,
             // 某些浏览器支持的额外选项
-            suppressLocalAudioPlayback: false,
-            googEchoCancellation: true,
-            googNoiseSuppression: true,
-            googAutoGainControl: true,
-            googHighpassFilter: true,
-            googNoiseSuppression2: true,
-            googEchoCancellation2: true,
-            googAutoGainControl2: true
+            // 已移除非标准的浏览器特定扩展属性
           }
         });
         console.log('成功获取麦克风权限，启用高级音频降噪');
@@ -266,8 +254,6 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
         audio: {
           echoCancellation: true,
           noiseSuppression: true,
-          // 增强系统音频的降噪处理
-          noiseSuppressionLevel: 'high',
           autoGainControl: true
         }
       });
@@ -461,53 +447,95 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
               throw new Error('录制数据不完整');
             }
           
-          // 创建下载链接
-          const downloadUrl = URL.createObjectURL(recordingBlob);
-          
-          // 创建并触发下载
-          const a = document.createElement('a');
-          a.href = downloadUrl;
-          
           // 根据MIME类型设置合适的文件扩展名
           let fileExtension = 'webm';
+          let mimeType = 'video/webm';
           if (mediaRecorder.mimeType.includes('mp4')) {
             fileExtension = 'mp4';
+            mimeType = 'video/mp4';
           }
           
           const fileName = `screen-recording-${new Date().toISOString().replace(/[:.]/g, '-')}.${fileExtension}`;
-          a.download = fileName;
-          a.style.display = 'none';
-          document.body.appendChild(a);
           
-          // 触发下载
-          a.click();
+          // 使用showSaveFilePicker让用户选择保存位置
+          if ((window as any).showSaveFilePicker) {
+            try {
+              // 显示文件保存对话框
+              const handle = await (window as any).showSaveFilePicker({
+                suggestedName: fileName,
+                types: [
+                  {
+                    description: '视频文件',
+                    accept: {
+                      [mimeType]: [`.${fileExtension}`],
+                    },
+                  },
+                ],
+              });
+              
+              // 获取可写流并写入文件
+              const writable = await handle.createWritable();
+              await writable.write(recordingBlob);
+              await writable.close();
+            } catch (saveError) {
+              // 用户取消保存对话框不会抛出错误，但如果有其他错误，使用备用下载方式
+              console.warn('文件保存对话框操作被取消或失败:', saveError);
+              // 回退到传统下载方式
+              const downloadUrl = URL.createObjectURL(recordingBlob);
+              const a = document.createElement('a');
+              a.href = downloadUrl;
+              a.download = fileName;
+              a.style.display = 'none';
+              document.body.appendChild(a);
+              a.click();
+            }
+          } else {
+            // 浏览器不支持showSaveFilePicker，回退到传统下载方式
+            console.warn('当前浏览器不支持文件保存对话框，使用传统下载方式');
+            const downloadUrl = URL.createObjectURL(recordingBlob);
+            const a = document.createElement('a');
+            a.href = downloadUrl;
+            a.download = fileName;
+            a.style.display = 'none';
+            document.body.appendChild(a);
+            a.click();
+          }
           
           // 显示录制成功提示
           const audioStatusMessage = combinedStream.getAudioTracks().length > 0 
             ? '包含音频轨道' 
             : '未检测到音频轨道';
           
-          const successNotification = document.createElement('div');
-          successNotification.innerHTML = `
+          // 简化的成功提示消息
+          const successMessage = `
             <div style="position: fixed; top: 20px; right: 20px; background: #10b981; color: white; padding: 12px 16px; border-radius: 8px; z-index: 10000; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-              <strong>录制成功！</strong><br>
-              文件已开始下载: ${fileName}<br>
-              ${audioStatusMessage}<br>
-              <span style="font-size: 12px; opacity: 0.8;">如果视频没有声音，请检查您的浏览器权限设置</span>
+              <strong>录制成功！</strong>
             </div>
           `;
+          
+          const successNotification = document.createElement('div');
+          successNotification.innerHTML = successMessage;
           document.body.appendChild(successNotification);
           
-          // 延迟移除a标签和提示
+          // 延迟移除提示和清理资源
           setTimeout(() => {
-            if (document.body.contains(a)) {
-              document.body.removeChild(a);
+            // 只在a变量存在时移除它
+            // 检查并移除临时下载链接元素
+            const tempLink = document.getElementById('temp-download-link');
+            if (tempLink && document.body.contains(tempLink)) {
+              document.body.removeChild(tempLink);
             }
             if (document.body.contains(successNotification)) {
               document.body.removeChild(successNotification);
             }
-            // 释放URL对象
-            URL.revokeObjectURL(downloadUrl);
+            // 清理URL对象
+            const tempUrlElement = document.getElementById('temp-download-link');
+            if (tempUrlElement) {
+              const url = tempUrlElement.getAttribute('href');
+              if (url) {
+                URL.revokeObjectURL(url);
+              }
+            }
           }, 3000);
           } catch (error) {
             console.error('处理录制数据时出错:', error);
@@ -535,16 +563,7 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
       const recordingNotification = document.createElement('div');
       recordingNotification.innerHTML = `
         <div style="position: fixed; top: 20px; right: 20px; background: #ef4444; color: white; padding: 12px 16px; border-radius: 8px; z-index: 10000; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-          <strong>正在录制屏幕...</strong><br>
-          点击录屏按钮暂停录制<br>
-          点击停止按钮完成录制<br>
-          按 Ctrl+Shift+R 暂停录制<br>
-          按 Ctrl+Shift+S 停止录制<br>
-          音频轨道: ${audioTrackCount} 条<br>
-          <span style="font-weight: bold; color: #fbbf24;">重要提示:</span><br>
-          1. 请确保您的麦克风已开启<br>
-          2. 请确保扬声器音量适中<br>
-          3. 请尝试对着麦克风说话测试
+          <strong>正在录制屏幕...</strong>
         </div>
       `;
       document.body.appendChild(recordingNotification);
@@ -1917,8 +1936,8 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
     saveCanvasState();
     
     // 创建关节圆形函数 - 使用中心点定位
-    const makeCircle = (centerX: number, centerY: number) => {
-      const radius = 12;
+    const makeCircle = (centerX: number, centerY: number, customRadius?: number) => {
+      const radius = customRadius || 12;
       const c = new fabric.Circle({
         left: centerX - radius,  // 计算左上角坐标
         top: centerY - radius,   // 计算左上角坐标
@@ -1981,7 +2000,7 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
     const centerY = canvas.height! / 2;
     
     // 首先创建所有关节控制点 - 增加手部和脚部关节
-    const headJoint = makeCircle(centerX, centerY - 75);      // 头部关节
+    const headJoint = makeCircle(centerX, centerY - 75, 24);      // 头部关节（放大一倍）
     const bodyJoint = makeCircle(centerX, centerY - 25);      // 身体中央关节
     const hipsJoint = makeCircle(centerX, centerY + 25);      // 臀部关节
     

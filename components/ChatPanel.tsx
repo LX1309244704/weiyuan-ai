@@ -68,6 +68,25 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
     document.removeEventListener('mouseup', handleResizeEnd)
   }, [handleResizeMove])
 
+  // 将消息内容添加到聊天中
+  const handleAddMessageToChat = async (messageContent: string, imageData?: string) => {
+    // 将消息内容设置到输入框
+    setInputText(messageContent)
+    
+    // 如果有图片数据，添加到预览列表
+    if (imageData) {
+      setUploadedImagePreviews([imageData])
+    }
+    
+    // 滚动到底部并聚焦输入框
+    scrollToBottom()
+    const textarea = document.querySelector('textarea') as HTMLTextAreaElement
+    textarea?.focus()
+    
+    // 显示成功通知
+    showNotification('已添加到输入框，可直接编辑后发送', 'success')
+  }
+
   // 开始拖拽调整宽度
   const handleResizeStart = (e: React.MouseEvent) => {
     e.preventDefault()
@@ -1090,7 +1109,6 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
                 : 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-gray-100'
             }`}>
               <p className="text-sm" data-message-content="true">{message.content}</p>
-
               
               {message.imageData && (
                 <div className="mt-2" data-ai-generated={message.type === 'ai' ? 'true' : 'false'}>
@@ -1099,16 +1117,17 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
                     alt={message.type === 'ai' ? 'AI生成图片' : '截图'} 
                     className="rounded border border-gray-200 dark:border-gray-600 max-w-full"
                   />
-                  {message.type === 'ai' && (
-                    <div className="flex space-x-2 mt-2">
-                      {/* 隐藏下载图片按钮 */}
-                      <button
-                        onClick={() => handleDownload(message.imageData!, 'ai-generated.png')}
-                        className="hidden flex items-center space-x-1 text-xs text-blue-600 hover:text-blue-800"
-                      >
-                        <Download className="h-3 w-3" />
-                        <span>下载图片</span>
-                      </button>
+                  <div className="flex space-x-2 mt-2">
+                    {/* 隐藏下载图片按钮 */}
+                    <button
+                      onClick={() => handleDownload(message.imageData!, 'ai-generated.png')}
+                      className="hidden flex items-center space-x-1 text-xs text-blue-600 hover:text-blue-800"
+                    >
+                      <Download className="h-3 w-3" />
+                      <span>下载图片</span>
+                    </button>
+                    {/* 只在AI消息中显示添加到画板按钮 */}
+                    {message.type === 'ai' && (
                       <button
                         onClick={() => handleAddToCanvas(message.imageData!)}
                         className="flex items-center space-x-1 text-xs text-green-600 hover:text-green-800"
@@ -1118,8 +1137,19 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
                         </svg>
                         <span>添加到画板</span>
                       </button>
-                    </div>
-                  )}
+                    )}
+                    {/* 所有类型消息都显示添加到聊天按钮 */}
+                    <button
+                      onClick={() => handleAddMessageToChat(message.content, message.imageData)}
+                      className={`flex items-center justify-center text-xs ${message.type === 'user' ? 'text-white hover:text-primary-200' : 'text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300'}`}
+                      title="将此消息内容添加到聊天输入框"
+                    >
+                      <svg className="h-3 w-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                      </svg>
+                      <span>添加到聊天</span>
+                    </button>
+                  </div>
                 </div>
               )}
               
@@ -1130,16 +1160,17 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
                     controls
                     className="rounded border border-gray-200 dark:border-gray-600 max-w-full"
                   />
-                  {message.type === 'ai' && (
-                    <div className="flex space-x-2 mt-2">
-                      {/* 隐藏下载视频按钮 */}
-                      <button
-                        onClick={() => handleDownload(message.videoData!, 'ai-generated.mp4')}
-                        className="hidden flex items-center space-x-1 text-xs text-blue-600 hover:text-blue-800"
-                      >
-                        <Download className="h-3 w-3" />
-                        <span>下载视频</span>
-                      </button>
+                  <div className="flex space-x-2 mt-2">
+                    {/* 隐藏下载视频按钮 */}
+                    <button
+                      onClick={() => handleDownload(message.videoData!, 'ai-generated.mp4')}
+                      className="hidden flex items-center space-x-1 text-xs text-blue-600 hover:text-blue-800"
+                    >
+                      <Download className="h-3 w-3" />
+                      <span>下载视频</span>
+                    </button>
+                    {/* 只在AI消息中显示添加到画板按钮 */}
+                    {message.type === 'ai' && (
                       <button
                         onClick={() => handleAddVideoToCanvas(message.videoData!)}
                         className="flex items-center space-x-1 text-xs text-green-600 hover:text-green-800"
@@ -1149,14 +1180,52 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
                         </svg>
                         <span>添加到画板</span>
                       </button>
-                    </div>
-                  )}
+                    )}
+                    {/* 所有类型消息都显示添加到聊天按钮 */}
+                    <button
+                      onClick={() => handleAddMessageToChat(message.content)}
+                      className={`flex items-center justify-center text-xs ${message.type === 'user' ? 'text-white hover:text-primary-200' : 'text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300'}`}
+                      title="将此消息内容添加到聊天输入框"
+                    >
+                      <svg className="h-3 w-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                      </svg>
+                      <span>添加到聊天</span>
+                    </button>
+                  </div>
                 </div>
               )}
-
-              <div className={`text-xs mt-1 ${
-                message.type === 'user' ? 'text-primary-200' : 'text-gray-500'
-              }`} data-message-time="true">
+              
+              {/* 为所有类型消息（没有图片/视频）添加按钮 */}
+              {!message.imageData && !message.videoData && (
+                <div className="flex space-x-2 mt-2">
+                  {/* 只在AI消息中显示添加到画板按钮 */}
+                  {message.type === 'ai' && (
+                    <button
+                      onClick={() => handleAddToCanvas(undefined)}
+                      className="flex items-center space-x-1 text-xs text-green-600 hover:text-green-800"
+                    >
+                      <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                      </svg>
+                      <span>添加到画板</span>
+                    </button>
+                  )}
+                  {/* 所有类型消息都显示添加到聊天按钮 */}
+                  <button
+                    onClick={() => handleAddMessageToChat(message.content)}
+                    className={`flex items-center justify-center text-xs ${message.type === 'user' ? 'text-white hover:text-primary-200' : 'text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300'}`}
+                    title="将此消息内容添加到聊天输入框"
+                  >
+                    <svg className="h-3 w-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                    </svg>
+                    <span>添加到聊天</span>
+                  </button>
+                </div>
+              )}
+              
+              <div className={`text-xs mt-1 ${message.type === 'user' ? 'text-primary-200' : 'text-gray-500'}`} data-message-time="true">
                 {message.timestamp instanceof Date && !isNaN(message.timestamp.getTime()) 
                   ? message.timestamp.toLocaleTimeString('zh-CN', { 
                       hour: '2-digit', 
