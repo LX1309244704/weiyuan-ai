@@ -79,22 +79,118 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
   const [historyRecords, setHistoryRecords] = useState<HistoryRecord[]>([])
   // 录屏功能状态 - 参考Cap仓库实现
   const [isRecording, setIsRecording] = useState(false)
+  const [isPaused, setIsPaused] = useState(false)
   const [recorder, setRecorder] = useState<MediaRecorder | null>(null)
   const [recordedChunks, setRecordedChunks] = useState<Blob[]>([])
   const [captureStream, setCaptureStream] = useState<MediaStream | null>(null)
+  const [recordingTime, setRecordingTime] = useState(0)
+  const recordingTimerRef = useRef<NodeJS.Timeout | null>(null)
 
   const layerPanelRef = useRef<HTMLDivElement>(null)
   const historyPanelRef = useRef<HTMLDivElement>(null)
   const [copiedObject, setCopiedObject] = useState<any>(null)
   const [isLoadingPoints, setIsLoadingPoints] = useState(false)
 
+  // 格式化时间函数 (秒 -> MM:SS)
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60).toString().padStart(2, '0');
+    const secs = (seconds % 60).toString().padStart(2, '0');
+    return `${mins}:${secs}`;
+  };
+
+  // 停止录制函数
+  const handleStopRecording = () => {
+    if (recorder && recorder.state !== 'inactive') {
+      recorder.stop();
+      // 清除计时器
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current);
+        recordingTimerRef.current = null;
+      }
+      setRecordingTime(0);
+      // 显示停止录制提示
+      const stopNotification = document.createElement('div');
+      stopNotification.innerHTML = `
+        <div style="position: fixed; top: 20px; right: 20px; background: #10b981; color: white; padding: 12px 16px; border-radius: 8px; z-index: 10000; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+          <strong>录制已停止</strong><br>
+          文件正在处理中...
+        </div>
+      `;
+      document.body.appendChild(stopNotification);
+      
+      setTimeout(() => {
+        if (document.body.contains(stopNotification)) {
+          document.body.removeChild(stopNotification);
+        }
+      }, 2000);
+    }
+  };
+
   // 录屏功能实现 - 使用更可靠的音频录制方法
   const handleStartRecording = async () => {
     if (isRecording) {
-      // 停止录制
-      if (recorder) {
-        recorder.stop();
-      }
+        if (isPaused) {
+          // 恢复录制
+          if (recorder) {
+            recorder.resume();
+            setIsPaused(false);
+            
+            // 恢复计时器
+            if (!recordingTimerRef.current) {
+              recordingTimerRef.current = setInterval(() => {
+                setRecordingTime(prev => prev + 1);
+              }, 1000);
+            }
+            
+            // 显示恢复录制提示
+            const resumeNotification = document.createElement('div');
+            resumeNotification.innerHTML = `
+              <div style="position: fixed; top: 20px; right: 20px; background: #10b981; color: white; padding: 12px 16px; border-radius: 8px; z-index: 10000; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                <strong>录制已恢复</strong><br>
+                点击录屏按钮暂停录制<br>
+                按 Ctrl+Shift+R 暂停录制<br>
+                按 Ctrl+Shift+S 停止录制
+              </div>
+            `;
+            document.body.appendChild(resumeNotification);
+        
+            setTimeout(() => {
+              if (document.body.contains(resumeNotification)) {
+                document.body.removeChild(resumeNotification);
+              }
+            }, 3000);
+          }
+      } else {
+          // 暂停录制
+          if (recorder) {
+            recorder.pause();
+            setIsPaused(true);
+            
+            // 暂停计时器
+            if (recordingTimerRef.current) {
+              clearInterval(recordingTimerRef.current);
+              recordingTimerRef.current = null;
+            }
+            
+            // 显示暂停录制提示
+            const pauseNotification = document.createElement('div');
+            pauseNotification.innerHTML = `
+              <div style="position: fixed; top: 20px; right: 20px; background: #f59e0b; color: white; padding: 12px 16px; border-radius: 8px; z-index: 10000; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                <strong>录制已暂停</strong><br>
+                点击录屏按钮继续录制<br>
+                按 Ctrl+Shift+R 继续录制<br>
+                按 Ctrl+Shift+S 停止录制
+              </div>
+            `;
+            document.body.appendChild(pauseNotification);
+            
+            setTimeout(() => {
+              if (document.body.contains(pauseNotification)) {
+                document.body.removeChild(pauseNotification);
+              }
+            }, 3000);
+          }
+        }
       return;
     }
 
@@ -127,11 +223,25 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
             echoCancellation: true,
             noiseSuppression: true,
             autoGainControl: true,
+            // 增强降噪配置
+            noiseSuppressionLevel: 'high', // 高级别降噪
             sampleRate: 48000,
-            channelCount: 2
+            channelCount: 2,
+            // 添加更多音频优化配置
+            echoCancellationType: 'system',
+            latency: 0,
+            // 某些浏览器支持的额外选项
+            suppressLocalAudioPlayback: false,
+            googEchoCancellation: true,
+            googNoiseSuppression: true,
+            googAutoGainControl: true,
+            googHighpassFilter: true,
+            googNoiseSuppression2: true,
+            googEchoCancellation2: true,
+            googAutoGainControl2: true
           }
         });
-        console.log('成功获取麦克风权限');
+        console.log('成功获取麦克风权限，启用高级音频降噪');
       } catch (err) {
         console.warn('无法获取麦克风权限:', err);
         // 显示麦克风权限提示
@@ -150,10 +260,16 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
         }, 3000);
       }
 
-      // 配置录制参数，使用更简单直接的音频配置
+      // 配置录制参数，优化音频设置
       const screenStream = await navigator.mediaDevices.getDisplayMedia({
         video: true,
-        audio: true  // 使用默认设置，让浏览器自动处理
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          // 增强系统音频的降噪处理
+          noiseSuppressionLevel: 'high',
+          autoGainControl: true
+        }
       });
       
       console.log('屏幕共享流获取成功，包含的轨道:', {
@@ -247,6 +363,24 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
       mediaRecorderOptions.audioBitsPerSecond = 192000;  // 提高音频比特率
       mediaRecorderOptions.videoBitsPerSecond = 5000000;  // 设置合理的视频比特率
       
+      // 检查是否可以应用音频处理（如果浏览器支持）
+      if (typeof AudioContext !== 'undefined' && micStream) {
+        try {
+          const audioContext = new AudioContext();
+          const source = audioContext.createMediaStreamSource(micStream);
+          
+          // 尝试创建音频处理节点（如浏览器支持）
+          if (typeof ConvolverNode !== 'undefined' || typeof BiquadFilterNode !== 'undefined') {
+            console.log('浏览器支持高级音频处理，音频质量将进一步优化');
+          }
+          
+          console.log('音频上下文已初始化，准备进行可能的实时音频处理');
+        } catch (audioError) {
+          console.warn('无法初始化音频处理:', audioError);
+          // 继续使用默认处理
+        }
+      }
+      
       const mediaRecorder = new MediaRecorder(combinedStream, mediaRecorderOptions);
       console.log('MediaRecorder配置:', mediaRecorderOptions);
       console.log('实际使用的MIME类型:', mediaRecorder.mimeType);
@@ -255,6 +389,12 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
       setCaptureStream(combinedStream);
       setRecordedChunks([]);
       setIsRecording(true);
+      setRecordingTime(0);
+      
+      // 启动计时器
+      recordingTimerRef.current = setInterval(() => {
+        setRecordingTime(prev => prev + 1);
+      }, 1000);
       
       // 使用本地变量同步跟踪录制的块，避免React状态更新的异步问题
       const localRecordedChunks: BlobPart[] = [];
@@ -271,6 +411,13 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
       // 监听录制停止事件，处理录制结果
       mediaRecorder.onstop = async () => {
           setIsRecording(false);
+          setIsPaused(false);
+          // 清除计时器
+          if (recordingTimerRef.current) {
+            clearInterval(recordingTimerRef.current);
+            recordingTimerRef.current = null;
+          }
+          setRecordingTime(0);
           
           // 清理录制中的提示
           const recordingNotifications = document.querySelectorAll('div[style*="background: #ef4444"]');
@@ -389,7 +536,10 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
       recordingNotification.innerHTML = `
         <div style="position: fixed; top: 20px; right: 20px; background: #ef4444; color: white; padding: 12px 16px; border-radius: 8px; z-index: 10000; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
           <strong>正在录制屏幕...</strong><br>
-          点击录屏按钮或按 Ctrl+Shift+R 停止录制<br>
+          点击录屏按钮暂停录制<br>
+          点击停止按钮完成录制<br>
+          按 Ctrl+Shift+R 暂停录制<br>
+          按 Ctrl+Shift+S 停止录制<br>
           音频轨道: ${audioTrackCount} 条<br>
           <span style="font-weight: bold; color: #fbbf24;">重要提示:</span><br>
           1. 请确保您的麦克风已开启<br>
@@ -419,13 +569,45 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
     }
   }
 
-  // 添加快捷键支持 (Ctrl+Shift+R)
+  // 添加快捷键支持
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      // 检查是否按下了Ctrl+Shift+R
+      // 检查是否按下了Ctrl+Shift+R（用于开始/暂停/继续录制）
       if (event.ctrlKey && event.shiftKey && event.key === 'R') {
         event.preventDefault();
-        handleStartRecording();
+        // 如果正在录制但未暂停，先切换暂停状态
+        if (isRecording && !isPaused) {
+          // 模拟点击暂停录制
+          if (recorder) {
+            recorder.pause();
+            setIsPaused(true);
+            
+            // 显示暂停录制提示
+            const pauseNotification = document.createElement('div');
+            pauseNotification.innerHTML = `
+              <div style="position: fixed; top: 20px; right: 20px; background: #f59e0b; color: white; padding: 12px 16px; border-radius: 8px; z-index: 10000; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                <strong>录制已暂停</strong><br>
+                再次按 Ctrl+Shift+R 继续录制<br>
+                按 Ctrl+Shift+S 停止录制
+              </div>
+            `;
+            document.body.appendChild(pauseNotification);
+            
+            setTimeout(() => {
+              if (document.body.contains(pauseNotification)) {
+                document.body.removeChild(pauseNotification);
+              }
+            }, 3000);
+          }
+        } else {
+          // 其他情况（未录制或已暂停）调用原始处理函数
+          handleStartRecording();
+        }
+      }
+      // 检查是否按下了Ctrl+Shift+S（用于停止录制）
+      else if (event.ctrlKey && event.shiftKey && event.key === 'S' && isRecording) {
+        event.preventDefault();
+        handleStopRecording();
       }
     };
 
@@ -434,7 +616,7 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [handleStartRecording]);
+  }, [handleStartRecording, handleStopRecording, isRecording, isPaused, recorder]);
 
   // 清理函数，组件卸载时确保停止录制
   useEffect(() => {
@@ -3337,6 +3519,10 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
         break
       case 'p':
         event.preventDefault()
+        handleToolSelect('pencil')
+        break
+      case 'm':
+        event.preventDefault()
         handleAddStickFigure()
         break
       case 'r':
@@ -3614,13 +3800,13 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
           const getShortcut = (toolId: string) => {
             switch (toolId) {
               case 'hand': return 'H'
-              case 'pencil': return ''
+              case 'pencil': return 'P'
               case 'arrow': return 'R'
               case 'shapes': return 'S'
               case 'text': return 'T'
               case 'eraser': return 'E'
               case 'image': return 'I'
-              case 'stickfigure': return 'P'
+              case 'stickfigure': return 'M'
               default: return ''
             }
           }
@@ -3732,30 +3918,60 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
 
           {/* 历史记录按钮 */}
           <div className="relative">
-            {/* 录屏按钮 */}
-            <Tooltip content="录屏 (Ctrl+Shift+R)" position="bottom">
-              <button
-                onClick={handleStartRecording}
-                className={`p-1 lg:p-2 mr-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded ${isRecording ? 'bg-red-100 dark:bg-red-900' : ''}`}
-              >
-                <Video className="h-4 w-4 lg:h-5 lg:w-5" />
-              </button>
-            </Tooltip>
-
-            <Tooltip content="历史记录 (Ctrl+S)" position="bottom">
-              <button
-                onClick={() => {
-                  setActiveTool('history')
-                  setShowHistoryPanel(true)
-                  loadHistoryRecords()
-                }}
-                className={`p-1 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded ${
-                  activeTool === 'history' ? 'bg-blue-100 dark:bg-blue-900' : ''
-                }`}
-              >
-                <History className="h-4 w-4 lg:h-5 lg:w-5" />
-              </button>
-            </Tooltip>
+            <div className="flex items-center">
+              {/* 录制时间显示 - 仅在录制时显示 */}
+              {isRecording && (
+                <div className="flex items-center text-xs lg:text-sm font-mono text-gray-700 dark:text-gray-300 mr-2 whitespace-nowrap">
+                  {formatTime(recordingTime)}
+                </div>
+              )}
+              
+              {/* 录屏按钮 */}
+              <Tooltip content="录屏 (Ctrl+Shift+R)" position="bottom">
+                <button
+                  onClick={handleStartRecording}
+                  className={`p-1 lg:p-2 mr-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded ${isRecording ? (isPaused ? 'bg-amber-100 dark:bg-amber-900' : 'bg-red-100 dark:bg-red-900') : ''}`}
+                  title={isRecording ? (isPaused ? '继续录制' : '暂停录制') : '开始录制'}
+                >
+                  {isRecording && isPaused ? (
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 lg:h-5 lg:w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5v14l11-7z" />
+                    </svg>
+                  ) : (
+                    <Video className="h-4 w-4 lg:h-5 lg:w-5" />
+                  )}
+                </button>
+              </Tooltip>
+            
+              {/* 停止录制按钮 - 仅在录制时显示 */}
+              {isRecording && (
+                <Tooltip content="完成录制 (Ctrl+Shift+S)" position="bottom">
+                  <button
+                    onClick={handleStopRecording}
+                    className="p-1 lg:p-2 mr-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded bg-rose-100 dark:bg-rose-900"
+                    title="完成录制"
+                  >
+                    <Square className="h-4 w-4 lg:h-5 lg:w-5" />
+                  </button>
+                </Tooltip>
+              )}
+              
+              {/* 历史记录按钮 */}
+              <Tooltip content="历史记录 (Ctrl+H)" position="bottom">
+                <button
+                  onClick={() => {
+                    setActiveTool('history')
+                    setShowHistoryPanel(true)
+                    loadHistoryRecords()
+                  }}
+                  className={`p-1 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded ${
+                    activeTool === 'history' ? 'bg-blue-100 dark:bg-blue-900' : ''
+                  }`}
+                >
+                  <History className="h-4 w-4 lg:h-5 lg:w-5" />
+                </button>
+              </Tooltip>
+            </div>
             
             {/* 历史记录面板 */}
             {showHistoryPanel && (

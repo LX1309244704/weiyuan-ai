@@ -5,14 +5,14 @@
   "identifier": "com.weiyuan.ai",
   "build": {
     "frontendDist": "../out",
-    "devUrl": "http://localhost:3000",
+    "devUrl": "http://localhost:3100",
     "beforeDevCommand": "npm run dev",
     "beforeBuildCommand": "npm run build"
   },
   "app": {
     "windows": [
       {
-        "title": "微元AI-定制联系WX:sanjin_aigc",
+        "title": "ai东姬-可视化创意工作台",
         "width": 800,
         "height": 600,
         "resizable": true,
