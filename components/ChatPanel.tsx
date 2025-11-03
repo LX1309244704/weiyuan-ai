@@ -40,11 +40,11 @@ const ChatPanel = forwardRef<{ handleReceiveScreenshot: (imageData: string, prom
   const [selectedDuration, setSelectedDuration] = useState('10s')
   const [selectedModelType, setSelectedModelType] = useState<'image' | 'video' | 'text'>('video')
   const [notification, setNotification] = useState<{message: string, type: 'success' | 'error' | 'info'} | null>(null)
-  const [panelWidth, setPanelWidth] = useState(320) // 默认宽度320px
+  const [panelWidth, setPanelWidth] = useState(600) // 默认宽度600px（最大宽度）
   const [isResizing, setIsResizing] = useState(false)
   const resizeStartXRef = useRef(0)
   const resizeStartWidthRef = useRef(0)
-  const currentWidthRef = useRef(320) // 使用ref存储当前宽度，避免频繁状态更新
+  const currentWidthRef = useRef(600) // 使用ref存储当前宽度，避免频繁状态更新
 
   // 使用useCallback确保函数引用稳定，优化性能
   const handleResizeMove = useCallback((e: MouseEvent) => {

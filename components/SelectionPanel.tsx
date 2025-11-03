@@ -7,6 +7,7 @@ interface SelectionData {
   rect: any
   mousePosition: { x: number; y: number }
   screenPosition: { x: number; y: number }
+  object?: any
 }
 
 interface SelectionPanelProps {

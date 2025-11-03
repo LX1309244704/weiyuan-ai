@@ -55,7 +55,7 @@ interface CanvasToolbarProps {
   selectedArea: any
 }
 
-type Tool = 'pencil' | 'shapes' | 'text' | 'eraser' | 'image' | 'hand' | 'arrow' | 'layers' | 'history'
+type Tool = 'pencil' | 'shapes' | 'text' | 'eraser' | 'image' | 'hand' | 'arrow' | 'layers' | 'history' | 'stickfigure'
 type ShapeType = 'rectangle' | 'circle' | 'triangle' | 'star' | 'heart' | 'diamond' | 'octagon' | 'arrow' | 'line' | 'dashed-line' | 'left-brace' | 'right-brace'
 
 export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: CanvasToolbarProps) {

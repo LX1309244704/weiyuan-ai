@@ -4,7 +4,7 @@ import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuthStore } from '@/stores/authStore'
 import NavigationBar from '@/components/NavigationBar'
-import { Home, Plus, TrendingUp, Users, Star } from 'lucide-react'
+import { Home, Plus, TrendingUp, Users, Star, Video } from 'lucide-react'
 
 // 导入JSON数据
 import userData from '@/data/user.json'
@@ -49,6 +49,7 @@ export default function UserHomePage() {
                 {action.icon === 'TrendingUp' && <TrendingUp className="w-6 h-6" />}
                 {action.icon === 'Star' && <Star className="w-6 h-6" />}
                 {action.icon === 'Users' && <Users className="w-6 h-6" />}
+                {action.icon === 'Video' && <Video className="w-6 h-6" />}
               </div>
               <h3 className="font-semibold text-gray-900 dark:text-white mb-2">{action.title}</h3>
               <p className="text-gray-600 dark:text-gray-400 text-sm">{action.description}</p>
