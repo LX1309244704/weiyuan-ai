@@ -1714,28 +1714,47 @@ export default function CanvasToolbar({ canvas, onCaptureArea, selectedArea }: C
         canvas.defaultCursor = 'text'
         canvas.hoverCursor = 'text'
         
-        // 添加画布点击事件监听器来创建文字
-        const handleCanvasClick = (opt: any) => {
+        // 移除之前可能存在的文字工具点击监听器
+        canvas.off('mouse:down', handleTextClick)
+        
+        // 定义文字工具点击事件处理函数
+        const handleTextClick = (opt: any) => {
+          if (opt.target) {
+            // 如果点击了现有对象，不创建新文字
+            return
+          }
+          
           const pointer = canvas.getPointer(opt.e)
-          const text = new (window as any).fabric.Textbox('双击编辑文字', {
+          const fabric = (window as any).fabric
+          
+          if (!fabric) {
+            console.error('Fabric.js未加载')
+            return
+          }
+          
+          const text = new fabric.Textbox('双击编辑文字', {
             left: pointer.x,
             top: pointer.y,
             fontFamily: 'Arial',
             fill: brushColor,
             fontSize: 20,
             editable: true,
-            textAlign: 'left'
+            textAlign: 'left',
+            width: 150,
+            selectable: true
           })
+          
           canvas.add(text)
           canvas.setActiveObject(text)
-          canvas.renderAll()
+          text.enterEditing() // 直接进入编辑模式
+          canvas.requestRenderAll()
           
           // 移除点击监听器，避免重复创建
-          canvas.off('mouse:down', handleCanvasClick)
+          canvas.off('mouse:down', handleTextClick)
         }
         
         // 添加点击监听器
-        canvas.on('mouse:down', handleCanvasClick)
+        canvas.on('mouse:down', handleTextClick)
         break
       case 'image':
         canvas.isDrawingMode = false

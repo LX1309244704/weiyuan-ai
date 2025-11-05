@@ -7,7 +7,7 @@ import { useAuthStore } from '@/stores/authStore'
 import { 
   Sun, Moon, Languages, CreditCard, Users, LogOut, 
   Folder, Lightbulb, User, Home, Settings, HelpCircle,
-  Plus, Search, Bell, ChevronDown, Crown, X
+  Plus, Search, Bell, ChevronDown, Crown, X, Palette
 } from 'lucide-react'
 
 interface NavigationBarProps {
@@ -240,10 +240,17 @@ export default function NavigationBar({ title, icon: Icon, activeMenu, children 
               </div>
               
               {/* 快速操作 */}
-              <div className="mt-6 pt-4 border-t border-gray-100 dark:border-gray-700">
+              <div className="mt-6 pt-4 border-t border-gray-100 dark:border-gray-700 space-y-2">
                 <button className="w-full flex items-center justify-center space-x-2 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white px-4 py-3 rounded-xl font-medium transition-all duration-200 shadow-lg hover:shadow-xl">
                   <Plus className="w-5 h-5" />
                   <span>新建项目</span>
+                </button>
+                <button 
+                  onClick={() => router.push('/ad-creation')}
+                  className="w-full flex items-center justify-center space-x-2 bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-600 hover:to-pink-700 text-white px-4 py-3 rounded-xl font-medium transition-all duration-200 shadow-lg hover:shadow-xl"
+                >
+                  <Palette className="w-5 h-5" />
+                  <span>广告创作</span>
                 </button>
               </div>
             </div>

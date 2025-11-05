@@ -105,7 +105,7 @@
       "description": "营销广告设计制作",
       "icon": "📢",
       "color": "from-purple-500 to-pink-500",
-      "route": "/ad"
+      "route": "/ad-creation"
     }
   ]
 }
