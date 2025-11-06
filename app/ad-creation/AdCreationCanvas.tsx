@@ -1,6 +1,14 @@
 'use client'
 
 import { useEffect, useRef, forwardRef } from 'react'
+import { useUserStore } from '@/stores/userStore'
+
+// 添加全局类型声明
+declare global {
+  interface Window {
+    fabric: any
+  }
+}
 
 interface AdCreationCanvasProps {
   width: number
@@ -18,10 +26,15 @@ const AdCreationCanvas = forwardRef<any, AdCreationCanvasProps>(({
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const fabricCanvasRef = useRef<any>(null)
   const textClickHandlerRef = useRef<any>(null)
+  const borderRef = useRef<any>(null)
+  
+  // 获取主题状态
+  const { theme } = useUserStore()
+  const isInitializedRef = useRef(false)
   
   // 初始化画布
   useEffect(() => {
-    if (!canvasRef.current) return
+    if (!canvasRef.current || isInitializedRef.current) return
     
     // 使用延迟来确保Fabric.js已经加载
     const timer = setTimeout(() => {
@@ -37,7 +50,7 @@ const AdCreationCanvas = forwardRef<any, AdCreationCanvasProps>(({
         const canvas = new fabric.Canvas(canvasRef.current, {
           width,
           height,
-          backgroundColor: 'white',
+          backgroundColor: theme === 'dark' ? '#1f2937' : '#ffffff',
           selection: true,
           preserveObjectStacking: true
         })
@@ -46,43 +59,25 @@ const AdCreationCanvas = forwardRef<any, AdCreationCanvasProps>(({
         
         // 添加边框
         try {
-          const rect = new fabric.Rect({
+          borderRef.current = new fabric.Rect({
             left: 0,
             top: 0,
             width: width,
             height: height,
             fill: 'transparent',
-            stroke: '#e5e7eb',
+            stroke: theme === 'dark' ? '#374151' : '#e5e7eb',
             strokeWidth: 1,
             selectable: false,
             evented: false,
             strokeDashArray: [5, 5]
           })
-          canvas.add(rect)
-          canvas.sendToBack(rect)
+          canvas.add(borderRef.current)
+          canvas.sendToBack(borderRef.current)
         } catch (error) {
           console.error('Error creating border:', error)
         }
         
-        // 添加一个示例矩形
-        try {
-          const sampleRect = new fabric.Rect({
-            left: 50,
-            top: 50,
-            width: 100,
-            height: 100,
-            fill: '#3b82f6',
-            strokeWidth: 1,
-            stroke: '#1e40af',
-            rx: 5,
-            ry: 5
-          })
-          canvas.add(sampleRect)
-        } catch (error) {
-          console.error('Error creating sample rectangle:', error)
-        }
-        
-        // 历史记录功能 - 使用canvas对象作为数据存储
+        // 历史记录功能
         canvas.historyData = []
         canvas.historyIndex = -1
         canvas.maxHistorySize = 20
@@ -108,7 +103,7 @@ const AdCreationCanvas = forwardRef<any, AdCreationCanvasProps>(({
               ]))
             }
             
-            // 更新历史数据
+            // 更新历史数据 - 移除当前位置之后的所有历史记录
             canvas.historyData = canvas.historyData.slice(0, canvas.historyIndex + 1)
             canvas.historyData.push(state)
             canvas.historyIndex++
@@ -127,53 +122,71 @@ const AdCreationCanvas = forwardRef<any, AdCreationCanvasProps>(({
           }
         }
         
+        // 撤销函数
         canvas.undo = () => {
           console.log('Undo called, historyIndex:', canvas.historyIndex, 'historyData.length:', canvas.historyData.length)
           
-          if (canvas.historyIndex > 0) {
-            canvas.isUndoing = true
+          // 检查是否有可撤销的历史记录
+          if (!canvas.historyData || canvas.historyData.length === 0 || canvas.historyIndex <= 0) {
+            console.log('Cannot undo: no history to undo')
+            return
+          }
+          
+          canvas.isUndoing = true
+          
+          try {
+            // 减小历史索引
+            canvas.historyIndex--
             
-            try {
-              canvas.historyIndex--
-              
-              console.log('Undoing to index:', canvas.historyIndex)
-              
-              canvas.loadFromJSON(canvas.historyData[canvas.historyIndex], () => {
-                canvas.renderAll()
-                canvas.isUndoing = false
-                console.log('Undo completed, new historyIndex:', canvas.historyIndex)
-              })
-            } catch (error) {
-              console.error('Error during undo:', error)
+            console.log('Undoing to index:', canvas.historyIndex)
+            
+            // 加载前一个状态
+            canvas.loadFromJSON(canvas.historyData[canvas.historyIndex], () => {
+              // 确保所有对象正确渲染
+              canvas.renderAll()
               canvas.isUndoing = false
-            }
-          } else {
-            console.log('Cannot undo: at start of history')
+              console.log('Undo completed, new historyIndex:', canvas.historyIndex)
+            })
+          } catch (error) {
+            console.error('Error during undo:', error)
+            canvas.isUndoing = false
           }
         }
         
+        // 重做函数
         canvas.redo = () => {
           console.log('Redo called, historyIndex:', canvas.historyIndex, 'historyData.length:', canvas.historyData.length)
           
-          if (canvas.historyIndex < canvas.historyData.length - 1) {
-            canvas.isUndoing = true
+          // 检查是否有可重做的历史记录
+          if (!canvas.historyData || canvas.historyData.length === 0) {
+            console.log('Cannot redo: no history data')
+            return
+          }
+          
+          // 检查是否可以重做
+          if (canvas.historyIndex >= canvas.historyData.length - 1) {
+            console.log('Cannot redo: already at the latest state')
+            return
+          }
+          
+          canvas.isUndoing = true
+          
+          try {
+            // 增加历史索引
+            canvas.historyIndex++
             
-            try {
-              canvas.historyIndex++
-              
-              console.log('Redoing to index:', canvas.historyIndex)
-              
-              canvas.loadFromJSON(canvas.historyData[canvas.historyIndex], () => {
-                canvas.renderAll()
-                canvas.isUndoing = false
-                console.log('Redo completed, new historyIndex:', canvas.historyIndex)
-              })
-            } catch (error) {
-              console.error('Error during redo:', error)
+            console.log('Redoing to index:', canvas.historyIndex)
+            
+            // 加载后一个状态
+            canvas.loadFromJSON(canvas.historyData[canvas.historyIndex], () => {
+              // 确保所有对象正确渲染
+              canvas.renderAll()
               canvas.isUndoing = false
-            }
-          } else {
-            console.log('Cannot redo: at the end of history')
+              console.log('Redo completed, new historyIndex:', canvas.historyIndex)
+            })
+          } catch (error) {
+            console.error('Error during redo:', error)
+            canvas.isUndoing = false
           }
         }
         
@@ -183,6 +196,7 @@ const AdCreationCanvas = forwardRef<any, AdCreationCanvasProps>(({
           if (saveTimeout) clearTimeout(saveTimeout)
           saveTimeout = setTimeout(() => {
             try {
+              console.log('Saving state after operation')
               canvas.saveState()
             } catch (error) {
               console.error('Error in debounced save:', error)
@@ -192,17 +206,27 @@ const AdCreationCanvas = forwardRef<any, AdCreationCanvasProps>(({
         
         // 添加事件监听器
         canvas.on('object:modified', () => {
-          if (canvas.saveState) canvas.saveState()
+          console.log('Object modified, saving state')
+          if (!canvas.isUndoing) {
+            debouncedSave()
+          }
         })
         canvas.on('object:added', () => {
-          if (canvas.saveState) canvas.saveState()
+          console.log('Object added, saving state')
+          if (!canvas.isUndoing) {
+            debouncedSave()
+          }
         })
         canvas.on('object:removed', () => {
-          if (canvas.saveState) canvas.saveState()
+          console.log('Object removed, saving state')
+          if (!canvas.isUndoing) {
+            debouncedSave()
+          }
         })
         
         // 保存初始状态
         try {
+          console.log('Saving initial state')
           canvas.saveState()
         } catch (error) {
           console.error('Error saving initial state:', error)
@@ -223,6 +247,11 @@ const AdCreationCanvas = forwardRef<any, AdCreationCanvasProps>(({
         canvas.defaultCursor = 'default'
         canvas.hoverCursor = 'move'
         
+        // 确保重做功能在父组件中可用
+        console.log('Canvas initialized with redo function:', typeof canvas.redo)
+        
+        isInitializedRef.current = true
+        
       } catch (error) {
         console.error('Error initializing canvas:', error)
       }
@@ -233,12 +262,17 @@ const AdCreationCanvas = forwardRef<any, AdCreationCanvasProps>(({
       // 清理画布和事件监听器，防止内存泄漏
       if (fabricCanvasRef.current) {
         try {
+          // 先清除所有事件监听器
           fabricCanvasRef.current.off()
-          fabricCanvasRef.current.dispose()
+          // 确保canvas对象仍然有效后再调用dispose
+          if (fabricCanvasRef.current.lowerCanvasEl) {
+            fabricCanvasRef.current.dispose()
+          }
         } catch (error) {
           console.error('Error disposing canvas:', error)
         }
       }
+      isInitializedRef.current = false
     }
   }, [width, height, onCanvasReady])
   
@@ -254,7 +288,7 @@ const AdCreationCanvas = forwardRef<any, AdCreationCanvasProps>(({
       const target = e.target;
       if (target && target.type === 'i-text') {
         target.enterEditing();
-        canvas.renderAll();
+        fabricCanvasRef.current?.renderAll();
       }
     } catch (error) {
       console.error('Error handling text double click:', error)
@@ -263,10 +297,16 @@ const AdCreationCanvas = forwardRef<any, AdCreationCanvasProps>(({
   
   // 工具切换
   useEffect(() => {
-    if (!fabricCanvasRef.current || !window.fabric) return
+    if (!fabricCanvasRef.current || !window.fabric || !isInitializedRef.current) return
     
     const canvas = fabricCanvasRef.current
     const fabric = window.fabric
+    
+    // 确保重做功能始终可用
+    if (canvas.redo === undefined) {
+      console.error('Redo function is not defined on canvas')
+      return
+    }
     
     try {
       // 清除所有事件监听器
@@ -365,6 +405,31 @@ const AdCreationCanvas = forwardRef<any, AdCreationCanvasProps>(({
       console.error('Error setting tool:', error)
     }
   }, [activeTool])
+  
+  // 主题更新
+  useEffect(() => {
+    if (!fabricCanvasRef.current) return
+    
+    const canvas = fabricCanvasRef.current
+    const newBackgroundColor = theme === 'dark' ? '#1f2937' : '#ffffff'
+    const newBorderColor = theme === 'dark' ? '#374151' : '#e5e7eb'
+    
+    try {
+      // 只有当背景色确实需要改变时才更新
+      if (canvas.backgroundColor !== newBackgroundColor) {
+        canvas.backgroundColor = newBackgroundColor
+      }
+      
+      // 更新边框颜色
+      if (borderRef.current && borderRef.current.stroke !== newBorderColor) {
+        borderRef.current.set('stroke', newBorderColor)
+      }
+      
+      canvas.renderAll()
+    } catch (error) {
+      console.error('Error updating theme:', error)
+    }
+  }, [theme])
   
   return <canvas ref={canvasRef} />
 })

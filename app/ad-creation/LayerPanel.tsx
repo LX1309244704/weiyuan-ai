@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { Eye, EyeOff, Trash2, GripVertical, Layers, Plus, Lock, Unlock } from 'lucide-react'
+import { useUserStore } from '@/stores/userStore'
 
 interface LayerPanelProps {
   canvas: any
@@ -19,6 +20,11 @@ export default function LayerPanel({ canvas }: LayerPanelProps) {
   const [layers, setLayers] = useState<Layer[]>([])
   const [selectedLayerId, setSelectedLayerId] = useState<string | null>(null)
   const [draggedLayer, setDraggedLayer] = useState<string | null>(null)
+  const [contextMenuLayerId, setContextMenuLayerId] = useState<string | null>(null)
+  const [contextMenuPosition, setContextMenuPosition] = useState({ x: 0, y: 0 })
+  
+  // 获取主题状态
+  const { theme } = useUserStore()
   
   // 更新图层列表
   useEffect(() => {
@@ -166,6 +172,30 @@ export default function LayerPanel({ canvas }: LayerPanelProps) {
     canvas.renderAll()
   }
   
+
+  
+  // 将图层移到最顶层
+  const bringLayerToFront = (layerId: string) => {
+    if (!canvas) return
+    
+    const layer = layers.find(l => l.id === layerId)
+    if (!layer || !layer.object) return
+    
+    canvas.bringToFront(layer.object)
+    canvas.renderAll()
+  }
+  
+  // 将图层移到最底层
+  const sendLayerToBack = (layerId: string) => {
+    if (!canvas) return
+    
+    const layer = layers.find(l => l.id === layerId)
+    if (!layer || !layer.object) return
+    
+    canvas.sendToBack(layer.object)
+    canvas.renderAll()
+  }
+  
   // 处理拖拽
   const handleDragStart = (layerId: string) => {
     setDraggedLayer(layerId)
@@ -175,105 +205,151 @@ export default function LayerPanel({ canvas }: LayerPanelProps) {
     e.preventDefault()
   }
   
+  // 处理右键菜单
+  const handleContextMenu = (e: React.MouseEvent, layerId: string) => {
+    e.preventDefault()
+    setContextMenuLayerId(layerId)
+    setContextMenuPosition({ x: e.clientX, y: e.clientY })
+  }
+  
+  const closeContextMenu = () => {
+    setContextMenuLayerId(null)
+  }
+  
+  // 关闭右键菜单（点击其他地方）
+  useEffect(() => {
+    const handleClickOutside = () => {
+      closeContextMenu()
+    }
+    
+    document.addEventListener('click', handleClickOutside)
+    
+    return () => {
+      document.removeEventListener('click', handleClickOutside)
+    }
+  }, [])
+  
   const handleDrop = (targetLayerId: string) => {
     if (!canvas || !draggedLayer || draggedLayer === targetLayerId) return
     
+    // 获取被拖拽图层和目标图层在列表中的位置
     const draggedIndex = layers.findIndex(l => l.id === draggedLayer)
     const targetIndex = layers.findIndex(l => l.id === targetLayerId)
     
     if (draggedIndex === -1 || targetIndex === -1) return
     
-    // 交换在画布中的顺序
-    const draggedObject = layers[draggedIndex].object
-    const targetObject = layers[targetIndex].object
+    // 创建新的图层顺序数组
+    const newOrder = [...layers]
+    const [draggedLayerItem] = newOrder.splice(draggedIndex, 1)
     
-    if (!draggedObject || !targetObject) return
+    // 将被拖拽的图层插入到目标位置
+    newOrder.splice(targetIndex, 0, draggedLayerItem)
     
-    // 获取所有对象
+    // 获取所有对象并清空画布
     const allObjects = canvas.getObjects()
     
-    // 找到对象在画布中的实际索引
-    const draggedObjectIndex = allObjects.indexOf(draggedObject)
-    const targetObjectIndex = allObjects.indexOf(targetObject)
+    // 保存背景色
+    const bgColor = canvas.backgroundColor
     
-    if (draggedObjectIndex === -1 || targetObjectIndex === -1) return
+    // 清空画布但不销毁对象
+    canvas.clear()
     
-    // 从画布中移除被拖拽的对象
-    canvas.remove(draggedObject)
-    
-    // 计算新的索引位置
-    let newIndex = targetObjectIndex
-    if (draggedIndex < targetIndex) {
-      // 向下拖拽，目标位置在原目标之后
-      newIndex = targetObjectIndex
-    } else {
-      // 向上拖拽，目标位置在原目标之前
-      newIndex = targetObjectIndex + 1
+    // 按照新的顺序重新添加所有对象
+    // 图层列表顺序是从上到下，但画布对象顺序是从下到上
+    for (let i = newOrder.length - 1; i >= 0; i--) {
+      canvas.add(newOrder[i].object)
     }
     
-    // 在新位置插入对象
-    allObjects.splice(newIndex, 0, draggedObject)
-    
-    // 清空画布并重新添加所有对象
-    canvas.clear()
-    allObjects.forEach(obj => {
-      canvas.add(obj)
-    })
+    // 恢复背景色
+    canvas.backgroundColor = bgColor
     
     canvas.renderAll()
     setDraggedLayer(null)
   }
   
   return (
-    <div className="flex flex-col h-full">
-      {/* 添加新图层按钮 */}
-      <button
-        onClick={addNewLayer}
-        className="flex items-center justify-center gap-2 p-2 mb-2 bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 rounded-lg transition-colors"
-      >
-        <Plus size={16} />
-        <span>新建图层</span>
-      </button>
-      
-      {/* 图层列表 */}
-      <div className="flex-1 overflow-y-auto">
-        {layers.length === 0 ? (
-          <div className="flex flex-col items-center justify-center p-4 text-slate-400">
-            <Layers size={24} />
-            <p className="text-sm mt-2">暂无图层</p>
-          </div>
-        ) : (
-          <div className="space-y-1">
-            {layers.map((layer) => (
-              <div
-                key={layer.id}
-                draggable
-                onDragStart={() => handleDragStart(layer.id)}
-                onDragOver={handleDragOver}
-                onDrop={() => handleDrop(layer.id)}
-                className={`flex items-center gap-2 p-2 rounded-lg cursor-pointer transition-all ${
-                  selectedLayerId === layer.id 
-                    ? 'bg-blue-600/20 border border-blue-500/30' 
-                    : 'hover:bg-slate-700/30'
-                }`}
-                onClick={() => selectLayer(layer.id)}
-              >
-                {/* 拖拽手柄 */}
-                <GripVertical size={14} className="text-slate-500 cursor-grab" />
-                
+    <>
+      <div className="flex flex-col h-full w-60">
+        {/* 添加新图层按钮 */}
+        <button
+          onClick={addNewLayer}
+          className={`flex items-center justify-center gap-2 p-2 mb-2 rounded-lg transition-colors ${
+            theme === 'dark' 
+              ? 'bg-blue-600/20 hover:bg-blue-600/30 text-blue-400' 
+              : 'bg-blue-100 hover:bg-blue-200 text-blue-600'
+          }`}
+        >
+          <Plus size={16} />
+          <span>新建图层</span>
+        </button>
+        
+        {/* 图层列表 */}
+        <div className="flex-1 overflow-y-auto">
+          {layers.length === 0 ? (
+            <div className={`flex flex-col items-center justify-center p-4 ${
+              theme === 'dark' ? 'text-slate-400' : 'text-gray-400'
+            }`}>
+              <Layers size={24} />
+              <p className="text-sm mt-2">暂无图层</p>
+            </div>
+          ) : (
+            <div className="space-y-1">
+              {layers.map((layer) => (
+                <div
+                  key={layer.id}
+                  draggable
+                  onDragStart={() => handleDragStart(layer.id)}
+                  onDragOver={handleDragOver}
+                  onDrop={() => handleDrop(layer.id)}
+                  onContextMenu={(e) => handleContextMenu(e, layer.id)}
+                  className={`flex items-center gap-2 p-2 rounded-lg cursor-pointer transition-all w-full ${
+                    selectedLayerId === layer.id 
+                      ? theme === 'dark' 
+                        ? 'bg-blue-600/20 border border-blue-500/30'
+                        : 'bg-blue-100 border border-blue-300'
+                      : theme === 'dark'
+                        ? 'hover:bg-gray-700/50'
+                        : 'hover:bg-gray-100'
+                  }`}
+                  onClick={() => selectLayer(layer.id)}
+                >
+                  {/* 拖拽手柄 */}
+                  <GripVertical size={14} className={`${
+                    theme === 'dark' ? 'text-slate-500' : 'text-gray-400'
+                  } cursor-grab`} />
+                  
                 {/* 图层缩略图 */}
-                <div className="w-8 h-8 bg-slate-600 rounded flex-shrink-0 overflow-hidden">
+                <div className={`w-10 h-8 rounded flex-shrink-0 overflow-hidden ${
+                  theme === 'dark' ? 'bg-slate-700' : 'bg-gray-200'
+                }`}>
                   {/* 这里可以添加更详细的缩略图 */}
                   <div className="w-full h-full flex items-center justify-center text-xs">
-                    {layer.object?.type || 'obj'}
+                    <span className={theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}>
+                      {layer.object?.type === 'i-text' || layer.object?.type === 'textbox' 
+                        ? 'T' 
+                        : layer.object?.type === 'image' 
+                          ? '🖼' 
+                          : layer.object?.type === 'rect' 
+                            ? '▢' 
+                            : layer.object?.type === 'circle' 
+                              ? '○' 
+                              : layer.object?.type === 'path' 
+                                ? '⧣' 
+                                : layer.object?.type === 'line' 
+                                  ? '╱' 
+                                  : '?'
+                      }
+                    </span>
                   </div>
                 </div>
                 
                 {/* 图层名称 */}
-                <div className="flex-1 truncate text-sm">
+                <div className={`flex-1 truncate text-sm min-w-0 ${
+                  theme === 'dark' ? 'text-gray-200' : 'text-gray-700'
+                }`}>
                   {layer.name}
                 </div>
-                
+                  
                 {/* 操作按钮 */}
                 <div className="flex items-center gap-1">
                   {/* 可见性切换 */}
@@ -282,7 +358,11 @@ export default function LayerPanel({ canvas }: LayerPanelProps) {
                       e.stopPropagation()
                       toggleVisibility(layer.id)
                     }}
-                    className="p-1 hover:bg-slate-600/50 rounded transition-colors"
+                    className={`p-1 rounded transition-colors ${
+                      theme === 'dark' 
+                        ? 'hover:bg-gray-600/50 text-gray-400' 
+                        : 'hover:bg-gray-200 text-gray-600'
+                    }`}
                   >
                     {layer.visible ? <Eye size={14} /> : <EyeOff size={14} />}
                   </button>
@@ -293,7 +373,11 @@ export default function LayerPanel({ canvas }: LayerPanelProps) {
                       e.stopPropagation()
                       toggleLock(layer.id)
                     }}
-                    className="p-1 hover:bg-slate-600/50 rounded transition-colors"
+                    className={`p-1 rounded transition-colors ${
+                      theme === 'dark' 
+                        ? 'hover:bg-gray-600/50 text-gray-400' 
+                        : 'hover:bg-gray-200 text-gray-600'
+                    }`}
                   >
                     {layer.locked ? <Lock size={14} /> : <Unlock size={14} />}
                   </button>
@@ -304,16 +388,63 @@ export default function LayerPanel({ canvas }: LayerPanelProps) {
                       e.stopPropagation()
                       deleteLayer(layer.id)
                     }}
-                    className="p-1 hover:bg-red-600/50 rounded transition-colors text-red-400"
+                    className={`p-1 rounded transition-colors ${
+                      theme === 'dark' 
+                        ? 'hover:bg-red-600/50 text-red-400' 
+                        : 'hover:bg-red-100 text-red-500'
+                    }`}
                   >
                     <Trash2 size={14} />
                   </button>
                 </div>
-              </div>
-            ))}
-          </div>
-        )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
-    </div>
+      
+      {/* 右键菜单 */}
+      {contextMenuLayerId && (
+        <div 
+          className={`fixed z-50 py-1 rounded-md shadow-lg border min-w-[150px] ${
+            theme === 'dark' 
+              ? 'bg-gray-800 border-gray-700' 
+              : 'bg-white border-gray-200'
+          }`}
+          style={{ left: contextMenuPosition.x, top: contextMenuPosition.y }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              bringLayerToFront(contextMenuLayerId)
+              closeContextMenu()
+            }}
+            className={`w-full text-left px-3 py-1.5 text-sm ${
+              theme === 'dark' 
+                ? 'text-gray-200 hover:bg-gray-700' 
+                : 'text-gray-700 hover:bg-gray-100'
+            }`}
+          >
+            置于顶层
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              sendLayerToBack(contextMenuLayerId)
+              closeContextMenu()
+            }}
+            className={`w-full text-left px-3 py-1.5 text-sm ${
+              theme === 'dark' 
+                ? 'text-gray-200 hover:bg-gray-700' 
+                : 'text-gray-700 hover:bg-gray-100'
+            }`}
+          >
+            置于底层
+          </button>
+        </div>
+      )}
+    </>
   )
 }
