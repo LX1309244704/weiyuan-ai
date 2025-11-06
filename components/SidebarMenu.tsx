@@ -1,7 +1,7 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { Folder, Lightbulb, Database, User, CreditCard, Users, Home } from 'lucide-react'
+import { Folder, Lightbulb, Database, User, CreditCard, Users, Home, Palette } from 'lucide-react'
 
 interface SidebarMenuProps {
   activeMenu: string
@@ -14,6 +14,7 @@ export default function SidebarMenu({ activeMenu, onMenuClick, showInvitation = 
 
   const menuItems = [
     { id: '首页', icon: Home, label: '首页', path: '/user' },
+    { id: '广告创作', icon: Palette, label: '广告创作', path: '/ad-creation' },
     { id: '项目', icon: Folder, label: '项目', path: '/user/projects' },
     { id: '灵感', icon: Lightbulb, label: '灵感', path: '/user/inspiration' },
     { id: '资产', icon: Database, label: '资产', path: '/user/assets' },
@@ -37,6 +38,7 @@ export default function SidebarMenu({ activeMenu, onMenuClick, showInvitation = 
           const getColorConfig = (menuId: string) => {
             switch(menuId) {
               case '首页': return 'from-blue-500 to-cyan-500'
+              case '广告创作': return 'from-teal-500 to-emerald-500'
               case '项目': return 'from-green-500 to-teal-500'
               case '灵感': return 'from-purple-500 to-pink-500'
               case '资产': return 'from-orange-500 to-red-500'
