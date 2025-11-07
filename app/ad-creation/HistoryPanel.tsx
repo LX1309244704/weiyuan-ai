@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Download, Clock, Calendar, Sparkles, ChevronRight, Trash2 } from 'lucide-react'
+import { Download, Clock, Calendar, ChevronRight, Trash2, Plus } from 'lucide-react'
 
 interface HistoryPanelProps {
   canvas: any
@@ -60,7 +60,181 @@ export default function HistoryPanel({ canvas }: HistoryPanelProps) {
         }
       ]
       
-      setHistoryItems(mockHistory)
+      // 为每个历史项添加默认的canvasData
+      const historyWithCanvasData = mockHistory.map((item, index) => {
+        let canvasData
+        
+        switch (index) {
+          case 0: // 春季促销广告
+            canvasData = JSON.stringify({
+              version: '5.3.0',
+              objects: [
+                {
+                  type: 'rect',
+                  left: 50,
+                  top: 50,
+                  width: 100,
+                  height: 80,
+                  fill: '#ff0000',
+                  stroke: '#000000',
+                  strokeWidth: 2
+                },
+                {
+                  type: 'i-text',
+                  left: 100,
+                  top: 90,
+                  text: '春季促销',
+                  fontSize: 20,
+                  fill: '#ffffff',
+                  fontFamily: 'Arial'
+                }
+              ]
+            })
+            break
+            
+          case 1: // 新品发布海报
+            canvasData = JSON.stringify({
+              version: '5.3.0',
+              objects: [
+                {
+                  type: 'rect',
+                  left: 30,
+                  top: 40,
+                  width: 140,
+                  height: 70,
+                  fill: '#00ff00',
+                  stroke: '#000000',
+                  strokeWidth: 1
+                },
+                {
+                  type: 'i-text',
+                  left: 100,
+                  top: 75,
+                  text: '新品发布',
+                  fontSize: 18,
+                  fill: '#000000',
+                  fontFamily: 'Arial'
+                }
+              ]
+            })
+            break
+            
+          case 2: // 周年庆活动
+            canvasData = JSON.stringify({
+              version: '5.3.0',
+              objects: [
+                {
+                  type: 'circle',
+                  left: 100,
+                  top: 75,
+                  radius: 50,
+                  fill: '#0000ff',
+                  stroke: '#ffffff',
+                  strokeWidth: 2
+                },
+                {
+                  type: 'i-text',
+                  left: 100,
+                  top: 75,
+                  text: '周年庆',
+                  fontSize: 16,
+                  fill: '#ffffff',
+                  fontFamily: 'Arial'
+                }
+              ]
+            })
+            break
+            
+          case 3: // 会员专享优惠
+            canvasData = JSON.stringify({
+              version: '5.3.0',
+              objects: [
+                {
+                  type: 'rect',
+                  left: 40,
+                  top: 30,
+                  width: 120,
+                  height: 90,
+                  fill: '#ff00ff',
+                  stroke: '#000000',
+                  strokeWidth: 1
+                },
+                {
+                  type: 'i-text',
+                  left: 100,
+                  top: 75,
+                  text: '会员优惠',
+                  fontSize: 18,
+                  fill: '#000000',
+                  fontFamily: 'Arial'
+                }
+              ]
+            })
+            break
+            
+          case 4: // 品牌形象设计
+            canvasData = JSON.stringify({
+              version: '5.3.0',
+              objects: [
+                {
+                  type: 'triangle',
+                  left: 100,
+                  top: 50,
+                  width: 80,
+                  height: 80,
+                  fill: '#00ffff',
+                  stroke: '#000000',
+                  strokeWidth: 2
+                },
+                {
+                  type: 'i-text',
+                  left: 100,
+                  top: 85,
+                  text: '品牌形象',
+                  fontSize: 16,
+                  fill: '#000000',
+                  fontFamily: 'Arial'
+                }
+              ]
+            })
+            break
+            
+          default:
+            // 默认内容
+            canvasData = JSON.stringify({
+              version: '5.3.0',
+              objects: [
+                {
+                  type: 'rect',
+                  left: 50,
+                  top: 50,
+                  width: 100,
+                  height: 80,
+                  fill: '#cccccc',
+                  stroke: '#000000',
+                  strokeWidth: 2
+                },
+                {
+                  type: 'i-text',
+                  left: 100,
+                  top: 90,
+                  text: '示例文本',
+                  fontSize: 16,
+                  fill: '#000000',
+                  fontFamily: 'Arial'
+                }
+              ]
+            })
+        }
+        
+        return {
+          ...item,
+          canvasData
+        }
+      })
+      
+      setHistoryItems(historyWithCanvasData)
+      console.log('加载历史记录，第一项的canvasData:', historyWithCanvasData[0].canvasData ? '存在' : '不存在')
       setIsLoading(false)
     }
     
@@ -159,6 +333,207 @@ export default function HistoryPanel({ canvas }: HistoryPanelProps) {
     document.body.removeChild(link)
   }
   
+  // 添加历史记录项到画板（保留当前画布内容）
+  const addToCanvas = (item: HistoryItem) => {
+    console.log('尝试添加到画板，历史项ID:', item.id)
+    
+    if (!canvas) {
+      console.log('无法添加到画板: 画布不存在')
+      return
+    }
+    
+    if (!window.fabric) {
+      console.log('无法添加到画板: Fabric.js未加载')
+      return
+    }
+    
+    if (!item.canvasData) {
+      console.log('无法添加到画板: 历史记录没有画布数据')
+      return
+    }
+    
+    try {
+      console.log('开始添加历史记录到画板:', item.id)
+      const fabric = window.fabric
+      
+      // 直接解析JSON数据获取对象
+      const canvasData = typeof item.canvasData === 'string' 
+        ? JSON.parse(item.canvasData) 
+        : item.canvasData
+        
+      if (!canvasData || !canvasData.objects || canvasData.objects.length === 0) {
+        console.log('历史记录中没有对象')
+        return
+      }
+      
+      const objects = canvasData.objects
+      console.log('历史记录对象数量:', objects.length)
+      
+      // 计算历史内容的边界框（基于原始数据）
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+      
+      objects.forEach(objData => {
+        const objLeft = objData.left || 0
+        const objTop = objData.top || 0
+        let objWidth = 0
+        let objHeight = 0
+        
+        if (objData.type === 'circle') {
+          objWidth = objHeight = (objData.radius || 0) * 2
+        } else if (objData.type === 'triangle') {
+          objWidth = objData.width || 0
+          objHeight = objData.height || 0
+        } else {
+          objWidth = objData.width || 0
+          objHeight = objData.height || 0
+        }
+        
+        minX = Math.min(minX, objLeft)
+        minY = Math.min(minY, objTop)
+        maxX = Math.max(maxX, objLeft + objWidth)
+        maxY = Math.max(maxY, objTop + objHeight)
+      })
+      
+      // 处理边界情况
+      if (minX === Infinity || minY === Infinity || maxX === -Infinity || maxY === -Infinity) {
+        minX = 0
+        minY = 0
+        maxX = 100
+        maxY = 100
+      }
+      
+      const historyWidth = maxX - minX
+      const historyHeight = maxY - minY
+      const historyCenterX = minX + historyWidth / 2
+      const historyCenterY = minY + historyHeight / 2
+      
+      // 获取实际画布尺寸
+      const canvasWidth = canvas.width
+      const canvasHeight = canvas.height
+      const canvasCenterX = canvasWidth / 2
+      const canvasCenterY = canvasHeight / 2
+      
+      console.log('画布尺寸:', { width: canvasWidth, height: canvasHeight })
+      console.log('画布中心:', { x: canvasCenterX, y: canvasCenterY })
+      console.log('历史内容边界:', { minX, minY, maxX, maxY })
+      console.log('历史内容中心:', { x: historyCenterX, y: historyCenterY })
+      
+      // 计算偏移量
+      const offsetX = canvasCenterX - historyCenterX
+      const offsetY = canvasCenterY - historyCenterY
+      
+      console.log('计算偏移量:', { offsetX, offsetY })
+      
+      // 暂时禁用画布的事件监听器，避免自动保存状态
+      const originalSelection = canvas.selection
+      const originalEvented = canvas.evented
+      
+      canvas.selection = false
+      canvas.evented = false
+      
+      // 临时移除事件监听器
+      const eventListeners = canvas._events || {}
+      const originalObjectAddedListener = eventListeners['object:added']
+      const originalObjectModifiedListener = eventListeners['object:modified']
+      
+      // 移除事件监听器
+      canvas.off('object:added')
+      canvas.off('object:modified')
+      
+      // 直接使用fabric的enlivenObjects方法创建对象
+      fabric.util.enlivenObjects(objects, (enlivenedObjects) => {
+        console.log('enlivenedObjects 数量:', enlivenedObjects.length)
+        
+        enlivenedObjects.forEach((obj, index) => {
+          try {
+            // 应用偏移
+            const currentLeft = obj.left || 0
+            const currentTop = obj.top || 0
+            
+            obj.set({
+              left: currentLeft + offsetX,
+              top: currentTop + offsetY,
+              selectable: true,
+              evented: true
+            })
+            
+            console.log(`添加对象 ${index} 到画布:`, {
+              type: obj.type,
+              originalLeft: currentLeft,
+              originalTop: currentTop,
+              newLeft: obj.left,
+              newTop: obj.top
+            })
+            
+            // 添加到当前画布
+            canvas.add(obj)
+          } catch (error) {
+            console.error('添加对象时出错:', error)
+          }
+        })
+        
+        // 重新渲染画布
+        canvas.renderAll()
+        
+        // 恢复画布的事件监听器
+        canvas.selection = originalSelection
+        canvas.evented = originalEvented
+        
+        // 恢复原始事件监听器
+        if (originalObjectAddedListener) {
+          canvas.on('object:added', originalObjectAddedListener)
+        }
+        if (originalObjectModifiedListener) {
+          canvas.on('object:modified', originalObjectModifiedListener)
+        }
+        
+        // 验证对象位置
+        setTimeout(() => {
+          console.log('验证添加的对象位置:')
+          const addedObjects = canvas.getObjects().slice(-enlivenedObjects.length)
+          addedObjects.forEach((obj, index) => {
+            console.log(`对象 ${index}:`, {
+              type: obj.type,
+              left: obj.left,
+              top: obj.top,
+              width: obj.width || (obj.radius ? obj.radius * 2 : 0),
+              height: obj.height || (obj.radius ? obj.radius * 2 : 0)
+            })
+          })
+        }, 100)
+      })
+      
+      // 显示添加成功提示
+      const notification = document.createElement('div')
+      notification.innerHTML = `
+        <div class="fixed top-4 right-4 bg-green-600 text-white px-4 py-2 rounded-lg shadow-lg z-50">
+          已添加到画板
+        </div>
+      `
+      document.body.appendChild(notification)
+      
+      setTimeout(() => {
+        document.body.removeChild(notification)
+      }, 2000)
+      
+    } catch (error) {
+      console.error('添加到画板失败:', error)
+      
+      // 显示错误提示
+      const notification = document.createElement('div')
+      notification.innerHTML = `
+        <div class="fixed top-4 right-4 bg-red-600 text-white px-4 py-2 rounded-lg shadow-lg z-50">
+          添加到画板失败
+        </div>
+      `
+      document.body.appendChild(notification)
+      
+      setTimeout(() => {
+        document.body.removeChild(notification)
+      }, 2000)
+    }
+  }
+  
   // 删除历史记录项
   const deleteHistoryItem = (itemId: string) => {
     setHistoryItems(prev => prev.filter(item => item.id !== itemId))
@@ -184,16 +559,6 @@ export default function HistoryPanel({ canvas }: HistoryPanelProps) {
   
   return (
     <div className="flex flex-col h-full">
-      {/* 保存当前画布按钮 */}
-      <button
-        onClick={saveToHistory}
-        disabled={isLoading}
-        className="flex items-center justify-center gap-2 p-2 mb-2 bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 rounded-lg transition-colors disabled:opacity-50"
-      >
-        <Sparkles size={16} />
-        <span>保存当前创作</span>
-      </button>
-      
       {/* 历史记录列表 */}
       <div className="flex-1 overflow-y-auto">
         {isLoading ? (
@@ -243,18 +608,25 @@ export default function HistoryPanel({ canvas }: HistoryPanelProps) {
                     {/* 操作按钮 */}
                     <div className="flex items-center gap-1">
                       <button
+                        onClick={() => addToCanvas(item)}
+                        className="flex items-center justify-center w-8 h-8 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white rounded-lg transition-all duration-200 shadow-md hover:shadow-lg hover:scale-105"
+                        title="添加到画板"
+                      >
+                        <Plus size={16} />
+                      </button>
+                      <button
                         onClick={() => downloadHistoryItem(item)}
-                        className="p-1 hover:bg-slate-600/50 rounded transition-colors"
+                        className="flex items-center justify-center w-8 h-8 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white rounded-lg transition-all duration-200 shadow-md hover:shadow-lg hover:scale-105"
                         title="下载"
                       >
-                        <Download size={14} />
+                        <Download size={16} />
                       </button>
                       <button
                         onClick={() => deleteHistoryItem(item.id)}
-                        className="p-1 hover:bg-red-600/50 rounded transition-colors text-red-400"
+                        className="flex items-center justify-center w-8 h-8 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white rounded-lg transition-all duration-200 shadow-md hover:shadow-lg hover:scale-105"
                         title="删除"
                       >
-                        <Trash2 size={14} />
+                        <Trash2 size={16} />
                       </button>
                     </div>
                   </div>
