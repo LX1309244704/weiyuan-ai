@@ -730,14 +730,110 @@ export default function AdCreationPage() {
         }
       }
       
-      // 这里可以添加实际的生成逻辑
-      console.log('生成提示词:', promptText)
+      // 调用nano-banana生图接口
+      console.log('开始生成图片，提示词:', promptText)
       console.log('选中对象类型:', activeObject ? activeObject.type : '无')
       console.log('截图数据:', imageDataUrl ? '已获取' : '未获取')
       
-      // TODO: 根据提示词和截图数据生成内容并更新画布
-      
-      await new Promise(resolve => setTimeout(resolve, 2000))
+      try {
+        // 导入ImageHistoryService
+        const { ImageHistoryService } = await import('@/services/ImageHistoryService');
+        const { HistoryItem } = await import('@/app/ad-creation/HistoryPanel');
+        
+        // 创建图片生成请求
+        const request = {
+          model: 'nano-banana' as const,
+          prompt: promptText,
+          images: imageDataUrl ? [imageDataUrl] : undefined,
+          size: '1024x1024', // 默认尺寸
+          aspectRatio: '1:1' // 默认宽高比
+        };
+        
+        // 创建生成任务
+        const { ModelService } = await import('@/services/ai-models');
+        const taskId = await ModelService.createTask(request);
+        console.log('创建图片生成任务，任务ID:', taskId);
+        
+        // 更新请求对象，添加任务ID
+        request.taskId = taskId;
+        
+        // 轮询任务状态直到完成
+        const result = await ModelService.getTaskStatus(request);
+        console.log('任务状态查询结果:', result);
+        
+        if (result.status === '2') { // 成功状态
+          const imageUrl = (result as any).imageUrl;
+          console.log('图片生成成功，URL:', imageUrl);
+          
+          // 将生成的图片添加到画布
+          if (canvas && window.fabric) {
+            const fabric = window.fabric;
+            
+            // 创建图片对象
+            fabric.Image.fromURL(imageUrl, (img) => {
+              // 设置图片尺寸和位置
+              const imgWidth = img.width || 500;
+              const imgHeight = img.height || 500;
+              
+              // 计算缩放比例，使图片适应画布
+              const maxWidth = canvas.width * 0.8;
+              const maxHeight = canvas.height * 0.8;
+              const scaleX = maxWidth / imgWidth;
+              const scaleY = maxHeight / imgHeight;
+              const scale = Math.min(scaleX, scaleY, 1); // 不放大，只缩小
+              
+              // 居中显示
+              const left = (canvas.width - imgWidth * scale) / 2;
+              const top = (canvas.height - imgHeight * scale) / 2;
+              
+              img.set({
+                left: left,
+                top: top,
+                scaleX: scale,
+                scaleY: scale,
+                selectable: true,
+                evented: true
+              });
+              
+              // 添加到画布
+              canvas.add(img);
+              canvas.renderAll();
+              
+              // 添加到历史记录
+              const newHistoryItem: HistoryItem = {
+                id: `history-${Date.now()}`,
+                title: promptText,
+                timestamp: Date.now(),
+                preview: imageUrl,
+                canvasData: JSON.stringify({
+                  version: '5.3.0',
+                  objects: [
+                    {
+                      type: 'image',
+                      src: imageUrl,
+                      left: left,
+                      top: top,
+                      scaleX: scale,
+                      scaleY: scale
+                    }
+                  ]
+                })
+              };
+              
+              // 这里可以添加到历史记录的逻辑
+              // TODO: 将newHistoryItem添加到历史记录
+            }, {
+              crossOrigin: 'anonymous'
+            });
+          }
+        } else { // 失败状态
+          console.error('图片生成失败:', result.status, (result as any).error);
+          alert('图片生成失败，请重试');
+        }
+      } catch (error) {
+        console.error('生成图片时出错:', error);
+        alert('生成图片失败，请重试');
+      }
     } catch (error) {
       console.error('生成失败:', error)
     } finally {

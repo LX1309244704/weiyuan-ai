@@ -539,6 +539,8 @@ export default function HistoryPanel({ canvas }: HistoryPanelProps) {
     setHistoryItems(prev => prev.filter(item => item.id !== itemId))
   }
   
+
+
   // 格式化时间戳
   const formatTimestamp = (timestamp: number) => {
     const now = Date.now()
