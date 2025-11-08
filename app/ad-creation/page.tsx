@@ -365,8 +365,25 @@ export default function AdCreationPage() {
   
   // 检查fabric是否已加载
   useEffect(() => {
+    // 立即检查是否已经加载
     if (window.fabric) {
+      console.log('Fabric.js already loaded')
       setFabricLoaded(true)
+      return
+    }
+    
+    // 设置超时检查，防止无限等待
+    const timeoutId = setTimeout(() => {
+      console.log('Fabric.js loading timeout, checking again...')
+      if (window.fabric) {
+        setFabricLoaded(true)
+      } else {
+        console.error('Fabric.js failed to load after timeout')
+      }
+    }, 3000) // 3秒超时
+    
+    return () => {
+      clearTimeout(timeoutId)
     }
   }, [])
   
@@ -872,9 +889,13 @@ export default function AdCreationPage() {
     <>
       <Script 
         src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js"
-        strategy="beforeInteractive"
+        strategy="afterInteractive"
         onLoad={() => {
+          console.log('Fabric.js script loaded')
           setFabricLoaded(true)
+        }}
+        onError={() => {
+          console.error('Fabric.js script failed to load')
         }}
       />
       
